@@ -86,7 +86,7 @@ fn application_handler(
             let l = params.len();
             params.remove(0);
             for param_group in params.into_iter().rev() {
-                if let AbstractSyntaxTree::Enclosed(inner, ch, _) = param_group {
+                if let AbstractSyntaxTree::Enclosed(inner, ch, param_group_range) = param_group {
                     if ch == '(' {
                         for element in inner.into_list() {
                             if let AbstractSyntaxTree::Typed(var_name, var_type, _) = *element {
@@ -96,7 +96,22 @@ fn application_handler(
                                 ) = *var_name
                                 {
                                     if components.len() != 1 {
-                                        panic!();
+                                        report::send(Report {
+                                            is_error: true,
+                                            offset: identifier_range.start,
+                                            message: "parameter names cannot be namespaced"
+                                                .to_string(),
+                                            note: None,
+                                            help: Some(format!(
+                                                "rename variable to `{}`",
+                                                components.last().unwrap()
+                                            )),
+                                            labels: vec![(
+                                                identifier_range,
+                                                "contains `::`".to_string(),
+                                            )],
+                                        });
+                                        return Err(());
                                     }
                                     r = AbstractSyntaxTree::Lambda(
                                         components[0].clone(),
@@ -105,14 +120,63 @@ fn application_handler(
                                         identifier_range,
                                     )
                                 } else {
-                                    panic!();
+                                    let identifier_range = var_name.get_range();
+                                    report::send(Report {
+                                        is_error: true,
+                                        offset: identifier_range.start,
+                                        message: "parameter name expected".to_string(),
+                                        note: None,
+                                        help: None,
+                                        labels: vec![(
+                                            identifier_range,
+                                            "not a valid identifier".to_string(),
+                                        )],
+                                    });
+                                    return Err(());
                                 }
                             } else {
-                                panic!();
+                                let element_range = element.get_range();
+                                report::send(Report {
+                                    is_error: true,
+                                    offset: element_range.start,
+                                    message: "function parameter expected".to_string(),
+                                    note: Some(
+                                        "parameters must follow the syntax `<name>: <type>`"
+                                            .to_string(),
+                                    ),
+                                    help: None,
+                                    labels: vec![(
+                                        element_range,
+                                        "not a valid parameter definition".to_string(),
+                                    )],
+                                });
+                                return Err(());
                             }
                         }
                     } else {
-                        panic!();
+                        report::send(Report {
+                            is_error: true,
+                            offset: param_group_range.start,
+                            message: "function parameters must be enclosed in parentheses"
+                                .to_string(),
+                            note: Some(
+                                "correct syntax is `fn (<name>: <type>, ...) ... <body>`"
+                                    .to_string(),
+                            ),
+                            help: None,
+                            labels: vec![(
+                                param_group_range,
+                                format!(
+                                    "enclosed in {}",
+                                    match ch {
+                                        '[' => "brackets",
+                                        '{' => "braces",
+                                        _ => panic!(),
+                                    }
+                                ),
+                            )],
+                        });
+                        return Err(());
                     }
                 } else {
                     panic!();
@@ -196,12 +260,12 @@ fn arrow_handler(
                             report::send(Report {
                                 is_error: true,
                                 offset: element_range.start,
-                                message: "type definition parameter expected".to_string(),
-                                note: None,
-                                help: Some(
+                                message: "type parameter expected".to_string(),
+                                note: Some(
                                     "parameters must follow the syntax `<name>: <type>`"
                                         .to_string(),
                                 ),
+                                help: None,
                                 labels: vec![(
                                     element_range,
                                     "not a valid parameter definition".to_string(),
@@ -214,13 +278,12 @@ fn arrow_handler(
                     report::send(Report {
                         is_error: true,
                         offset: param_group_range.start,
-                        message: "type definition parameters must be enclosed in parentheses"
-                            .to_string(),
-                        note: None,
-                        help: Some(
-                            "correct format is `type (<name>: <type>, ...) ... -> <type>`"
+                        message: "type parameters must be enclosed in parentheses".to_string(),
+                        note: Some(
+                            "correct syntax is `type (<name>: <type>, ...) ... -> <type>`"
                                 .to_string(),
                         ),
+                        help: None,
                         labels: vec![(
                             param_group_range,
                             format!(
@@ -240,12 +303,11 @@ fn arrow_handler(
                 report::send(Report {
                     is_error: true,
                     offset: param_group_range.start,
-                    message: "type definition parameters must be enclosed in parentheses"
-                        .to_string(),
-                    note: None,
-                    help: Some(
-                        "correct format is `type (<name>: <type>, ...) ... -> <type>`".to_string(),
+                    message: "type parameters must be enclosed in parentheses".to_string(),
+                    note: Some(
+                        "correct syntax is `type (<name>: <type>, ...) ... -> <type>`".to_string(),
                     ),
+                    help: None,
                     labels: vec![(param_group_range, "not enclosed".to_string())],
                 });
                 return Err(());
@@ -328,6 +390,7 @@ fn equals_handler(
     ))
 }
 
+// TODO: accept trailing semicolon
 // TODO: check if they are actually statements
 // TODO: ignore parser2::AbstractSyntaxTree::Empty if present
 fn semicolon_handler(
