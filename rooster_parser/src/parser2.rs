@@ -234,17 +234,17 @@ async fn parse_terminal(token: lexer::Token) -> Result<AbstractSyntaxTree, ()> {
             perform_macro_call("String::_parse".to_string(), s).await
         }
         lexer::Token::Parentheses(s, range) => Ok(AbstractSyntaxTree::Enclosed(
-            Box::new(preprocess::preprocess_chunk(s, 0).await?),
+            Box::new(preprocess::preprocess_chunk(s, range.start + 1).await?),
             '(',
             range,
         )),
         lexer::Token::Brackets(s, range) => Ok(AbstractSyntaxTree::Enclosed(
-            Box::new(preprocess::preprocess_chunk(s, 0).await?),
+            Box::new(preprocess::preprocess_chunk(s, range.start + 1).await?),
             '[',
             range,
         )),
         lexer::Token::Braces(s, range) => Ok(AbstractSyntaxTree::Enclosed(
-            Box::new(preprocess::preprocess_chunk(s, 0).await?),
+            Box::new(preprocess::preprocess_chunk(s, range.start + 1).await?),
             '{',
             range,
         )),

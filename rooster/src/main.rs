@@ -55,7 +55,7 @@ async fn main() {
                 for n in 0..report.labels.len() {
                     let label = &report.labels[n];
                     labels.push(ariadne::Label::new(("test.roo", label.0.clone()))
-                        .with_message(label.1.clone())
+                        .with_message(format_text(label.1.clone()))
                         .with_color(colors[n])
                     );
                 }

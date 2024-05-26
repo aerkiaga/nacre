@@ -179,7 +179,7 @@ pub(crate) async fn tokenize_chunk(
                             help: None,
                             labels: vec![(
                                 offset..offset + 1,
-                                format!("no matching {}", get_opening_char(ch)),
+                                format!("no matching `{}`", get_opening_char(ch)),
                             )],
                         });
                         return Err(());
@@ -212,7 +212,7 @@ pub(crate) async fn tokenize_chunk(
                         sender
                             .send(Token::SingleQuotes(
                                 char_stack.clone().into_iter().collect::<String>(),
-                                start_offset..offset,
+                                start_offset..offset + 1,
                             ))
                             .unwrap();
                         char_stack.clear();
@@ -256,7 +256,7 @@ pub(crate) async fn tokenize_chunk(
                         sender
                             .send(Token::DoubleQuotes(
                                 char_stack.clone().into_iter().collect::<String>(),
-                                start_offset..offset,
+                                start_offset..offset + 1,
                             ))
                             .unwrap();
                         char_stack.clear();
@@ -345,9 +345,9 @@ pub(crate) async fn tokenize_chunk(
                         let s = char_stack.clone().into_iter().collect::<String>();
                         sender
                             .send(match ch {
-                                ')' => Token::Parentheses(s, initial_offset.unwrap()..offset),
-                                ']' => Token::Brackets(s, initial_offset.unwrap()..offset),
-                                '}' => Token::Braces(s, initial_offset.unwrap()..offset),
+                                ')' => Token::Parentheses(s, initial_offset.unwrap()..offset + 1),
+                                ']' => Token::Brackets(s, initial_offset.unwrap()..offset + 1),
+                                '}' => Token::Braces(s, initial_offset.unwrap()..offset + 1),
                                 _ => panic!(),
                             })
                             .unwrap();
@@ -422,7 +422,7 @@ pub(crate) async fn tokenize_chunk(
                     help: None,
                     labels: vec![(
                         offset..offset + 1,
-                        format!("no matching {}", get_closing_char(ch)),
+                        format!("no matching `{}`", get_closing_char(ch)),
                     )],
                 });
             }
