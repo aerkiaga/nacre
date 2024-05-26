@@ -1,3 +1,4 @@
+use ariadne::Fmt;
 use std::ops::Range;
 use tokio::sync::mpsc;
 
@@ -9,6 +10,19 @@ fn error_incorrect_args() {
     println!("Error: incorrect arguments to program.");
     print_usage();
     panic!();
+}
+
+fn format_text(text: String) -> String {
+    let mut tokens = text.split('`').map(|x| x.to_string()).collect::<Vec<_>>();
+    for n in 0..tokens.len() {
+        if n % 2 == 1 {
+            tokens[n] = format!(
+                "{}",
+                tokens[n].clone().fg(ariadne::Color::Rgb(64, 196, 196))
+            );
+        }
+    }
+    tokens.join("")
 }
 
 #[tokio::main]
@@ -47,13 +61,13 @@ async fn main() {
                 }
                 // TODO: get filename somehow
                 let mut r = ariadne::Report::<(&str, Range<usize>)>::build(ariadne::ReportKind::Error, "test.roo", report.offset)
-                    .with_message(report.message)
+                    .with_message(format_text(report.message))
                     .with_labels(labels);
                 if let Some(note) = report.note {
-                    r.set_note(note);
+                    r.set_note(format_text(note));
                 }
                 if let Some(help) = report.help {
-                    r.set_help(help);
+                    r.set_help(format_text(help));
                 }
                 r
                     .finish()
