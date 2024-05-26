@@ -1,0 +1,8 @@
+// A type for Peano arithmetic using Church numerals
+let Church = type(T: Type)(f: T -> T, x: T) -> T;
+let Church::0 = fn(T: Type)(f: T -> T, x: T) x;
+let Church::s = fn(n: Church) {
+    fn(T: Type)(f: T -> T, x: T) {
+        f (n T f x)
+    }
+}

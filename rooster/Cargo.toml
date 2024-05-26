@@ -1,0 +1,9 @@
+[package]
+name = "rooster"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+ariadne = "0.4.1"
+rooster_parser = {path = "../rooster_parser"}
+tokio = {version = "1", features = ["fs", "io-util", "macros", "rt-multi-thread", "sync"]}
