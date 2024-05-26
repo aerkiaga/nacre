@@ -26,12 +26,57 @@ fn application_handler(left: AbstractSyntaxTree, right: AbstractSyntaxTree) -> A
         AbstractSyntaxTree::Identifier(components) => {
             if components.len() == 1 && components[0] == "type" {
                 AbstractSyntaxTree::TypeApp(Box::new(left), Box::new(right))
+            } else if components.len() == 1 && components[0] == "fn" {
+                AbstractSyntaxTree::FnApp(Box::new(left), Box::new(right))
             } else {
                 AbstractSyntaxTree::Application(Box::new(left), Box::new(right))
             }
         }
         AbstractSyntaxTree::TypeApp(_, _) => {
             AbstractSyntaxTree::TypeApp(Box::new(left), Box::new(right))
+        }
+        AbstractSyntaxTree::FnApp(_, _) => {
+            if let AbstractSyntaxTree::Enclosed(_, ch) = right {
+                if ch == '(' {
+                    return AbstractSyntaxTree::FnApp(Box::new(left), Box::new(right));
+                }
+            }
+            let mut params = left.fn_app_flatten();
+            if params.len() < 2 {
+                panic!();
+            }
+            let mut r = right;
+            let l = params.len();
+            params.remove(0);
+            for param_group in params.into_iter().rev() {
+                if let AbstractSyntaxTree::Enclosed(inner, ch) = param_group {
+                    if ch == '(' {
+                        for element in inner.into_list() {
+                            if let AbstractSyntaxTree::Typed(var_name, var_type) = *element {
+                                if let AbstractSyntaxTree::Identifier(components) = *var_name {
+                                    if components.len() != 1 {
+                                        panic!();
+                                    }
+                                    r = AbstractSyntaxTree::Lambda(
+                                        components[0].clone(),
+                                        var_type,
+                                        Box::new(r),
+                                    )
+                                } else {
+                                    panic!();
+                                }
+                            } else {
+                                panic!();
+                            }
+                        }
+                    } else {
+                        panic!();
+                    }
+                } else {
+                    panic!();
+                }
+            }
+            r
         }
         _ => AbstractSyntaxTree::Application(Box::new(left), Box::new(right)),
     }

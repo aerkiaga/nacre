@@ -14,10 +14,12 @@ pub(crate) enum AbstractSyntaxTree {
         Box<AbstractSyntaxTree>,
         Box<AbstractSyntaxTree>,
     ),
+    Lambda(String, Box<AbstractSyntaxTree>, Box<AbstractSyntaxTree>),
     // invalid in final AST:
     Empty,
     Typed(Box<AbstractSyntaxTree>, Box<AbstractSyntaxTree>),
     TypeApp(Box<AbstractSyntaxTree>, Box<AbstractSyntaxTree>),
+    FnApp(Box<AbstractSyntaxTree>, Box<AbstractSyntaxTree>),
 }
 
 impl AbstractSyntaxTree {
@@ -100,6 +102,13 @@ impl AbstractSyntaxTree {
                 term.fmt_rec(f, levels, true);
                 levels.pop();
             }
+            AbstractSyntaxTree::Lambda(identifier, var_type, term) => {
+                write!(f, "Lambda {}\n", identifier);
+                levels.push(true);
+                var_type.fmt_rec(f, levels, false);
+                term.fmt_rec(f, levels, true);
+                levels.pop();
+            }
             AbstractSyntaxTree::Empty => {
                 write!(f, "Empty\n");
             }
@@ -117,6 +126,13 @@ impl AbstractSyntaxTree {
                 right.fmt_rec(f, levels, true);
                 levels.pop();
             }
+            AbstractSyntaxTree::FnApp(left, right) => {
+                write!(f, "FnApp\n");
+                levels.push(true);
+                left.fmt_rec(f, levels, false);
+                right.fmt_rec(f, levels, true);
+                levels.pop();
+            }
         }
         Ok(())
     }
@@ -125,6 +141,17 @@ impl AbstractSyntaxTree {
         match self {
             AbstractSyntaxTree::TypeApp(left, right) => {
                 let mut r = left.type_app_flatten();
+                r.push(*right);
+                r
+            }
+            _ => vec![self],
+        }
+    }
+
+    pub(crate) fn fn_app_flatten(self) -> Vec<AbstractSyntaxTree> {
+        match self {
+            AbstractSyntaxTree::FnApp(left, right) => {
+                let mut r = left.fn_app_flatten();
                 r.push(*right);
                 r
             }
