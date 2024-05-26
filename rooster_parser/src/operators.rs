@@ -4,8 +4,6 @@ use crate::*;
 use once_cell::sync::Lazy;
 use std::collections::HashMap;
 use std::ops::Range;
-use std::sync::Arc;
-use tokio::sync::mpsc;
 
 // TODO: error handling
 fn namespace_handler(
