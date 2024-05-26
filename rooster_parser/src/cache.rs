@@ -42,7 +42,7 @@ async fn read_file(file: &mut File) -> String {
 }
 
 /// Make sure the AST associated with a logical path is available.
-async fn load_ast(logical_path: &str) {
+async fn load_ast(logical_path: &str) -> Result<(), ()> {
     // TODO: load file only if necessary
     // TODO: convert logical to physical paths
     let mut file = match File::open(logical_path).await {
@@ -50,12 +50,13 @@ async fn load_ast(logical_path: &str) {
         Err(_) => error_cannot_find(logical_path),
     };
     // TODO: call preprocessor giving it an async stream
-    let ast = preprocess::preprocess_file(&read_file(&mut file).await).await;
+    let ast = preprocess::preprocess_file(&read_file(&mut file).await).await?;
     println!("{:?}", &ast);
     PARSER_CACHE
         .write()
         .await
         .insert(logical_path.to_string(), CacheEntry::Available(ast.into()));
+    Ok(())
 }
 
 async fn try_get_ast(logical_path: &str) -> Option<Arc<parser2::AbstractSyntaxTree>> {
@@ -65,7 +66,7 @@ async fn try_get_ast(logical_path: &str) -> Option<Arc<parser2::AbstractSyntaxTr
     }
 }
 
-pub(crate) async fn get_ast(logical_path: &str) -> Arc<parser2::AbstractSyntaxTree> {
+pub(crate) async fn get_ast(logical_path: &str) -> Result<Arc<parser2::AbstractSyntaxTree>, ()> {
     // First, atomically check if entry exists and insert pending if not
     let option = {
         let notify = Arc::new(Notify::new());
@@ -88,7 +89,7 @@ pub(crate) async fn get_ast(logical_path: &str) -> Arc<parser2::AbstractSyntaxTr
         })
         .await
         .unwrap();
-        try_get_ast(logical_path).await.unwrap();
+        try_get_ast(logical_path).await.ok_or(())?;
     }
 
     // Wait if pending, return AST if/when available
@@ -96,8 +97,8 @@ pub(crate) async fn get_ast(logical_path: &str) -> Arc<parser2::AbstractSyntaxTr
     match entry {
         CacheEntry::Pending(notify) => {
             notify.notified().await;
-            try_get_ast(logical_path).await.unwrap()
+            Ok(try_get_ast(logical_path).await.ok_or(())?)
         }
-        CacheEntry::Available(ast) => ast.clone(),
+        CacheEntry::Available(ast) => Ok(ast.clone()),
     }
 }

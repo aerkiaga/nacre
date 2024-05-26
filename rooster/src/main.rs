@@ -46,9 +46,16 @@ async fn main() {
                     );
                 }
                 // TODO: get filename somehow
-                ariadne::Report::<(&str, Range<usize>)>::build(ariadne::ReportKind::Error, "test.roo", report.offset)
+                let mut r = ariadne::Report::<(&str, Range<usize>)>::build(ariadne::ReportKind::Error, "test.roo", report.offset)
                     .with_message(report.message)
-                    .with_labels(labels)
+                    .with_labels(labels);
+                if let Some(note) = report.note {
+                    r.set_note(note);
+                }
+                if let Some(help) = report.help {
+                    r.set_help(help);
+                }
+                r
                     .finish()
                     .eprint(("test.roo", ariadne::Source::from(include_str!("../../test.roo"))))
                     .unwrap();

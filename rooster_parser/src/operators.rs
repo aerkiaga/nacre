@@ -3,15 +3,23 @@ use crate::*;
 
 use once_cell::sync::Lazy;
 use std::collections::HashMap;
+use std::ops::Range;
 use std::sync::Arc;
 use tokio::sync::mpsc;
 
 // TODO: error handling
-fn namespace_handler(left: AbstractSyntaxTree, right: AbstractSyntaxTree) -> AbstractSyntaxTree {
-    if let AbstractSyntaxTree::Identifier(mut left_components) = left {
-        if let AbstractSyntaxTree::Identifier(mut right_components) = right {
+fn namespace_handler(
+    left: AbstractSyntaxTree,
+    right: AbstractSyntaxTree,
+    range: Range<usize>,
+) -> Result<AbstractSyntaxTree, ()> {
+    if let AbstractSyntaxTree::Identifier(mut left_components, left_range) = left {
+        if let AbstractSyntaxTree::Identifier(mut right_components, right_range) = right {
             left_components.append(&mut right_components);
-            AbstractSyntaxTree::Identifier(left_components)
+            Ok(AbstractSyntaxTree::Identifier(
+                left_components,
+                left_range.start..right_range.end,
+            ))
         } else {
             panic!();
         }
@@ -21,39 +29,74 @@ fn namespace_handler(left: AbstractSyntaxTree, right: AbstractSyntaxTree) -> Abs
 }
 
 // TODO: handle macros, including their special ordering
-fn application_handler(left: AbstractSyntaxTree, right: AbstractSyntaxTree) -> AbstractSyntaxTree {
+fn application_handler(
+    left: AbstractSyntaxTree,
+    right: AbstractSyntaxTree,
+    range: Range<usize>,
+) -> Result<AbstractSyntaxTree, ()> {
     match &left {
-        AbstractSyntaxTree::Identifier(components) => {
+        AbstractSyntaxTree::Identifier(components, left_range) => {
+            let left_start = left_range.start;
+            let right_range = right.get_range();
             if components.len() == 1 && components[0] == "type" {
-                AbstractSyntaxTree::TypeApp(Box::new(left), Box::new(right))
+                Ok(AbstractSyntaxTree::TypeApp(
+                    Box::new(left),
+                    Box::new(right),
+                    left_start..right_range.end,
+                ))
             } else if components.len() == 1 && components[0] == "fn" {
-                AbstractSyntaxTree::FnApp(Box::new(left), Box::new(right))
+                Ok(AbstractSyntaxTree::FnApp(
+                    Box::new(left),
+                    Box::new(right),
+                    left_start..right_range.end,
+                ))
             } else {
-                AbstractSyntaxTree::Application(Box::new(left), Box::new(right))
+                Ok(AbstractSyntaxTree::Application(
+                    Box::new(left),
+                    Box::new(right),
+                    left_start..right_range.end,
+                ))
             }
         }
-        AbstractSyntaxTree::TypeApp(_, _) => {
-            AbstractSyntaxTree::TypeApp(Box::new(left), Box::new(right))
+        AbstractSyntaxTree::TypeApp(_, _, left_range) => {
+            let left_start = left_range.start;
+            let right_range = right.get_range();
+            Ok(AbstractSyntaxTree::TypeApp(
+                Box::new(left),
+                Box::new(right),
+                left_start..right_range.end,
+            ))
         }
-        AbstractSyntaxTree::FnApp(_, _) => {
-            if let AbstractSyntaxTree::Enclosed(_, ch) = right {
-                if ch == '(' {
-                    return AbstractSyntaxTree::FnApp(Box::new(left), Box::new(right));
+        AbstractSyntaxTree::FnApp(_, _, left_range) => {
+            let left_start = left_range.start;
+            if let AbstractSyntaxTree::Enclosed(_, ch, right_range) = &right {
+                let right_end = right_range.end;
+                if *ch == '(' {
+                    return Ok(AbstractSyntaxTree::FnApp(
+                        Box::new(left),
+                        Box::new(right),
+                        left_start..right_end,
+                    ));
                 }
             }
             let mut params = left.fn_app_flatten();
             if params.len() < 2 {
                 panic!();
             }
+            let right_range = right.get_range();
             let mut r = right;
             let l = params.len();
             params.remove(0);
             for param_group in params.into_iter().rev() {
-                if let AbstractSyntaxTree::Enclosed(inner, ch) = param_group {
+                if let AbstractSyntaxTree::Enclosed(inner, ch, _) = param_group {
                     if ch == '(' {
                         for element in inner.into_list() {
-                            if let AbstractSyntaxTree::Typed(var_name, var_type) = *element {
-                                if let AbstractSyntaxTree::Identifier(components) = *var_name {
+                            if let AbstractSyntaxTree::Typed(var_name, var_type, _) = *element {
+                                if let AbstractSyntaxTree::Identifier(
+                                    components,
+                                    identifier_range,
+                                ) = *var_name
+                                {
                                     if components.len() != 1 {
                                         panic!();
                                     }
@@ -61,6 +104,7 @@ fn application_handler(left: AbstractSyntaxTree, right: AbstractSyntaxTree) -> A
                                         components[0].clone(),
                                         var_type,
                                         Box::new(r),
+                                        identifier_range,
                                     )
                                 } else {
                                     panic!();
@@ -76,14 +120,26 @@ fn application_handler(left: AbstractSyntaxTree, right: AbstractSyntaxTree) -> A
                     panic!();
                 }
             }
-            r
+            Ok(r)
         }
-        _ => AbstractSyntaxTree::Application(Box::new(left), Box::new(right)),
+        _ => {
+            let left_start = left.get_range().start;
+            let right_end = right.get_range().end;
+            Ok(AbstractSyntaxTree::Application(
+                Box::new(left),
+                Box::new(right),
+                left_start..right_end,
+            ))
+        }
     }
 }
 
-fn arrow_handler(left: AbstractSyntaxTree, right: AbstractSyntaxTree) -> AbstractSyntaxTree {
-    if let AbstractSyntaxTree::TypeApp(_, _) = left {
+fn arrow_handler(
+    left: AbstractSyntaxTree,
+    right: AbstractSyntaxTree,
+    range: Range<usize>,
+) -> Result<AbstractSyntaxTree, ()> {
+    if let AbstractSyntaxTree::TypeApp(_, _, left_range) = &left {
         let mut params = left.type_app_flatten();
         if params.len() < 2 {
             panic!();
@@ -92,11 +148,13 @@ fn arrow_handler(left: AbstractSyntaxTree, right: AbstractSyntaxTree) -> Abstrac
         let l = params.len();
         params.remove(0);
         for param_group in params.into_iter().rev() {
-            if let AbstractSyntaxTree::Enclosed(inner, ch) = param_group {
+            if let AbstractSyntaxTree::Enclosed(inner, ch, _) = param_group {
                 if ch == '(' {
                     for element in inner.into_list() {
-                        if let AbstractSyntaxTree::Typed(var_name, var_type) = *element {
-                            if let AbstractSyntaxTree::Identifier(components) = *var_name {
+                        if let AbstractSyntaxTree::Typed(var_name, var_type, _) = *element {
+                            if let AbstractSyntaxTree::Identifier(components, identifier_range) =
+                                *var_name
+                            {
                                 if components.len() != 1 {
                                     panic!();
                                 }
@@ -104,6 +162,7 @@ fn arrow_handler(left: AbstractSyntaxTree, right: AbstractSyntaxTree) -> Abstrac
                                     Some(components[0].clone()),
                                     var_type,
                                     Box::new(r),
+                                    identifier_range,
                                 )
                             } else {
                                 panic!();
@@ -116,55 +175,130 @@ fn arrow_handler(left: AbstractSyntaxTree, right: AbstractSyntaxTree) -> Abstrac
                     panic!();
                 }
             } else {
-                panic!();
+                let param_group_range = param_group.get_range();
+                report::send(Report {
+                    is_error: true,
+                    offset: param_group_range.start,
+                    message: "type definition parameters must be enclosed in parentheses"
+                        .to_string(),
+                    note: None,
+                    help: Some(
+                        "correct format is `type (<name>: <type>, ...) ... -> <type>`".to_string(),
+                    ),
+                    labels: vec![(param_group_range, "not enclosed".to_string())],
+                });
+                return Err(());
             }
         }
-        r
+        Ok(r)
     } else {
-        AbstractSyntaxTree::Forall(None, Box::new(left), Box::new(right))
+        let left_start = left.get_range().start;
+        let right_end = right.get_range().end;
+        Ok(AbstractSyntaxTree::Forall(
+            None,
+            Box::new(left),
+            Box::new(right),
+            left_start..right_end,
+        ))
     }
 }
 
-fn colon_handler(left: AbstractSyntaxTree, right: AbstractSyntaxTree) -> AbstractSyntaxTree {
-    AbstractSyntaxTree::Typed(Box::new(left), Box::new(right))
+fn colon_handler(
+    left: AbstractSyntaxTree,
+    right: AbstractSyntaxTree,
+    range: Range<usize>,
+) -> Result<AbstractSyntaxTree, ()> {
+    let left_start = left.get_range().start;
+    let right_end = right.get_range().end;
+    Ok(AbstractSyntaxTree::Typed(
+        Box::new(left),
+        Box::new(right),
+        left_start..right_end,
+    ))
 }
 
-fn comma_handler(left: AbstractSyntaxTree, right: AbstractSyntaxTree) -> AbstractSyntaxTree {
-    if let AbstractSyntaxTree::List(mut left_statements) = left {
-        if let AbstractSyntaxTree::List(mut right_statements) = right {
+// TODO: accept trailing comma
+fn comma_handler(
+    left: AbstractSyntaxTree,
+    right: AbstractSyntaxTree,
+    range: Range<usize>,
+) -> Result<AbstractSyntaxTree, ()> {
+    if let AbstractSyntaxTree::List(mut left_statements, left_range) = left {
+        let right_range = right.get_range();
+        if let AbstractSyntaxTree::List(mut right_statements, _) = right {
             left_statements.append(&mut right_statements);
         } else {
             left_statements.push(Box::new(right));
         }
-        AbstractSyntaxTree::List(left_statements)
-    } else if let parser2::AbstractSyntaxTree::List(mut right_statements) = right {
+        Ok(AbstractSyntaxTree::List(
+            left_statements,
+            left_range.start..right_range.end,
+        ))
+    } else if let parser2::AbstractSyntaxTree::List(mut right_statements, right_range) = right {
+        let left_range = left.get_range();
         right_statements.insert(0, Box::new(left));
-        AbstractSyntaxTree::List(right_statements)
+        Ok(AbstractSyntaxTree::List(
+            right_statements,
+            left_range.start..right_range.end,
+        ))
     } else {
-        AbstractSyntaxTree::List(vec![Box::new(left), Box::new(right)])
+        let left_start = left.get_range().start;
+        let right_end = right.get_range().end;
+        Ok(AbstractSyntaxTree::List(
+            vec![Box::new(left), Box::new(right)],
+            left_start..right_end,
+        ))
     }
 }
 
-fn equals_handler(left: AbstractSyntaxTree, right: AbstractSyntaxTree) -> AbstractSyntaxTree {
+fn equals_handler(
+    left: AbstractSyntaxTree,
+    right: AbstractSyntaxTree,
+    range: Range<usize>,
+) -> Result<AbstractSyntaxTree, ()> {
     // TODO: if leftmost is "let", set last field to true
-    AbstractSyntaxTree::Assignment(Box::new(left), Box::new(right), false)
+    let left_start = left.get_range().start;
+    let right_end = right.get_range().end;
+    Ok(AbstractSyntaxTree::Assignment(
+        Box::new(left),
+        Box::new(right),
+        false,
+        left_start..right_end,
+    ))
 }
 
 // TODO: check if they are actually statements
 // TODO: ignore parser2::AbstractSyntaxTree::Empty if present
-fn semicolon_handler(left: AbstractSyntaxTree, right: AbstractSyntaxTree) -> AbstractSyntaxTree {
-    if let AbstractSyntaxTree::Block(mut left_statements) = left {
-        if let AbstractSyntaxTree::Block(mut right_statements) = right {
+fn semicolon_handler(
+    left: AbstractSyntaxTree,
+    right: AbstractSyntaxTree,
+    range: Range<usize>,
+) -> Result<AbstractSyntaxTree, ()> {
+    if let AbstractSyntaxTree::Block(mut left_statements, left_range) = left {
+        let right_range = right.get_range();
+        if let AbstractSyntaxTree::Block(mut right_statements, _) = right {
             left_statements.append(&mut right_statements);
         } else {
             left_statements.push(Box::new(right));
         }
-        AbstractSyntaxTree::Block(left_statements)
-    } else if let parser2::AbstractSyntaxTree::Block(mut right_statements) = right {
+        Ok(AbstractSyntaxTree::Block(
+            left_statements,
+            left_range.start..right_range.end,
+        ))
+    } else if let parser2::AbstractSyntaxTree::Block(mut right_statements, right_range) = right {
+        let left_range = left.get_range();
         right_statements.insert(0, Box::new(left));
-        AbstractSyntaxTree::Block(right_statements)
+        Ok(AbstractSyntaxTree::Block(
+            right_statements,
+            left_range.start..right_range.end,
+        ))
     } else {
-        AbstractSyntaxTree::Block(vec![Box::new(left), Box::new(right)])
+        let left_start = left.get_range().start;
+        let right_end = right.get_range().end;
+        Ok(AbstractSyntaxTree::Block(
+            vec![Box::new(left), Box::new(right)],
+            left_start..right_end,
+        ))
     }
 }
 
@@ -179,7 +313,11 @@ pub(crate) static OPERATOR_TABLE: Lazy<
         (
             usize,
             bool,
-            fn(AbstractSyntaxTree, AbstractSyntaxTree) -> AbstractSyntaxTree,
+            fn(
+                AbstractSyntaxTree,
+                AbstractSyntaxTree,
+                Range<usize>,
+            ) -> Result<AbstractSyntaxTree, ()>,
         ),
     >,
 > = Lazy::new(|| {

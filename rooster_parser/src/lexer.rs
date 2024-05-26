@@ -1,26 +1,41 @@
 use crate::*;
 
+use std::ops::Range;
 use tokio::sync::mpsc;
 
 #[derive(Clone)]
 pub(crate) enum Token {
-    SingleQuotes(String),
-    DoubleQuotes(String),
-    Parentheses(String),
-    Brackets(String),
-    Braces(String),
-    Other(String), // TODO: use string interning for this one
+    SingleQuotes(String, Range<usize>),
+    DoubleQuotes(String, Range<usize>),
+    Parentheses(String, Range<usize>),
+    Brackets(String, Range<usize>),
+    Braces(String, Range<usize>),
+    Other(String, Range<usize>), // TODO: use string interning for this one
+}
+
+impl Token {
+    pub(crate) fn get_range(&self) -> Range<usize> {
+        match self {
+            Token::SingleQuotes(_, range) => range,
+            Token::DoubleQuotes(_, range) => range,
+            Token::Parentheses(_, range) => range,
+            Token::Brackets(_, range) => range,
+            Token::Braces(_, range) => range,
+            Token::Other(_, range) => range,
+        }
+        .clone()
+    }
 }
 
 impl std::fmt::Debug for Token {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Token::SingleQuotes(s) => write!(f, "\'{}\'", s),
-            Token::DoubleQuotes(s) => write!(f, "\"{}\"", s),
-            Token::Parentheses(s) => write!(f, "({})", s),
-            Token::Brackets(s) => write!(f, "[{}]", s),
-            Token::Braces(s) => write!(f, "{{{}}}", s),
-            Token::Other(s) => write!(f, "{}", s),
+            Token::SingleQuotes(s, _) => write!(f, "\'{}\'", s),
+            Token::DoubleQuotes(s, _) => write!(f, "\"{}\"", s),
+            Token::Parentheses(s, _) => write!(f, "({})", s),
+            Token::Brackets(s, _) => write!(f, "[{}]", s),
+            Token::Braces(s, _) => write!(f, "{{{}}}", s),
+            Token::Other(s, _) => write!(f, "{}", s),
         }
     }
 }
@@ -97,6 +112,7 @@ pub(crate) async fn tokenize_chunk(
 ) -> Result<(), ()> {
     let mut state = TokenizerState::Normal;
     let mut char_stack = vec![];
+    let mut initial_offset = None;
     for ch in chunk.chars().chain(" ".chars()) {
         let ch_type = classify_char(ch);
         match state {
@@ -106,14 +122,19 @@ pub(crate) async fn tokenize_chunk(
                         sender
                             .send(Token::Other(
                                 char_stack.clone().into_iter().collect::<String>(),
+                                initial_offset.unwrap()..offset,
                             ))
                             .unwrap();
                         char_stack.clear();
+                        initial_offset = None;
                     }
                 }
                 match ch_type {
                     CharType::Identifier => {
                         char_stack.push(ch);
+                        if let None = initial_offset {
+                            initial_offset = Some(offset);
+                        }
                     }
                     CharType::Operator => {
                         if char_stack.len() > 0 && char_stack[char_stack.len() - 1] == '/' {
@@ -126,18 +147,27 @@ pub(crate) async fn tokenize_chunk(
                                     TokenizerState::LongComment(false, offset - 1, state.into());
                             } else {
                                 char_stack.push(ch);
+                                if let None = initial_offset {
+                                    initial_offset = Some(offset);
+                                }
                             }
                         } else {
                             char_stack.push(ch);
+                            if let None = initial_offset {
+                                initial_offset = Some(offset);
+                            }
                         }
                     }
                     CharType::SingleQuote => {
+                        initial_offset = Some(offset);
                         state = TokenizerState::SingleQuotes(false, offset);
                     }
                     CharType::DoubleQuote => {
+                        initial_offset = Some(offset);
                         state = TokenizerState::DoubleQuotes(false, offset);
                     }
                     CharType::OpenDelimiter => {
+                        initial_offset = Some(offset);
                         state = TokenizerState::Delimiters(vec![(ch, offset)]);
                     }
                     CharType::CloseDelimiter => {
@@ -182,9 +212,11 @@ pub(crate) async fn tokenize_chunk(
                         sender
                             .send(Token::SingleQuotes(
                                 char_stack.clone().into_iter().collect::<String>(),
+                                start_offset..offset,
                             ))
                             .unwrap();
                         char_stack.clear();
+                        initial_offset = None;
                         state = TokenizerState::Normal;
                     }
                 } else if ch == '\\' {
@@ -224,9 +256,11 @@ pub(crate) async fn tokenize_chunk(
                         sender
                             .send(Token::DoubleQuotes(
                                 char_stack.clone().into_iter().collect::<String>(),
+                                start_offset..offset,
                             ))
                             .unwrap();
                         char_stack.clear();
+                        initial_offset = None;
                         state = TokenizerState::Normal;
                     }
                 } else if ch == '\\' {
@@ -311,13 +345,14 @@ pub(crate) async fn tokenize_chunk(
                         let s = char_stack.clone().into_iter().collect::<String>();
                         sender
                             .send(match ch {
-                                ')' => Token::Parentheses(s),
-                                ']' => Token::Brackets(s),
-                                '}' => Token::Braces(s),
+                                ')' => Token::Parentheses(s, initial_offset.unwrap()..offset),
+                                ']' => Token::Brackets(s, initial_offset.unwrap()..offset),
+                                '}' => Token::Braces(s, initial_offset.unwrap()..offset),
                                 _ => panic!(),
                             })
                             .unwrap();
                         char_stack.clear();
+                        initial_offset = None;
                         state = TokenizerState::Normal;
                     } else {
                         char_stack.push(ch);

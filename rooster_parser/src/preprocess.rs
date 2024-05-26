@@ -6,7 +6,10 @@ use tokio::sync::mpsc;
 use tokio::sync::oneshot;
 
 #[async_recursion]
-pub(crate) async fn preprocess_chunk(chunk: String, offset: usize) -> parser2::AbstractSyntaxTree {
+pub(crate) async fn preprocess_chunk(
+    chunk: String,
+    offset: usize,
+) -> Result<parser2::AbstractSyntaxTree, ()> {
     // Start a concurrent task for tokenization
     let (tokenizer_sender, mut tokenizer_receiver) = mpsc::unbounded_channel();
     let tokenizer_handle = tokio::spawn(async move {
@@ -26,9 +29,9 @@ pub(crate) async fn preprocess_chunk(chunk: String, offset: usize) -> parser2::A
     tokenizer_handle.await.unwrap();
     parser_handle.await.unwrap();
     parser2_handle.await.unwrap();
-    parser2_receiver.await.unwrap()
+    Ok(parser2_receiver.await.unwrap()?)
 }
 
-pub(crate) async fn preprocess_file(src: &String) -> parser2::AbstractSyntaxTree {
+pub(crate) async fn preprocess_file(src: &String) -> Result<parser2::AbstractSyntaxTree, ()> {
     preprocess_chunk(src.clone(), 0).await
 }
