@@ -20,14 +20,64 @@ fn namespace_handler(left: AbstractSyntaxTree, right: AbstractSyntaxTree) -> Abs
     }
 }
 
+// TODO: handle macros, including their special ordering
 fn application_handler(left: AbstractSyntaxTree, right: AbstractSyntaxTree) -> AbstractSyntaxTree {
-    AbstractSyntaxTree::Application(Box::new(left), Box::new(right))
+    match &left {
+        AbstractSyntaxTree::Identifier(components) => {
+            if components.len() == 1 && components[0] == "type" {
+                AbstractSyntaxTree::TypeApp(Box::new(left), Box::new(right))
+            } else {
+                AbstractSyntaxTree::Application(Box::new(left), Box::new(right))
+            }
+        }
+        AbstractSyntaxTree::TypeApp(_, _) => {
+            AbstractSyntaxTree::TypeApp(Box::new(left), Box::new(right))
+        }
+        _ => AbstractSyntaxTree::Application(Box::new(left), Box::new(right)),
+    }
 }
 
 fn arrow_handler(left: AbstractSyntaxTree, right: AbstractSyntaxTree) -> AbstractSyntaxTree {
-    let leftmost = left.application_leftmost_term();
-    // TODO: if leftmost is "type", create forall
-    AbstractSyntaxTree::Forall(None, Box::new(left), Box::new(right))
+    if let AbstractSyntaxTree::TypeApp(_, _) = left {
+        let mut params = left.type_app_flatten();
+        if params.len() < 2 {
+            panic!();
+        }
+        let mut r = right;
+        let l = params.len();
+        params.remove(0);
+        for param_group in params.into_iter().rev() {
+            if let AbstractSyntaxTree::Enclosed(inner, ch) = param_group {
+                if ch == '(' {
+                    for element in inner.into_list() {
+                        if let AbstractSyntaxTree::Typed(var_name, var_type) = *element {
+                            if let AbstractSyntaxTree::Identifier(components) = *var_name {
+                                if components.len() != 1 {
+                                    panic!();
+                                }
+                                r = AbstractSyntaxTree::Forall(
+                                    Some(components[0].clone()),
+                                    var_type,
+                                    Box::new(r),
+                                )
+                            } else {
+                                panic!();
+                            }
+                        } else {
+                            panic!();
+                        }
+                    }
+                } else {
+                    panic!();
+                }
+            } else {
+                panic!();
+            }
+        }
+        r
+    } else {
+        AbstractSyntaxTree::Forall(None, Box::new(left), Box::new(right))
+    }
 }
 
 fn colon_handler(left: AbstractSyntaxTree, right: AbstractSyntaxTree) -> AbstractSyntaxTree {
@@ -73,6 +123,9 @@ fn semicolon_handler(left: AbstractSyntaxTree, right: AbstractSyntaxTree) -> Abs
     }
 }
 
+// TODO: make some operators left-associative
+// TODO: use floating-point precedence values
+// TODO: implement macro operator
 // TODO: use string interning for this
 // TODO: move operator table into separate module
 pub(crate) static OPERATOR_TABLE: Lazy<

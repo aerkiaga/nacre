@@ -17,6 +17,7 @@ pub(crate) enum AbstractSyntaxTree {
     // invalid in final AST:
     Empty,
     Typed(Box<AbstractSyntaxTree>, Box<AbstractSyntaxTree>),
+    TypeApp(Box<AbstractSyntaxTree>, Box<AbstractSyntaxTree>),
 }
 
 impl AbstractSyntaxTree {
@@ -109,14 +110,32 @@ impl AbstractSyntaxTree {
                 right.fmt_rec(f, levels, true);
                 levels.pop();
             }
+            AbstractSyntaxTree::TypeApp(left, right) => {
+                write!(f, "TypeApp\n");
+                levels.push(true);
+                left.fmt_rec(f, levels, false);
+                right.fmt_rec(f, levels, true);
+                levels.pop();
+            }
         }
         Ok(())
     }
 
-    pub(crate) fn application_leftmost_term<'a>(&'a self) -> &'a AbstractSyntaxTree {
+    pub(crate) fn type_app_flatten(self) -> Vec<AbstractSyntaxTree> {
         match self {
-            AbstractSyntaxTree::Application(left, _) => left.application_leftmost_term(),
-            _ => &self,
+            AbstractSyntaxTree::TypeApp(left, right) => {
+                let mut r = left.type_app_flatten();
+                r.push(*right);
+                r
+            }
+            _ => vec![self],
+        }
+    }
+
+    pub(crate) fn into_list(self) -> Vec<Box<AbstractSyntaxTree>> {
+        match self {
+            AbstractSyntaxTree::List(elements) => elements,
+            _ => vec![Box::new(self)],
         }
     }
 }
@@ -125,10 +144,6 @@ impl std::fmt::Debug for AbstractSyntaxTree {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         self.fmt_rec(f, &mut vec![], true)
     }
-}
-
-enum TreeBuilderState {
-    Normal,
 }
 
 async fn perform_macro_call(logical_path: String, s: String) -> AbstractSyntaxTree {
@@ -161,29 +176,26 @@ async fn parse_terminal(token: lexer::Token) -> AbstractSyntaxTree {
 pub(crate) async fn build_tree(
     mut receiver: mpsc::UnboundedReceiver<parser::ParserToken>,
 ) -> AbstractSyntaxTree {
-    let mut state = TreeBuilderState::Normal;
     let mut ast_stack = vec![];
     loop {
         let token = match receiver.recv().await {
             Some(token) => token,
             None => break,
         };
-        match state {
-            TreeBuilderState::Normal => match token {
-                parser::ParserToken::Terminal(opt) => {
-                    ast_stack.push(match opt {
-                        Some(x) => parse_terminal(x).await,
-                        None => AbstractSyntaxTree::Empty,
-                    });
-                }
-                parser::ParserToken::Operator(s) => {
-                    let definition = operators::OPERATOR_TABLE.get(&s).unwrap();
-                    let handler = definition.2;
-                    let right = ast_stack.pop().unwrap();
-                    let left = ast_stack.pop().unwrap();
-                    ast_stack.push(handler(left, right));
-                }
-            },
+        match token {
+            parser::ParserToken::Terminal(opt) => {
+                ast_stack.push(match opt {
+                    Some(x) => parse_terminal(x).await,
+                    None => AbstractSyntaxTree::Empty,
+                });
+            }
+            parser::ParserToken::Operator(s) => {
+                let definition = operators::OPERATOR_TABLE.get(&s).unwrap();
+                let handler = definition.2;
+                let right = ast_stack.pop().unwrap();
+                let left = ast_stack.pop().unwrap();
+                ast_stack.push(handler(left, right));
+            }
         }
     }
     ast_stack.pop().unwrap()
