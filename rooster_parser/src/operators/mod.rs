@@ -19,7 +19,7 @@ use arrow::*;
 fn colon_handler(
     left: AbstractSyntaxTree,
     right: AbstractSyntaxTree,
-    range: Range<usize>,
+    _range: Range<usize>,
 ) -> Result<AbstractSyntaxTree, ()> {
     let left_start = left.get_range().start;
     let right_end = right.get_range().end;
@@ -34,7 +34,7 @@ fn colon_handler(
 fn comma_handler(
     left: AbstractSyntaxTree,
     right: AbstractSyntaxTree,
-    range: Range<usize>,
+    _range: Range<usize>,
 ) -> Result<AbstractSyntaxTree, ()> {
     if let AbstractSyntaxTree::List(mut left_statements, left_range) = left {
         let right_range = right.get_range();
@@ -67,7 +67,7 @@ fn comma_handler(
 fn equals_handler(
     left: AbstractSyntaxTree,
     right: AbstractSyntaxTree,
-    range: Range<usize>,
+    _range: Range<usize>,
 ) -> Result<AbstractSyntaxTree, ()> {
     let left_start = left.get_range().start;
     let right_end = right.get_range().end;
@@ -106,7 +106,7 @@ fn equals_handler(
 fn semicolon_handler(
     left: AbstractSyntaxTree,
     right: AbstractSyntaxTree,
-    range: Range<usize>,
+    _range: Range<usize>,
 ) -> Result<AbstractSyntaxTree, ()> {
     if let AbstractSyntaxTree::Block(mut left_statements, left_range) = left {
         let right_range = right.get_range();
@@ -137,7 +137,6 @@ fn semicolon_handler(
 }
 
 // TODO: make some operators left-associative
-// TODO: use floating-point precedence values
 // TODO: implement macro operator
 // TODO: use string interning for this
 pub(crate) static OPERATOR_TABLE: Lazy<

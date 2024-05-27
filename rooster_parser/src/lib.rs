@@ -13,5 +13,5 @@ pub use report::REPORTS;
 
 /// Get the annotated CoC expression corresponding to a particular logical path.
 pub async fn get_expression(logical_path: &str) {
-    cache::get_ast(logical_path).await;
+    cache::get_ast(logical_path).await.unwrap();
 }

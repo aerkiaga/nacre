@@ -79,22 +79,22 @@ impl AbstractSyntaxTree {
         let l = levels.len();
         for n in 0..l.max(1) - 1 {
             if levels[n] {
-                write!(f, "│ ");
+                write!(f, "│ ")?;
             } else {
-                write!(f, "  ");
+                write!(f, "  ")?;
             }
         }
         if l > 0 {
             if last {
-                write!(f, "└ ");
+                write!(f, "└ ")?;
                 levels[l - 1] = false;
             } else {
-                write!(f, "├ ");
+                write!(f, "├ ")?;
             }
         }
         match self {
             AbstractSyntaxTree::Block(statements, _) => {
-                write!(f, "Block\n");
+                write!(f, "Block\n")?;
                 levels.push(true);
                 for n in 0..statements.len() {
                     statements[n].fmt_rec(f, levels, n == statements.len() - 1)?
@@ -102,7 +102,7 @@ impl AbstractSyntaxTree {
                 levels.pop();
             }
             AbstractSyntaxTree::List(statements, _) => {
-                write!(f, "Block\n");
+                write!(f, "Block\n")?;
                 levels.push(true);
                 for n in 0..statements.len() {
                     statements[n].fmt_rec(f, levels, n == statements.len() - 1)?
@@ -110,74 +110,74 @@ impl AbstractSyntaxTree {
                 levels.pop();
             }
             AbstractSyntaxTree::Enclosed(ast, ch, _) => {
-                write!(f, "Enclosed {}\n", ch);
+                write!(f, "Enclosed {}\n", ch)?;
                 levels.push(true);
-                ast.fmt_rec(f, levels, true);
+                ast.fmt_rec(f, levels, true)?;
                 levels.pop();
             }
             AbstractSyntaxTree::Identifier(components, _) => {
-                write!(f, "Identifier ");
+                write!(f, "Identifier ")?;
                 for n in 0..components.len() {
                     if n != 0 {
-                        write!(f, "::");
+                        write!(f, "::")?;
                     }
-                    write!(f, "{}", components[n]);
+                    write!(f, "{}", components[n])?;
                 }
-                write!(f, "\n");
+                write!(f, "\n")?;
             }
             AbstractSyntaxTree::Assignment(identifier, value, is_let, _) => {
-                write!(f, "Assignment {}\n", is_let);
+                write!(f, "Assignment {}\n", is_let)?;
                 levels.push(true);
-                identifier.fmt_rec(f, levels, false);
-                value.fmt_rec(f, levels, true);
+                identifier.fmt_rec(f, levels, false)?;
+                value.fmt_rec(f, levels, true)?;
                 levels.pop();
             }
             AbstractSyntaxTree::Application(left, right, _) => {
-                write!(f, "Application\n");
+                write!(f, "Application\n")?;
                 levels.push(true);
-                left.fmt_rec(f, levels, false);
-                right.fmt_rec(f, levels, true);
+                left.fmt_rec(f, levels, false)?;
+                right.fmt_rec(f, levels, true)?;
                 levels.pop();
             }
             AbstractSyntaxTree::Forall(identifier, var_type, term, _) => {
                 match identifier {
-                    Some(name) => write!(f, "Forall {}\n", name),
-                    None => write!(f, "Forall\n"),
+                    Some(name) => write!(f, "Forall {}\n", name)?,
+                    None => write!(f, "Forall\n")?,
                 };
                 levels.push(true);
-                var_type.fmt_rec(f, levels, false);
-                term.fmt_rec(f, levels, true);
+                var_type.fmt_rec(f, levels, false)?;
+                term.fmt_rec(f, levels, true)?;
                 levels.pop();
             }
             AbstractSyntaxTree::Lambda(identifier, var_type, term, _) => {
-                write!(f, "Lambda {}\n", identifier);
+                write!(f, "Lambda {}\n", identifier)?;
                 levels.push(true);
-                var_type.fmt_rec(f, levels, false);
-                term.fmt_rec(f, levels, true);
+                var_type.fmt_rec(f, levels, false)?;
+                term.fmt_rec(f, levels, true)?;
                 levels.pop();
             }
             AbstractSyntaxTree::Empty => {
-                write!(f, "Empty\n");
+                write!(f, "Empty\n")?;
             }
             AbstractSyntaxTree::Typed(left, right, _) => {
-                write!(f, "Typed\n");
+                write!(f, "Typed\n")?;
                 levels.push(true);
-                left.fmt_rec(f, levels, false);
-                right.fmt_rec(f, levels, true);
+                left.fmt_rec(f, levels, false)?;
+                right.fmt_rec(f, levels, true)?;
                 levels.pop();
             }
             AbstractSyntaxTree::TypeApp(left, right, _) => {
-                write!(f, "TypeApp\n");
+                write!(f, "TypeApp\n")?;
                 levels.push(true);
-                left.fmt_rec(f, levels, false);
-                right.fmt_rec(f, levels, true);
+                left.fmt_rec(f, levels, false)?;
+                right.fmt_rec(f, levels, true)?;
                 levels.pop();
             }
             AbstractSyntaxTree::FnApp(left, right, _) => {
-                write!(f, "FnApp\n");
+                write!(f, "FnApp\n")?;
                 levels.push(true);
-                left.fmt_rec(f, levels, false);
-                right.fmt_rec(f, levels, true);
+                left.fmt_rec(f, levels, false)?;
+                right.fmt_rec(f, levels, true)?;
                 levels.pop();
             }
         }
@@ -263,7 +263,7 @@ pub(crate) async fn build_tree(
             None => break,
         };
         match token {
-            parser::ParserToken::Terminal(opt, _) => {
+            parser::ParserToken::Terminal(opt) => {
                 ast_stack.push(match opt {
                     Some(x) => parse_terminal(x).await?,
                     None => AbstractSyntaxTree::Empty,

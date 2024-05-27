@@ -83,13 +83,21 @@ pub(crate) async fn get_ast(logical_path: &str) -> Result<Arc<parser2::AbstractS
     if let Some(notify) = option {
         let s = logical_path.to_string();
         let notify_sender = notify.clone();
-        tokio::spawn(async move {
-            load_ast(&s).await;
+        let result = tokio::spawn(async move {
+            load_ast(&s).await?;
             notify_sender.notify_waiters();
+            Ok::<(), ()>(())
         })
         .await
         .unwrap();
-        try_get_ast(logical_path).await.ok_or(())?;
+        if let Err(_) = result {
+            PARSER_CACHE.write().await.remove(logical_path);
+            return Err(());
+        }
+        if let Err(_) = try_get_ast(logical_path).await.ok_or(()) {
+            PARSER_CACHE.write().await.remove(logical_path);
+            return Err(());
+        }
     }
 
     // Wait if pending, return AST if/when available

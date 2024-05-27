@@ -6,7 +6,7 @@ use std::ops::Range;
 pub(crate) fn namespace_handler(
     left: AbstractSyntaxTree,
     right: AbstractSyntaxTree,
-    range: Range<usize>,
+    _range: Range<usize>,
 ) -> Result<AbstractSyntaxTree, ()> {
     if let AbstractSyntaxTree::Identifier(mut left_components, left_range) = left {
         if let AbstractSyntaxTree::Identifier(mut right_components, right_range) = right {

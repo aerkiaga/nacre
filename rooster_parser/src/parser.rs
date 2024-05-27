@@ -4,14 +4,14 @@ use std::ops::Range;
 use tokio::sync::mpsc;
 
 pub(crate) enum ParserToken {
-    Terminal(Option<lexer::Token>, Range<usize>),
+    Terminal(Option<lexer::Token>),
     Operator(String, Range<usize>),
 }
 
 impl std::fmt::Debug for ParserToken {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            ParserToken::Terminal(opt, _) => match opt {
+            ParserToken::Terminal(opt) => match opt {
                 Some(token) => write!(f, "Terminal {:?}", token),
                 None => write!(f, "Empty Terminal"),
             },
@@ -35,7 +35,7 @@ pub(crate) async fn parse_stream(
         };
         let mut s_clone = None;
         // Check if we're dealing with an operator
-        let maybe_operator = if let lexer::Token::Other(s, rg) = &token {
+        let maybe_operator = if let lexer::Token::Other(s, _) = &token {
             s_clone = Some(s.clone());
             operators::OPERATOR_TABLE.get(s)
         } else {
@@ -45,7 +45,7 @@ pub(crate) async fn parse_stream(
         // Convert each actual token into a sequence of pseudo-tokens
         // to remove empty and unary operators
         let tokens = match maybe_operator {
-            Some(definition) => {
+            Some(_) => {
                 if next_is_operator {
                     // Binary operator
                     next_is_operator = false;
@@ -54,7 +54,7 @@ pub(crate) async fn parse_stream(
                     // Unary operator
                     next_is_operator = false;
                     vec![
-                        ParserToken::Terminal(None, range.clone()),
+                        ParserToken::Terminal(None),
                         ParserToken::Operator(s_clone.unwrap(), range),
                     ]
                 }
@@ -65,20 +65,20 @@ pub(crate) async fn parse_stream(
                     next_is_operator = true;
                     vec![
                         ParserToken::Operator("".to_string(), range.clone()),
-                        ParserToken::Terminal(Some(token.clone()), range),
+                        ParserToken::Terminal(Some(token.clone())),
                     ]
                 } else {
                     // Regular terminal
                     next_is_operator = true;
-                    vec![ParserToken::Terminal(Some(token.clone()), range)]
+                    vec![ParserToken::Terminal(Some(token.clone()))]
                 }
             }
         };
         // Shunting yard algorithm
         for token in tokens {
             match &token {
-                ParserToken::Terminal(opt, _) => {
-                    sender.send(token);
+                ParserToken::Terminal(_) => {
+                    sender.send(token).unwrap();
                 }
                 ParserToken::Operator(s, _) => {
                     let definition = operators::OPERATOR_TABLE.get(s).unwrap();
@@ -88,7 +88,7 @@ pub(crate) async fn parse_stream(
                         }
                         let stack_operator = &operator_stack[operator_stack.len() - 1];
                         let stack_definition = match stack_operator {
-                            ParserToken::Terminal(_, _) => panic!(),
+                            ParserToken::Terminal(_) => panic!(),
                             ParserToken::Operator(s, _) => {
                                 operators::OPERATOR_TABLE.get(s).unwrap()
                             }
@@ -98,7 +98,7 @@ pub(crate) async fn parse_stream(
                         {
                             break;
                         }
-                        sender.send(operator_stack.pop().unwrap());
+                        sender.send(operator_stack.pop().unwrap()).unwrap();
                     }
                     operator_stack.push(token);
                 }
@@ -107,9 +107,11 @@ pub(crate) async fn parse_stream(
     }
     // Flush remaining stack
     loop {
-        sender.send(match operator_stack.pop() {
-            Some(token) => token,
-            None => break,
-        });
+        sender
+            .send(match operator_stack.pop() {
+                Some(token) => token,
+                None => break,
+            })
+            .unwrap();
     }
 }

@@ -7,7 +7,7 @@ use std::ops::Range;
 pub(crate) fn application_handler(
     left: AbstractSyntaxTree,
     right: AbstractSyntaxTree,
-    range: Range<usize>,
+    _range: Range<usize>,
 ) -> Result<AbstractSyntaxTree, ()> {
     match &left {
         AbstractSyntaxTree::Identifier(components, left_range) => {
@@ -58,9 +58,7 @@ pub(crate) fn application_handler(
             if params.len() < 2 {
                 panic!();
             }
-            let right_range = right.get_range();
             let mut r = right;
-            let l = params.len();
             params.remove(0);
             for param_group in params.into_iter().rev() {
                 if let AbstractSyntaxTree::Enclosed(inner, ch, param_group_range) = param_group {

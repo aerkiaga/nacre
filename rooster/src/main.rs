@@ -36,7 +36,7 @@ async fn main() {
     let (notify_completion_send, mut notify_completion) = mpsc::channel(1);
     let task_handle = tokio::spawn(async move {
         rooster_parser::get_expression(&logical_path).await;
-        notify_completion_send.send(()).await;
+        notify_completion_send.send(()).await.unwrap();
     });
     let mut report_receiver = rooster_parser::REPORTS.subscribe();
     let mut color_generator = ariadne::ColorGenerator::new();
@@ -76,5 +76,5 @@ async fn main() {
             },
         };
     }
-    task_handle.await;
+    task_handle.await.unwrap();
 }

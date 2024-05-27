@@ -18,5 +18,5 @@ pub static REPORTS: Lazy<broadcast::Sender<Report>> = Lazy::new(|| {
 });
 
 pub(crate) fn send(report: Report) {
-    REPORTS.send(report);
+    let _ = REPORTS.send(report);
 }

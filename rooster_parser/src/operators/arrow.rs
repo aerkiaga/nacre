@@ -6,15 +6,14 @@ use std::ops::Range;
 pub(crate) fn arrow_handler(
     left: AbstractSyntaxTree,
     right: AbstractSyntaxTree,
-    range: Range<usize>,
+    _range: Range<usize>,
 ) -> Result<AbstractSyntaxTree, ()> {
-    if let AbstractSyntaxTree::TypeApp(_, _, left_range) = &left {
+    if let AbstractSyntaxTree::TypeApp(_, _, _) = &left {
         let mut params = left.type_app_flatten();
         if params.len() < 2 {
             panic!();
         }
         let mut r = right;
-        let l = params.len();
         params.remove(0);
         for param_group in params.into_iter().rev() {
             if let AbstractSyntaxTree::Enclosed(inner, ch, param_group_range) = param_group {
