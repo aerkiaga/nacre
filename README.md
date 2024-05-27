@@ -56,4 +56,6 @@ These items are planned design features or traits:
 - Optimization at whole binary level.
 
 ## Progress
-Currently only the lexer and first-stage parser are implemented.
+Currently only the lexer and parser are implemented.
+
+**Next step**: improve current code, prepare for kernel.

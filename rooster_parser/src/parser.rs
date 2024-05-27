@@ -3,7 +3,6 @@ use crate::*;
 use std::ops::Range;
 use tokio::sync::mpsc;
 
-// TODO: propagate debug info
 pub(crate) enum ParserToken {
     Terminal(Option<lexer::Token>, Range<usize>),
     Operator(String, Range<usize>),

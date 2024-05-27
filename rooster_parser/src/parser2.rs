@@ -3,6 +3,7 @@ use crate::*;
 use std::ops::Range;
 use tokio::sync::mpsc;
 
+#[derive(Clone)]
 pub(crate) enum AbstractSyntaxTree {
     Block(Vec<Box<AbstractSyntaxTree>>, Range<usize>),
     List(Vec<Box<AbstractSyntaxTree>>, Range<usize>),
