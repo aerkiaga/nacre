@@ -6,6 +6,7 @@ use std::ops::Range;
 pub(crate) fn arrow_handler(
     left: AbstractSyntaxTree,
     right: AbstractSyntaxTree,
+    filename: String,
     _range: Range<usize>,
 ) -> Result<AbstractSyntaxTree, ()> {
     if let AbstractSyntaxTree::TypeApp(_, _, _) = &left {
@@ -26,6 +27,7 @@ pub(crate) fn arrow_handler(
                                 if components.len() != 1 {
                                     report::send(Report {
                                         is_error: true,
+                                        filename: filename,
                                         offset: identifier_range.start,
                                         message: "parameter names cannot be namespaced".to_string(),
                                         note: None,
@@ -50,6 +52,7 @@ pub(crate) fn arrow_handler(
                                 let identifier_range = var_name.get_range();
                                 report::send(Report {
                                     is_error: true,
+                                    filename: filename,
                                     offset: identifier_range.start,
                                     message: "parameter name expected".to_string(),
                                     note: None,
@@ -65,6 +68,7 @@ pub(crate) fn arrow_handler(
                             let element_range = element.get_range();
                             report::send(Report {
                                 is_error: true,
+                                filename: filename,
                                 offset: element_range.start,
                                 message: "type parameter expected".to_string(),
                                 note: Some(
@@ -83,6 +87,7 @@ pub(crate) fn arrow_handler(
                 } else {
                     report::send(Report {
                         is_error: true,
+                        filename: filename,
                         offset: param_group_range.start,
                         message: "type parameters must be enclosed in parentheses".to_string(),
                         note: Some(
@@ -108,6 +113,7 @@ pub(crate) fn arrow_handler(
                 let param_group_range = param_group.get_range();
                 report::send(Report {
                     is_error: true,
+                    filename: filename,
                     offset: param_group_range.start,
                     message: "type parameters must be enclosed in parentheses".to_string(),
                     note: Some(

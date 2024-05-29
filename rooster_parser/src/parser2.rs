@@ -252,7 +252,7 @@ async fn perform_macro_call(logical_path: String, s: String) -> Result<AbstractS
     panic!("Macros are yet unimplemented");
 }
 
-async fn parse_terminal(token: lexer::Token) -> Result<AbstractSyntaxTree, ()> {
+async fn parse_terminal(token: lexer::Token, filename: String) -> Result<AbstractSyntaxTree, ()> {
     match token {
         lexer::Token::SingleQuotes(s, _) => {
             // desugars into #char::_parse (...)
@@ -263,17 +263,17 @@ async fn parse_terminal(token: lexer::Token) -> Result<AbstractSyntaxTree, ()> {
             perform_macro_call("String::_parse".to_string(), s).await
         }
         lexer::Token::Parentheses(s, range) => Ok(AbstractSyntaxTree::Enclosed(
-            Box::new(preprocess::preprocess_chunk(s, range.start + 1).await?),
+            Box::new(preprocess::preprocess_chunk(s, filename, range.start + 1).await?),
             '(',
             range,
         )),
         lexer::Token::Brackets(s, range) => Ok(AbstractSyntaxTree::Enclosed(
-            Box::new(preprocess::preprocess_chunk(s, range.start + 1).await?),
+            Box::new(preprocess::preprocess_chunk(s, filename, range.start + 1).await?),
             '[',
             range,
         )),
         lexer::Token::Braces(s, range) => Ok(AbstractSyntaxTree::Enclosed(
-            Box::new(preprocess::preprocess_chunk(s, range.start + 1).await?),
+            Box::new(preprocess::preprocess_chunk(s, filename, range.start + 1).await?),
             '{',
             range,
         )),
@@ -283,6 +283,7 @@ async fn parse_terminal(token: lexer::Token) -> Result<AbstractSyntaxTree, ()> {
 
 pub(crate) async fn build_tree(
     mut receiver: mpsc::UnboundedReceiver<parser::ParserToken>,
+    filename: String,
 ) -> Result<AbstractSyntaxTree, ()> {
     let mut ast_stack = vec![];
     loop {
@@ -293,7 +294,7 @@ pub(crate) async fn build_tree(
         match token {
             parser::ParserToken::Terminal(opt) => {
                 ast_stack.push(match opt {
-                    Some(x) => parse_terminal(x).await?,
+                    Some(x) => parse_terminal(x, filename.clone()).await?,
                     None => AbstractSyntaxTree::Empty,
                 });
             }
@@ -302,7 +303,7 @@ pub(crate) async fn build_tree(
                 let handler = definition.2;
                 let right = ast_stack.pop().unwrap();
                 let left = ast_stack.pop().unwrap();
-                ast_stack.push(handler(left, right, range)?);
+                ast_stack.push(handler(left, right, filename.clone(), range)?);
             }
         }
     }

@@ -6,6 +6,7 @@ use std::ops::Range;
 pub(crate) fn namespace_handler(
     left: AbstractSyntaxTree,
     right: AbstractSyntaxTree,
+    filename: String,
     _range: Range<usize>,
 ) -> Result<AbstractSyntaxTree, ()> {
     if let AbstractSyntaxTree::Identifier(mut left_components, left_range) = left {
@@ -19,6 +20,7 @@ pub(crate) fn namespace_handler(
             let right_range = right.get_range();
             report::send(Report {
                 is_error: true,
+                filename: filename,
                 offset: right_range.start,
                 message: "qualified name must be composed of identifiers".to_string(),
                 note: None,
@@ -31,6 +33,7 @@ pub(crate) fn namespace_handler(
         let left_range = left.get_range();
         report::send(Report {
             is_error: true,
+            filename: filename,
             offset: left_range.start,
             message: "qualified name must be composed of identifiers".to_string(),
             note: None,

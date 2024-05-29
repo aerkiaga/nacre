@@ -107,6 +107,7 @@ enum TokenizerState {
 // parenthesized expressions are produced as single tokens
 pub(crate) async fn tokenize_chunk(
     chunk: &String,
+    filename: String,
     mut offset: usize,
     sender: mpsc::UnboundedSender<Token>,
 ) -> Result<(), ()> {
@@ -173,6 +174,7 @@ pub(crate) async fn tokenize_chunk(
                     CharType::CloseDelimiter => {
                         report::send(Report {
                             is_error: true,
+                            filename: filename,
                             offset: offset,
                             message: "unmatched closing delimiter".to_string(),
                             note: None,
@@ -327,6 +329,7 @@ pub(crate) async fn tokenize_chunk(
                     if opening != get_opening_char(ch) {
                         report::send(Report {
                             is_error: true,
+                            filename: filename,
                             offset: offset,
                             message: "mismatched delimiters".to_string(),
                             note: None,
@@ -373,6 +376,7 @@ pub(crate) async fn tokenize_chunk(
         TokenizerState::LongComment(_, start_offset, _) => {
             report::send(Report {
                 is_error: true,
+                filename: filename,
                 offset: offset,
                 message: "unterminated comment".to_string(),
                 note: None,
@@ -387,6 +391,7 @@ pub(crate) async fn tokenize_chunk(
         TokenizerState::SingleQuotes(_, start_offset) => {
             report::send(Report {
                 is_error: true,
+                filename: filename,
                 offset: offset,
                 message: "unterminated single quotes".to_string(),
                 note: None,
@@ -401,6 +406,7 @@ pub(crate) async fn tokenize_chunk(
         TokenizerState::DoubleQuotes(_, start_offset) => {
             report::send(Report {
                 is_error: true,
+                filename: filename,
                 offset: offset,
                 message: "unterminated double quotes".to_string(),
                 note: None,
@@ -416,6 +422,7 @@ pub(crate) async fn tokenize_chunk(
             for (ch, offset) in stack {
                 report::send(Report {
                     is_error: true,
+                    filename: filename.clone(),
                     offset: offset,
                     message: "unmatched opening delimiter".to_string(),
                     note: None,

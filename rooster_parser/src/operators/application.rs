@@ -7,6 +7,7 @@ use std::ops::Range;
 pub(crate) fn application_handler(
     left: AbstractSyntaxTree,
     right: AbstractSyntaxTree,
+    filename: String,
     _range: Range<usize>,
 ) -> Result<AbstractSyntaxTree, ()> {
     match &left {
@@ -73,6 +74,7 @@ pub(crate) fn application_handler(
                                     if components.len() != 1 {
                                         report::send(Report {
                                             is_error: true,
+                                            filename: filename,
                                             offset: identifier_range.start,
                                             message: "parameter names cannot be namespaced"
                                                 .to_string(),
@@ -98,6 +100,7 @@ pub(crate) fn application_handler(
                                     let identifier_range = var_name.get_range();
                                     report::send(Report {
                                         is_error: true,
+                                        filename: filename,
                                         offset: identifier_range.start,
                                         message: "parameter name expected".to_string(),
                                         note: None,
@@ -113,6 +116,7 @@ pub(crate) fn application_handler(
                                 let element_range = element.get_range();
                                 report::send(Report {
                                     is_error: true,
+                                    filename: filename,
                                     offset: element_range.start,
                                     message: "function parameter expected".to_string(),
                                     note: Some(
@@ -131,6 +135,7 @@ pub(crate) fn application_handler(
                     } else {
                         report::send(Report {
                             is_error: true,
+                            filename: filename,
                             offset: param_group_range.start,
                             message: "function parameters must be enclosed in parentheses"
                                 .to_string(),

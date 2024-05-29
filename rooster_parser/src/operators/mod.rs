@@ -19,6 +19,7 @@ use arrow::*;
 fn colon_handler(
     left: AbstractSyntaxTree,
     right: AbstractSyntaxTree,
+    _filename: String,
     _range: Range<usize>,
 ) -> Result<AbstractSyntaxTree, ()> {
     let left_start = left.get_range().start;
@@ -34,6 +35,7 @@ fn colon_handler(
 fn comma_handler(
     left: AbstractSyntaxTree,
     right: AbstractSyntaxTree,
+    _filename: String,
     _range: Range<usize>,
 ) -> Result<AbstractSyntaxTree, ()> {
     if let AbstractSyntaxTree::List(mut left_statements, left_range) = left {
@@ -67,6 +69,7 @@ fn comma_handler(
 fn equals_handler(
     left: AbstractSyntaxTree,
     right: AbstractSyntaxTree,
+    _filename: String,
     _range: Range<usize>,
 ) -> Result<AbstractSyntaxTree, ()> {
     let left_start = left.get_range().start;
@@ -106,6 +109,7 @@ fn equals_handler(
 fn semicolon_handler(
     left: AbstractSyntaxTree,
     right: AbstractSyntaxTree,
+    _filename: String,
     _range: Range<usize>,
 ) -> Result<AbstractSyntaxTree, ()> {
     if let AbstractSyntaxTree::Block(mut left_statements, left_range) = left {
@@ -148,6 +152,7 @@ pub(crate) static OPERATOR_TABLE: Lazy<
             fn(
                 AbstractSyntaxTree,
                 AbstractSyntaxTree,
+                String,
                 Range<usize>,
             ) -> Result<AbstractSyntaxTree, ()>,
         ),

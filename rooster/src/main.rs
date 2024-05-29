@@ -54,13 +54,13 @@ async fn main() {
                 let mut labels = vec![];
                 for n in 0..report.labels.len() {
                     let label = &report.labels[n];
-                    labels.push(ariadne::Label::new(("test.roo", label.0.clone()))
+                    labels.push(ariadne::Label::new((&*report.filename, label.0.clone()))
                         .with_message(format_text(label.1.clone()))
                         .with_color(colors[n])
                     );
                 }
                 // TODO: get filename somehow
-                let mut r = ariadne::Report::<(&str, Range<usize>)>::build(ariadne::ReportKind::Error, "test.roo", report.offset)
+                let mut r = ariadne::Report::<(&str, Range<usize>)>::build(ariadne::ReportKind::Error, &*report.filename, report.offset)
                     .with_message(format_text(report.message))
                     .with_labels(labels);
                 if let Some(note) = report.note {
@@ -71,7 +71,7 @@ async fn main() {
                 }
                 r
                     .finish()
-                    .eprint(("test.roo", ariadne::Source::<String>::from((&*rooster_parser::get_contents("test.roo").await.unwrap()).to_string())))
+                    .eprint((&*report.filename, ariadne::Source::<String>::from((&*rooster_parser::get_contents(&report.filename).await.unwrap()).to_string())))
                     .unwrap();
             },
         };

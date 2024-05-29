@@ -10,6 +10,8 @@ use tokio::sync::broadcast;
 pub struct Report {
     /// Whether the report corresponds to an error. If false, it is a warning.
     pub is_error: bool,
+    /// What file the issue occurred in.
+    pub filename: String,
     /// Where in the code the reported issue occurs.
     pub offset: usize,
     /// Message to show to the user.

@@ -57,9 +57,10 @@ pub async fn get_contents(filename: &str) -> Result<Arc<String>, ()> {
 fn parser_loader(
     filename: &str,
 ) -> Pin<Box<dyn Future<Output = Result<AbstractSyntaxTree, ()>> + Send + '_>> {
+    let filename_string = filename.to_string();
     Box::pin(async move {
         let file = get_contents(filename).await?;
-        let ast = preprocess::preprocess_file(&file).await?;
+        let ast = preprocess::preprocess_file(&file, filename_string).await?;
         println!("{:?}", &ast); //D
         Ok(ast)
     })
