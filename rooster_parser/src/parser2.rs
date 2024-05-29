@@ -3,47 +3,75 @@ use crate::*;
 use std::ops::Range;
 use tokio::sync::mpsc;
 
+/// An AST for parsed Rooster code.
+///
+/// All tuple variants contain a `Range` field
+/// that indicates where in the source code the
+/// element occurs.
 #[derive(Clone)]
-pub(crate) enum AbstractSyntaxTree {
+pub enum AbstractSyntaxTree {
+    /// A sequence of definitions or statements sperated by semicolons.
     Block(Vec<Box<AbstractSyntaxTree>>, Range<usize>),
+    /// A sequence of expressions separated by commas.
     List(Vec<Box<AbstractSyntaxTree>>, Range<usize>),
+    /// Some code enclosed in a particular (opening) character.
+    /// This may be `'('`, `'['` or `'{'`.
     Enclosed(Box<AbstractSyntaxTree>, char, Range<usize>),
+    /// An identifier made of one or more path elements separated by `::`.
     Identifier(Vec<String>, Range<usize>), // TODO: invalid in final AST?
+    /// An assignment or definition.
     Assignment(
+        /// Left-hand expression.
         Box<AbstractSyntaxTree>,
+        /// Right-hand expression.
         Box<AbstractSyntaxTree>,
+        /// Whether the assignment is a definition (starts with `let`).
         bool,
         Range<usize>,
     ),
+    /// A function application.
     Application(
+        /// Function to be called.
         Box<AbstractSyntaxTree>,
+        /// Parameter.
         Box<AbstractSyntaxTree>,
         Range<usize>,
     ),
+    /// A type definition or forall expression.
     Forall(
+        /// Optional parameter name.
         Option<String>,
+        /// Parameter type.
         Box<AbstractSyntaxTree>,
+        /// Return type.
         Box<AbstractSyntaxTree>,
         Range<usize>,
     ),
+    /// A function definition.
     Lambda(
+        /// Parameter name.
         String,
+        /// Parameter type.
         Box<AbstractSyntaxTree>,
+        /// Return type.
         Box<AbstractSyntaxTree>,
         Range<usize>,
     ),
-    // invalid in final AST:
+    /// Empty AST, should only occur internally.
     Empty,
+    /// Typed parameter, should only occur internally.
     Typed(
         Box<AbstractSyntaxTree>,
         Box<AbstractSyntaxTree>,
         Range<usize>,
     ),
+    /// Should only occur internally.
     TypeApp(
         Box<AbstractSyntaxTree>,
         Box<AbstractSyntaxTree>,
         Range<usize>,
     ),
+    /// Should only occur internally.
     FnApp(
         Box<AbstractSyntaxTree>,
         Box<AbstractSyntaxTree>,

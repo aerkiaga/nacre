@@ -14,6 +14,7 @@ mod parser2;
 mod preprocess;
 mod report;
 
+pub use parser2::AbstractSyntaxTree;
 pub use report::Report;
 pub use report::REPORTS;
 
@@ -27,38 +28,50 @@ fn error_cannot_read() -> ! {
     panic!();
 }
 
-// TODO: move into new module
-async fn read_file(file: &mut File) -> String {
-    let mut r = String::new();
-    match file.read_to_string(&mut r).await {
-        Ok(_) => (),
-        Err(_) => error_cannot_read(),
-    }
-    r
-}
-
-fn parser_loader(
-    logical_path: &str,
-) -> Pin<Box<dyn Future<Output = Result<parser2::AbstractSyntaxTree, ()>> + Send + '_>> {
+fn file_loader(filename: &str) -> Pin<Box<dyn Future<Output = Result<String, ()>> + Send + '_>> {
     Box::pin(async move {
         // TODO: load file only if necessary
         // TODO: convert logical to physical paths
-        let mut file = match File::open(logical_path).await {
+        let mut file = match File::open(filename).await {
             Ok(x) => x,
-            Err(_) => error_cannot_find(logical_path),
+            Err(_) => error_cannot_find(filename),
         };
-        let ast = preprocess::preprocess_file(&read_file(&mut file).await).await?;
+        let mut r = String::new();
+        match file.read_to_string(&mut r).await {
+            Ok(_) => (),
+            Err(_) => error_cannot_read(),
+        }
+        Ok(r)
+    })
+}
+
+// The global cache storing all raw files
+static FILE__CACHE: cache::Cache<String> = cache::Cache::new(file_loader as _);
+
+/// Get the raw contents of a particular file.
+pub async fn get_contents(filename: &str) -> Result<Arc<String>, ()> {
+    // TODO: normalize filename
+    FILE__CACHE.get(filename).await
+}
+
+fn parser_loader(
+    filename: &str,
+) -> Pin<Box<dyn Future<Output = Result<AbstractSyntaxTree, ()>> + Send + '_>> {
+    Box::pin(async move {
+        let file = get_contents(filename).await?;
+        let ast = preprocess::preprocess_file(&file).await?;
         println!("{:?}", &ast); //D
         Ok(ast)
     })
 }
 
-// The global cache storing all processed definitions
-static PARSER_CACHE: cache::Cache<parser2::AbstractSyntaxTree> =
-    cache::Cache::new(parser_loader as _);
+// The global cache storing all parsed files
+static PARSER_CACHE: cache::Cache<AbstractSyntaxTree> = cache::Cache::new(parser_loader as _);
 
-async fn get_ast(key: &str) -> Result<Arc<parser2::AbstractSyntaxTree>, ()> {
-    PARSER_CACHE.get(key).await
+/// Get the [AbstractSyntaxTree] for a particular file.
+pub async fn get_ast(filename: &str) -> Result<Arc<AbstractSyntaxTree>, ()> {
+    // TODO: normalize filename
+    PARSER_CACHE.get(filename).await
 }
 
 /// Get the annotated CoC expression corresponding to a particular logical path.

@@ -71,7 +71,7 @@ async fn main() {
                 }
                 r
                     .finish()
-                    .eprint(("test.roo", ariadne::Source::from(include_str!("../../test.roo"))))
+                    .eprint(("test.roo", ariadne::Source::<String>::from((&*rooster_parser::get_contents("test.roo").await.unwrap()).to_string())))
                     .unwrap();
             },
         };
