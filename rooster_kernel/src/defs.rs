@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 type GlobalRef = usize;
 
 type VariableRef = usize;
@@ -58,6 +60,36 @@ impl Term {
             Term::Let(a, b) => Ok(Term::Apply(
                 Box::new(a.make_inner_by_n(n)?),
                 Box::new(b.make_inner_by_n(n)?),
+            )),
+        }
+    }
+
+    // Removes n levels of abstraction from around the term.
+    // Returns Err(()) if an integer underflow occurred.
+    pub(crate) fn make_outer_by_n(&self, n: usize) -> Result<Term, ()> {
+        match self {
+            Term::Prop => Ok(Term::Prop),
+            Term::Type(n) => Ok(Term::Type(*n)),
+            Term::Global(g) => Ok(Term::Global(*g)),
+            Term::Variable(v) => match v.checked_sub(n) {
+                Some(r) => Ok(Term::Variable(r)),
+                None => Err(()),
+            },
+            Term::Forall(a, b) => Ok(Term::Forall(
+                Box::new(a.make_outer_by_n(n)?),
+                Box::new(b.make_outer_by_n(n)?),
+            )),
+            Term::Lambda(a, b) => Ok(Term::Lambda(
+                Box::new(a.make_outer_by_n(n)?),
+                Box::new(b.make_outer_by_n(n)?),
+            )),
+            Term::Apply(a, b) => Ok(Term::Apply(
+                Box::new(a.make_outer_by_n(n)?),
+                Box::new(b.make_outer_by_n(n)?),
+            )),
+            Term::Let(a, b) => Ok(Term::Apply(
+                Box::new(a.make_outer_by_n(n)?),
+                Box::new(b.make_outer_by_n(n)?),
             )),
         }
     }
@@ -154,6 +186,21 @@ impl Term {
     }
 }
 
+impl std::fmt::Debug for Term {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Term::Prop => write!(f, "𝐏"),
+            Term::Type(n) => write!(f, "𝐓{}", n),
+            Term::Global(g) => write!(f, "G{}", g),
+            Term::Variable(v) => write!(f, "x{}", v),
+            Term::Forall(a, b) => write!(f, "∀:{:?}.{:?}", a, b),
+            Term::Lambda(a, b) => write!(f, "λ:{:?}.{:?}", a, b),
+            Term::Apply(a, b) => write!(f, "({:?})({:?})", a, b),
+            Term::Let(a, b) => write!(f, "={:?};{:?}", a, b),
+        }
+    }
+}
+
 // The local context of a subterm, including all local variables in order of definition, from the inside out.
 pub(crate) struct Context {
     inner: Vec<(Option<Term>, Term)>,
@@ -169,16 +216,24 @@ impl Context {
     }
 
     pub(crate) fn variable_type(&self, v: VariableRef) -> Option<&Term> {
-        self.inner.get(v).map(|x| &x.1)
+        if !self.contains_variable(v) {
+            return None;
+        }
+        self.inner.get(self.inner.len() - v - 1).map(|x| &x.1)
     }
 
     pub(crate) fn variable_value(&self, v: VariableRef) -> Option<&Term> {
-        self.inner.get(v).map(|x| x.0.as_ref())?
+        if !self.contains_variable(v) {
+            return None;
+        }
+        self.inner
+            .get(self.inner.len() - v - 1)
+            .map(|x| x.0.as_ref())?
     }
 
     // Add a new variable with a definition to a context, at the innermost position.
     pub(crate) fn add_inner(&mut self, var_def: Option<Term>, var_type: Term) {
-        self.inner.insert(0, (var_def, var_type));
+        self.inner.push((var_def, var_type));
     }
 
     // Removes the innermost variable from a context.
@@ -187,33 +242,53 @@ impl Context {
     }
 }
 
+impl std::fmt::Debug for Context {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "[")?;
+        for def in &self.inner {
+            if let Some(term) = &def.0 {
+                write!(f, "{:?}", term)?;
+            }
+            write!(f, " : {:?}, ", def.1)?;
+        }
+        write!(f, "]")
+    }
+}
+
 /// The global environment that a term lives in, containing all global variables.
-// TODO: make it Sync, use RwLock
 pub struct Environment {
-    inner: Vec<(Option<Term>, Term)>,
+    inner: Vec<(Option<Arc<Term>>, Arc<Term>)>,
 }
 
 impl Environment {
+    /// Construct an [Environment] from a list of definitions.
+    ///
+    /// Each definition consists of an optional value and a mandatory type.
+    /// The definitions are not checked for well-foundedness or validity.
+    pub fn from_vec(list: Vec<(Option<Arc<Term>>, Arc<Term>)>) -> Environment {
+        Environment { inner: list }
+    }
+
     pub(crate) fn contains_global(&self, g: GlobalRef) -> bool {
         g < self.inner.len()
     }
 
     pub(crate) fn global_type(&self, g: GlobalRef) -> Option<&Term> {
-        self.inner.get(g).map(|x| &x.1)
+        self.inner.get(g).map(|x| &*x.1)
     }
 
     pub(crate) fn global_value(&self, g: GlobalRef) -> Option<&Term> {
-        self.inner.get(g).map(|x| x.0.as_ref())?
+        self.inner.get(g).map(|x| x.0.as_deref())?
     }
 
     /// Add a new global definition to an environment,
     /// returning `Err(())` if it could not be added.
     pub fn add_definition(
         &mut self,
-        global_def: Option<Term>,
-        global_type: Term,
+        global_def: Option<Arc<Term>>,
+        global_type: Arc<Term>,
     ) -> Result<(), ()> {
-        if self.global_is_legal(global_def.as_ref(), &global_type) {
+        if self.global_is_legal(global_def.as_deref(), &global_type) {
             if let Some(def) = &global_def {
                 let ctdef = def.get_type(self)?.normalize(self)?;
                 let cglobal_type = global_type.normalize(self)?;
@@ -226,5 +301,18 @@ impl Environment {
         } else {
             Err(())
         }
+    }
+}
+
+impl std::fmt::Debug for Environment {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        for def in &self.inner {
+            write!(f, "| ")?;
+            if let Some(term) = &def.0 {
+                write!(f, "{:?}", term)?;
+            }
+            write!(f, " : {:?}\n", def.1)?;
+        }
+        write!(f, "\n")
     }
 }

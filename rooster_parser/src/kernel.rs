@@ -1,14 +1,36 @@
 use crate::parser2::AbstractSyntaxTree;
 use crate::*;
 
+use rooster_kernel::Environment;
 use rooster_kernel::Term;
 use std::collections::HashMap;
+use std::collections::HashSet;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 use tokio::task::JoinSet;
 
 // A counter to assign indices to top-level definitions
 static INDEX_COUNTER: AtomicUsize = AtomicUsize::new(0);
+
+async fn create_environment(dependencies: Arc<HashSet<String>>) -> Result<Environment, ()> {
+    let mut map_index_to_def = HashMap::new();
+    let mut max_index = 0;
+    for dep in dependencies.iter() {
+        let (def, def_type, index) = &*KERNEL__CACHE.get(dep).await?;
+        map_index_to_def.insert(*index, (Some(def.clone()), def_type.clone()));
+        max_index = max_index.max(*index);
+    }
+    let mut env_vec = vec![];
+    let null = (None, Arc::new(Term::Prop));
+    for index in 0..max_index + 1 {
+        let def = match map_index_to_def.remove(&index) {
+            Some(prev) => prev,
+            None => null.clone(),
+        };
+        env_vec.push(def);
+    }
+    Ok(Environment::from_vec(env_vec))
+}
 
 fn kernel_loader(
     logical_path: &str,
@@ -17,6 +39,7 @@ fn kernel_loader(
     Box::pin(async move {
         println!("Verifying {}", logical_path);
         // First we compute all dependencies, so the operation can be parallelized
+        // TODO: move into new function that can be used by API users
         let deps = semantics::get_direct_dependencies(logical_path).await?;
         let mut join_set = JoinSet::new();
         for dep in deps.iter() {
@@ -26,13 +49,22 @@ fn kernel_loader(
         while let Some(result) = join_set.join_next().await {
             result.or(Err(()))?;
         }
+        // Then we verify the current definition
+        // Start by loading the definition term
         let (ast, filename) = get_ast(logical_path).await.unwrap();
         let definition =
             Arc::new(semantics::convert_to_term(ast, &HashMap::new(), 0, &filename).await?);
-        //let type_term = definition.get_type()?; // need environment
-        let index = INDEX_COUNTER.fetch_add(1, Ordering::Relaxed);
+        // Then create an environment for the kernel
+        // TODO: add indirect dependencies
+        let all_deps = semantics::get_all_dependencies(logical_path).await?;
+        let mut env = create_environment(all_deps).await?;
+        // And finally call into the kernel
+        let type_term = Arc::new(definition.get_type(&env).unwrap());
+        env.add_definition(Some(definition.clone()), type_term.clone())
+            .unwrap();
         println!("Verified {}", logical_path);
-        Ok((definition, Arc::new(Term::Prop), index))
+        let index = INDEX_COUNTER.fetch_add(1, Ordering::Relaxed);
+        Ok((definition, type_term, index))
     })
 }
 

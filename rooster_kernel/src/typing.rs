@@ -30,7 +30,7 @@ impl Term {
     // Assumes that both the environment and context are well-formed.
     // Returns Err(()) if the term does not have a type or an error occurred.
     pub(crate) fn compute_type(&self, env: &Environment, ctx: &mut Context) -> Result<Term, ()> {
-        // TODO: debug_assert that env and ctx are well-formed
+        debug_assert!(self.is_well_formed(env, ctx));
         match self {
             Term::Prop => Ok(Term::Type(0)),
             Term::Type(n) => {
@@ -41,17 +41,20 @@ impl Term {
             Term::Variable(v) => ctx.variable_type(*v).map(|x| x.clone()).ok_or(()),
             Term::Forall(a, b) => {
                 let ta = a.compute_type(env, ctx)?;
-                ctx.add_inner(None, *a.clone());
+                ctx.add_inner(None, a.make_inner_by_n(1)?);
                 let tb = b.compute_type(env, ctx)?;
                 ctx.remove_inner();
                 combine_forall_types(&ta, &tb, env, ctx)
             }
             Term::Lambda(a, b) => {
                 let ta = a.compute_type(env, ctx)?;
-                ctx.add_inner(None, *a.clone());
+                ctx.add_inner(None, a.make_inner_by_n(1)?);
                 let tb = b.compute_type(env, ctx)?;
+                let replacement = ctx.variable_type(0).map(|x| x.clone()).ok_or(())?;
                 ctx.remove_inner();
-                let ttb = tb.compute_type(env, ctx)?;
+                let ttb = tb
+                    .replace_variable(0, &replacement)?
+                    .compute_type(env, ctx)?;
                 combine_forall_types(&ta, &ttb, env, ctx)?;
                 Ok(Term::Forall(Box::new(*a.clone()), Box::new(tb)))
             }

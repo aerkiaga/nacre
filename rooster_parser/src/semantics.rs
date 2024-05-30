@@ -205,3 +205,15 @@ pub(crate) async fn get_direct_dependencies(
 ) -> Result<Arc<HashSet<String>>, ()> {
     DEPENDENCY__CACHE.get(logical_path).await
 }
+
+// Get all dependencies dependencies of a top-level definition.
+pub(crate) async fn get_all_dependencies(logical_path: &str) -> Result<Arc<HashSet<String>>, ()> {
+    let deps = get_direct_dependencies(logical_path).await?;
+    let mut r = HashSet::new();
+    for dep in &*deps {
+        let more_deps = get_direct_dependencies(logical_path).await?;
+        r = &r | &more_deps;
+    }
+    r = &r | &deps;
+    Ok(Arc::new(r))
+}
