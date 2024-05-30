@@ -92,3 +92,15 @@ pub(crate) async fn get_physical_path(logical_path: &str) -> (String, String) {
     }
     (file_path, identifier)
 }
+
+// Gets absolute path from relative path and file name
+pub(crate) fn make_absolute(relative_path: &str, filename: &str) -> String {
+    filename[..filename.len() - 4]
+        .split('/')
+        .into_iter()
+        .filter(|x| x.len() > 0 && x != &".")
+        .collect::<Vec<_>>()
+        .join("::")
+        + "::"
+        + relative_path
+}

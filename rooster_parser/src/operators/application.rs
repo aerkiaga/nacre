@@ -53,7 +53,21 @@ pub(crate) fn application_handler(
                         Box::new(right),
                         left_start..right_end,
                     ));
+                } else if *ch != '{' {
+                    panic!();
                 }
+            } else {
+                let right_range = right.get_range();
+                report::send(Report {
+                    is_error: true,
+                    filename: filename,
+                    offset: right_range.start,
+                    message: "function body must be enclosed in braces".to_string(),
+                    note: None,
+                    help: None,
+                    labels: vec![(right_range, "not enclosed".to_string())],
+                });
+                return Err(());
             }
             let mut params = left.fn_app_flatten();
             if params.len() < 2 {

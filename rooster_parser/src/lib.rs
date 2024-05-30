@@ -7,6 +7,7 @@ use tokio::fs::File;
 use tokio::io::AsyncReadExt;
 
 mod cache;
+mod kernel;
 mod lexer;
 mod operators;
 mod parser;
@@ -14,7 +15,9 @@ mod parser2;
 mod path;
 mod preprocess;
 mod report;
+mod semantics;
 
+pub use kernel::verify;
 pub use parser2::AbstractSyntaxTree;
 pub use report::Report;
 pub use report::REPORTS;
@@ -77,7 +80,7 @@ pub async fn get_file_ast(filename: &str) -> Result<Arc<AbstractSyntaxTree>, ()>
 
 fn definition_loader(
     logical_path: &str,
-) -> Pin<Box<dyn Future<Output = Result<&'static AbstractSyntaxTree, ()>> + Send + '_>> {
+) -> Pin<Box<dyn Future<Output = Result<(&'static AbstractSyntaxTree, String), ()>> + Send + '_>> {
     let logical_path_string = logical_path.to_string();
     Box::pin(async move {
         let (filename, identifier) = path::get_physical_path(&logical_path_string).await;
@@ -87,22 +90,21 @@ fn definition_loader(
         // r effectively has a 'static lifetime even though Rust won't see it.
         // Let's manually give it that lifetime.
         // REMEMBER TO DO SOMETHING ABOUT THIS if Cache ever implements eviction
-        Ok(unsafe { &*(r as *const AbstractSyntaxTree) })
+        Ok((unsafe { &*(r as *const AbstractSyntaxTree) }, filename))
     })
 }
 
 // The global cache storing all parsed top-level definitions
-static DEFINITION_CACHE: cache::Cache<&AbstractSyntaxTree> =
+static DEFINITION_CACHE: cache::Cache<(&AbstractSyntaxTree, String)> =
     cache::Cache::new(definition_loader as _);
 
 /// Get the [AbstractSyntaxTree] for a particular top-level definition.
-pub async fn get_ast(logical_path: &str) -> Result<Arc<&AbstractSyntaxTree>, ()> {
+pub(crate) async fn get_ast(
+    logical_path: &str,
+) -> Result<(&'static AbstractSyntaxTree, String), ()> {
     // TODO: normalize filename
-    DEFINITION_CACHE.get(logical_path).await
-}
-
-/// Get the annotated CoC expression corresponding to a particular logical path.
-pub async fn get_expression(logical_path: &str) {
-    let ast = get_ast(&logical_path).await.unwrap();
-    println!("{:?}", &ast); //D
+    DEFINITION_CACHE
+        .get(&logical_path)
+        .await
+        .map(|x| (*x).clone())
 }
