@@ -11,6 +11,7 @@ mod lexer;
 mod operators;
 mod parser;
 mod parser2;
+mod path;
 mod preprocess;
 mod report;
 
@@ -61,7 +62,6 @@ fn parser_loader(
     Box::pin(async move {
         let file = get_contents(filename).await?;
         let ast = preprocess::preprocess_file(&file, filename_string).await?;
-        println!("{:?}", &ast); //D
         Ok(ast)
     })
 }
@@ -70,12 +70,39 @@ fn parser_loader(
 static PARSER_CACHE: cache::Cache<AbstractSyntaxTree> = cache::Cache::new(parser_loader as _);
 
 /// Get the [AbstractSyntaxTree] for a particular file.
-pub async fn get_ast(filename: &str) -> Result<Arc<AbstractSyntaxTree>, ()> {
+pub async fn get_file_ast(filename: &str) -> Result<Arc<AbstractSyntaxTree>, ()> {
     // TODO: normalize filename
     PARSER_CACHE.get(filename).await
 }
 
+fn definition_loader(
+    logical_path: &str,
+) -> Pin<Box<dyn Future<Output = Result<&'static AbstractSyntaxTree, ()>> + Send + '_>> {
+    let logical_path_string = logical_path.to_string();
+    Box::pin(async move {
+        let (filename, identifier) = path::get_physical_path(&logical_path_string).await;
+        let file_ast = get_file_ast(&filename).await?;
+        let r = file_ast.get_definition(&identifier)?;
+        // Since PARSER_CACHE is static, the Arc will never get dropped, so
+        // r effectively has a 'static lifetime even though Rust won't see it.
+        // Let's manually give it that lifetime.
+        // REMEMBER TO DO SOMETHING ABOUT THIS if Cache ever implements eviction
+        Ok(unsafe { &*(r as *const AbstractSyntaxTree) })
+    })
+}
+
+// The global cache storing all parsed top-level definitions
+static DEFINITION_CACHE: cache::Cache<&AbstractSyntaxTree> =
+    cache::Cache::new(definition_loader as _);
+
+/// Get the [AbstractSyntaxTree] for a particular top-level definition.
+pub async fn get_ast(logical_path: &str) -> Result<Arc<&AbstractSyntaxTree>, ()> {
+    // TODO: normalize filename
+    DEFINITION_CACHE.get(logical_path).await
+}
+
 /// Get the annotated CoC expression corresponding to a particular logical path.
 pub async fn get_expression(logical_path: &str) {
-    get_ast(logical_path).await.unwrap();
+    let ast = get_ast(&logical_path).await.unwrap();
+    println!("{:?}", &ast); //D
 }

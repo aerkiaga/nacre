@@ -240,6 +240,36 @@ impl AbstractSyntaxTree {
             _ => vec![Box::new(self)],
         }
     }
+
+    pub(crate) fn get_definition(&self, name: &str) -> Result<&AbstractSyntaxTree, ()> {
+        match self {
+            AbstractSyntaxTree::Block(statements, _) => {
+                for statement in statements {
+                    match statement.get_definition(name) {
+                        Ok(definition) => return Ok(definition),
+                        Err(_) => {}
+                    }
+                }
+                Err(())
+            }
+            AbstractSyntaxTree::Assignment(def_name, value, is_def, _) => {
+                if *is_def {
+                    if let AbstractSyntaxTree::Identifier(components, _) = &**def_name {
+                        if components.join("::") == name {
+                            Ok(value)
+                        } else {
+                            Err(())
+                        }
+                    } else {
+                        Err(())
+                    }
+                } else {
+                    Err(())
+                }
+            }
+            _ => Err(()),
+        }
+    }
 }
 
 impl std::fmt::Debug for AbstractSyntaxTree {

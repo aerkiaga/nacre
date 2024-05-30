@@ -19,7 +19,7 @@ pub(crate) fn arrow_handler(
         for param_group in params.into_iter().rev() {
             if let AbstractSyntaxTree::Enclosed(inner, ch, param_group_range) = param_group {
                 if ch == '(' {
-                    for element in inner.into_list() {
+                    for element in inner.into_list().into_iter().rev() {
                         if let AbstractSyntaxTree::Typed(var_name, var_type, _) = *element {
                             if let AbstractSyntaxTree::Identifier(components, identifier_range) =
                                 *var_name
