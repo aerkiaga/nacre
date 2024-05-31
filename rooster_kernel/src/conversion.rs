@@ -12,7 +12,7 @@ impl Term {
                 None => Err(()),
             },
             Term::Variable(v) => match ctx.variable_value(*v) {
-                Some(t) => Ok(self.replace_variable(0, t)?.convert(env, ctx)?), // Delta-Local
+                Some(t) => Ok(t.convert(env, ctx)?), // Delta-Local
                 None => Ok(Term::Variable(*v)),
             },
             Term::Apply(a, b) => {

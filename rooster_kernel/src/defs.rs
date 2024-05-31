@@ -36,62 +36,44 @@ impl Term {
 
     // Adds n levels of abstraction around the term.
     // Returns Err(()) if an integer overflow occurred.
-    pub(crate) fn make_inner_by_n(&self, n: usize) -> Result<Term, ()> {
+    pub(crate) fn make_inner_by_n_rec(&self, n: usize, at_least: usize) -> Result<Term, ()> {
         match self {
             Term::Prop => Ok(Term::Prop),
             Term::Type(n) => Ok(Term::Type(*n)),
             Term::Global(g) => Ok(Term::Global(*g)),
-            Term::Variable(v) => match v.checked_add(n) {
-                Some(r) => Ok(Term::Variable(r)),
-                None => Err(()),
-            },
+            Term::Variable(v) => {
+                if *v >= at_least {
+                    match v.checked_add(n) {
+                        Some(r) => Ok(Term::Variable(r)),
+                        None => Err(()),
+                    }
+                } else {
+                    Ok(Term::Variable(*v))
+                }
+            }
             Term::Forall(a, b) => Ok(Term::Forall(
-                Box::new(a.make_inner_by_n(n)?),
-                Box::new(b.make_inner_by_n(n)?),
+                Box::new(a.make_inner_by_n_rec(n, at_least)?),
+                Box::new(b.make_inner_by_n_rec(n, at_least.checked_add(1).ok_or(())?)?),
             )),
             Term::Lambda(a, b) => Ok(Term::Lambda(
-                Box::new(a.make_inner_by_n(n)?),
-                Box::new(b.make_inner_by_n(n)?),
+                Box::new(a.make_inner_by_n_rec(n, at_least)?),
+                Box::new(b.make_inner_by_n_rec(n, at_least.checked_add(1).ok_or(())?)?),
             )),
             Term::Apply(a, b) => Ok(Term::Apply(
-                Box::new(a.make_inner_by_n(n)?),
-                Box::new(b.make_inner_by_n(n)?),
+                Box::new(a.make_inner_by_n_rec(n, at_least)?),
+                Box::new(b.make_inner_by_n_rec(n, at_least)?),
             )),
             Term::Let(a, b) => Ok(Term::Apply(
-                Box::new(a.make_inner_by_n(n)?),
-                Box::new(b.make_inner_by_n(n)?),
+                Box::new(a.make_inner_by_n_rec(n, at_least)?),
+                Box::new(b.make_inner_by_n_rec(n, at_least.checked_add(1).ok_or(())?)?),
             )),
         }
     }
 
-    // Removes n levels of abstraction from around the term.
-    // Returns Err(()) if an integer underflow occurred.
-    pub(crate) fn make_outer_by_n(&self, n: usize) -> Result<Term, ()> {
-        match self {
-            Term::Prop => Ok(Term::Prop),
-            Term::Type(n) => Ok(Term::Type(*n)),
-            Term::Global(g) => Ok(Term::Global(*g)),
-            Term::Variable(v) => match v.checked_sub(n) {
-                Some(r) => Ok(Term::Variable(r)),
-                None => Err(()),
-            },
-            Term::Forall(a, b) => Ok(Term::Forall(
-                Box::new(a.make_outer_by_n(n)?),
-                Box::new(b.make_outer_by_n(n)?),
-            )),
-            Term::Lambda(a, b) => Ok(Term::Lambda(
-                Box::new(a.make_outer_by_n(n)?),
-                Box::new(b.make_outer_by_n(n)?),
-            )),
-            Term::Apply(a, b) => Ok(Term::Apply(
-                Box::new(a.make_outer_by_n(n)?),
-                Box::new(b.make_outer_by_n(n)?),
-            )),
-            Term::Let(a, b) => Ok(Term::Apply(
-                Box::new(a.make_outer_by_n(n)?),
-                Box::new(b.make_outer_by_n(n)?),
-            )),
-        }
+    // Adds n levels of abstraction around the term.
+    // Returns Err(()) if an integer overflow occurred.
+    pub(crate) fn make_inner_by_n(&self, n: usize) -> Result<Term, ()> {
+        self.make_inner_by_n_rec(n, 0)
     }
 
     // Replaces all occurrences of the v-th variable with t in a,
@@ -283,6 +265,7 @@ impl Environment {
 
     /// Add a new global definition to an environment,
     /// returning `Err(())` if it could not be added.
+    // TODO: make the type also optional (can't be both None)
     pub fn add_definition(
         &mut self,
         global_def: Option<Arc<Term>>,

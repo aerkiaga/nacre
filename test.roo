@@ -29,27 +29,27 @@ let List::new = fn(A: Type) {
 };
 let List::push_back = fn(A: Type)(self: List A, element: A) {
     fn(T: Type, f: T -> A -> T, x: T) {
-        f (self T f x) A
+        f (self T f x) element
     }
 };
 let List::push_front = fn(A: Type)(self: List A, element: A) {
     fn(T: Type, f: T -> A -> T, x: T) {
-        self T f (f x A)
+        self T f (f x element)
     }
 };
 let List::map = fn(A: Type, B: Type)(self: List A, f: A -> B) {
-    let mapper = fn(r: List, a: A) {
+    let mapper = fn(r: List B, a: A) {
         let new_element = f a;
         List::push_back B r new_element
     };
-    self (List B) mapper List::new B
+    self (List B) mapper (List::new B)
 };
 let List::filter = fn(A: Type)(self: List A, f: A -> Bool) {
     let filter_fn = fn(r: List A, a: A) {
-        let do_append = f A;
-        let if_true = fn(r: List A) {List::push_back A r a};
-        let if_false = fn(r: List A) {r};
+        let do_append = f a;
+        let if_true = List::push_back A r a;
+        let if_false = r;
         do_append (List A) if_true if_false
     };
-    self (List A) filter_fn List::new A
+    self (List A) filter_fn (List::new A)
 }

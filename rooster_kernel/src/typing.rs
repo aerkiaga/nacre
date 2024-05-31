@@ -18,6 +18,7 @@ fn combine_forall_types(
             }
         }
         Term::Type(j) => match cta {
+            Term::Prop => Ok(Term::Type(j)), /* ? */
             Term::Type(i) => Ok(Term::Type(i.max(j))),
             _ => Err(()),
         },
@@ -38,23 +39,23 @@ impl Term {
                 Ok(Term::Type(r))
             }
             Term::Global(g) => env.global_type(*g).map(|x| x.clone()).ok_or(()),
-            Term::Variable(v) => ctx.variable_type(*v).map(|x| x.clone()).ok_or(()),
+            Term::Variable(v) => ctx
+                .variable_type(*v)
+                .map(|x| x.make_inner_by_n(*v + 1))
+                .ok_or(())?,
             Term::Forall(a, b) => {
                 let ta = a.compute_type(env, ctx)?;
-                ctx.add_inner(None, a.make_inner_by_n(1)?);
+                ctx.add_inner(None, *a.clone());
                 let tb = b.compute_type(env, ctx)?;
                 ctx.remove_inner();
                 combine_forall_types(&ta, &tb, env, ctx)
             }
             Term::Lambda(a, b) => {
                 let ta = a.compute_type(env, ctx)?;
-                ctx.add_inner(None, a.make_inner_by_n(1)?);
+                ctx.add_inner(None, *a.clone());
                 let tb = b.compute_type(env, ctx)?;
-                let replacement = ctx.variable_type(0).map(|x| x.clone()).ok_or(())?;
+                let ttb = tb.compute_type(env, ctx)?;
                 ctx.remove_inner();
-                let ttb = tb
-                    .replace_variable(0, &replacement)?
-                    .compute_type(env, ctx)?;
                 combine_forall_types(&ta, &ttb, env, ctx)?;
                 Ok(Term::Forall(Box::new(*a.clone()), Box::new(tb)))
             }
