@@ -6,10 +6,10 @@ fn combine_forall_types(
     ta: &Term,
     tb: &Term,
     env: &Environment,
-    ctx: &Context,
+    ctx: &mut Context,
 ) -> Result<Term, ()> {
-    let cta = ta.convert(env, ctx)?;
-    match tb.convert(env, ctx)? /* x:A is not necessary */ {
+    let cta = ta.normalize_in_ctx(env, ctx)?;
+    match tb.normalize_in_ctx(env, ctx)? /* x:A is not necessary */ {
         Term::Prop => {
             if cta.is_sort() {
                 Ok(Term::Prop)
@@ -61,11 +61,11 @@ impl Term {
             }
             Term::Apply(a, b) => {
                 let ta = a.compute_type(env, ctx)?;
-                match ta.convert(env, ctx)? {
+                match ta.normalize_in_ctx(env, ctx)? {
                     Term::Forall(c, d) => {
                         let tb = b.compute_type(env, ctx)?;
-                        let ctb = tb.convert(env, ctx)?;
-                        let cc = c.convert(env, ctx)?;
+                        let ctb = tb.normalize_in_ctx(env, ctx)?;
+                        let cc = c.normalize_in_ctx(env, ctx)?;
                         if ctb == cc {
                             d.replace_variable(0, b)
                         } else {
@@ -77,7 +77,7 @@ impl Term {
             }
             Term::Let(a, b) => {
                 let ta = a.compute_type(env, ctx)?;
-                ctx.add_inner(None, ta);
+                ctx.add_inner(Some(*a.clone()), ta);
                 let tb = b.compute_type(env, ctx)?;
                 ctx.remove_inner();
                 tb.replace_variable(0, a)

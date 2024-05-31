@@ -99,7 +99,10 @@ pub(crate) async fn convert_to_term(
                                 if components.len() > 1 {
                                     panic!();
                                 }
-                                rv.push(convert_to_term(value, locals, new_level, filename).await?);
+                                rv.push(
+                                    convert_to_term(value, &new_locals, new_level, filename)
+                                        .await?,
+                                );
                                 new_locals.insert(components[0].clone(), new_level);
                                 new_level += 1;
                             } else {
@@ -207,11 +210,12 @@ pub(crate) async fn get_direct_dependencies(
 }
 
 // Get all dependencies dependencies of a top-level definition.
+#[async_recursion]
 pub(crate) async fn get_all_dependencies(logical_path: &str) -> Result<Arc<HashSet<String>>, ()> {
     let deps = get_direct_dependencies(logical_path).await?;
     let mut r = HashSet::new();
     for dep in &*deps {
-        let more_deps = get_direct_dependencies(logical_path).await?;
+        let more_deps = get_all_dependencies(dep).await?;
         r = &r | &more_deps;
     }
     r = &r | &deps;
