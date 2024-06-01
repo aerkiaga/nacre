@@ -249,6 +249,35 @@ impl AbstractSyntaxTree {
             _ => Err(()),
         }
     }
+
+    pub(crate) fn do_namespace(self, components: &Vec<String>) -> AbstractSyntaxTree {
+        match self {
+            AbstractSyntaxTree::Block(statements, range) => AbstractSyntaxTree::Block(
+                statements
+                    .into_iter()
+                    .map(|statement| Box::new(statement.do_namespace(components)))
+                    .collect(),
+                range,
+            ),
+            AbstractSyntaxTree::Assignment(def_name, value, is_def, range) => {
+                if is_def {
+                    if let AbstractSyntaxTree::Identifier(components2, identifier_range) = *def_name
+                    {
+                        let mut full_name = components.clone();
+                        full_name.extend_from_slice(&components2);
+                        let new_identifier =
+                            AbstractSyntaxTree::Identifier(full_name, identifier_range);
+                        AbstractSyntaxTree::Assignment(Box::new(new_identifier), value, true, range)
+                    } else {
+                        panic!();
+                    }
+                } else {
+                    panic!();
+                }
+            }
+            _ => panic!(),
+        }
+    }
 }
 
 impl std::fmt::Debug for AbstractSyntaxTree {
