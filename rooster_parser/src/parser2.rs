@@ -66,15 +66,10 @@ pub enum AbstractSyntaxTree {
         Range<usize>,
     ),
     /// Should only occur internally.
-    TypeApp(
+    SpecialApp(
         Box<AbstractSyntaxTree>,
         Box<AbstractSyntaxTree>,
-        Range<usize>,
-    ),
-    /// Should only occur internally.
-    FnApp(
-        Box<AbstractSyntaxTree>,
-        Box<AbstractSyntaxTree>,
+        String,
         Range<usize>,
     ),
 }
@@ -92,8 +87,7 @@ impl AbstractSyntaxTree {
             AbstractSyntaxTree::Lambda(_, _, _, range) => range,
             AbstractSyntaxTree::Empty => panic!(),
             AbstractSyntaxTree::Typed(_, _, range) => range,
-            AbstractSyntaxTree::TypeApp(_, _, range) => range,
-            AbstractSyntaxTree::FnApp(_, _, range) => range,
+            AbstractSyntaxTree::SpecialApp(_, _, _, range) => range,
         }
         .clone()
     }
@@ -194,15 +188,8 @@ impl AbstractSyntaxTree {
                 right.fmt_rec(f, levels, true)?;
                 levels.pop();
             }
-            AbstractSyntaxTree::TypeApp(left, right, _) => {
-                write!(f, "TypeApp\n")?;
-                levels.push(true);
-                left.fmt_rec(f, levels, false)?;
-                right.fmt_rec(f, levels, true)?;
-                levels.pop();
-            }
-            AbstractSyntaxTree::FnApp(left, right, _) => {
-                write!(f, "FnApp\n")?;
+            AbstractSyntaxTree::SpecialApp(left, right, keyword, _) => {
+                write!(f, "SpecialApp {}\n", keyword)?;
                 levels.push(true);
                 left.fmt_rec(f, levels, false)?;
                 right.fmt_rec(f, levels, true)?;
@@ -212,25 +199,17 @@ impl AbstractSyntaxTree {
         Ok(())
     }
 
-    pub(crate) fn type_app_flatten(self) -> Vec<AbstractSyntaxTree> {
-        match self {
-            AbstractSyntaxTree::TypeApp(left, right, _) => {
-                let mut r = left.type_app_flatten();
+    pub(crate) fn special_app_flatten(self, keyword: &str) -> Vec<AbstractSyntaxTree> {
+        if let AbstractSyntaxTree::SpecialApp(left, right, keyword2, range) = self {
+            if keyword2 == keyword {
+                let mut r = left.special_app_flatten(keyword);
                 r.push(*right);
                 r
+            } else {
+                vec![AbstractSyntaxTree::SpecialApp(left, right, keyword2, range)]
             }
-            _ => vec![self],
-        }
-    }
-
-    pub(crate) fn fn_app_flatten(self) -> Vec<AbstractSyntaxTree> {
-        match self {
-            AbstractSyntaxTree::FnApp(left, right, _) => {
-                let mut r = left.fn_app_flatten();
-                r.push(*right);
-                r
-            }
-            _ => vec![self],
+        } else {
+            vec![self]
         }
     }
 

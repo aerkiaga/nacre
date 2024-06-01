@@ -9,8 +9,11 @@ pub(crate) fn arrow_handler(
     filename: String,
     _range: Range<usize>,
 ) -> Result<AbstractSyntaxTree, ()> {
-    if let AbstractSyntaxTree::TypeApp(_, _, _) = &left {
-        let mut params = left.type_app_flatten();
+    if let AbstractSyntaxTree::SpecialApp(_, _, keyword, _) = &left {
+        if keyword != "type" {
+            panic!();
+        }
+        let mut params = left.special_app_flatten("type");
         if params.len() < 2 {
             panic!();
         }

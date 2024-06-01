@@ -14,62 +14,80 @@ pub(crate) fn application_handler(
         AbstractSyntaxTree::Identifier(components, left_range) => {
             let left_start = left_range.start;
             let right_range = right.get_range();
-            if components.len() == 1 && components[0] == "type" {
-                Ok(AbstractSyntaxTree::TypeApp(
-                    Box::new(left),
-                    Box::new(right),
-                    left_start..right_range.end,
-                ))
-            } else if components.len() == 1 && components[0] == "fn" {
-                Ok(AbstractSyntaxTree::FnApp(
-                    Box::new(left),
-                    Box::new(right),
-                    left_start..right_range.end,
-                ))
-            } else {
-                Ok(AbstractSyntaxTree::Application(
-                    Box::new(left),
-                    Box::new(right),
-                    left_start..right_range.end,
-                ))
+            if components.len() == 1 {
+                if match &*components[0] {
+                    "fn" | "type" => true,
+                    _ => false,
+                } {
+                    let name = components[0].clone();
+                    return Ok(AbstractSyntaxTree::SpecialApp(
+                        Box::new(left),
+                        Box::new(right),
+                        name,
+                        left_start..right_range.end,
+                    ));
+                }
             }
-        }
-        AbstractSyntaxTree::TypeApp(_, _, left_range) => {
-            let left_start = left_range.start;
-            let right_range = right.get_range();
-            Ok(AbstractSyntaxTree::TypeApp(
+            Ok(AbstractSyntaxTree::Application(
                 Box::new(left),
                 Box::new(right),
                 left_start..right_range.end,
             ))
         }
-        AbstractSyntaxTree::FnApp(_, _, left_range) => {
+        AbstractSyntaxTree::SpecialApp(_, _, keyword, left_range) => {
             let left_start = left_range.start;
+            let right_range = right.get_range();
             if let AbstractSyntaxTree::Enclosed(_, ch, right_range) = &right {
                 let right_end = right_range.end;
                 if *ch == '(' {
-                    return Ok(AbstractSyntaxTree::FnApp(
+                    let key = keyword.clone();
+                    return Ok(AbstractSyntaxTree::SpecialApp(
                         Box::new(left),
                         Box::new(right),
+                        key,
                         left_start..right_end,
                     ));
-                } else if *ch != '{' {
-                    panic!();
+                } else {
+                    if !match &**keyword {
+                        "fn" => *ch == '{',
+                        "type" => false,
+                        _ => panic!(),
+                    } {
+                        panic!();
+                    }
                 }
             } else {
-                let right_range = right.get_range();
-                report::send(Report {
-                    is_error: true,
-                    filename: filename,
-                    offset: right_range.start,
-                    message: "function body must be enclosed in braces".to_string(),
-                    note: None,
-                    help: None,
-                    labels: vec![(right_range, "not enclosed".to_string())],
-                });
+                let right_start = right.get_range().start;
+                match &**keyword {
+                    "fn" => {
+                        report::send(Report {
+                            is_error: true,
+                            filename: filename,
+                            offset: right_range.start,
+                            message: format!("function body must be enclosed in braces"),
+                            note: None,
+                            help: None,
+                            labels: vec![(right_range, "not enclosed".to_string())],
+                        });
+                    }
+                    "type" => {
+                        report::send(Report {
+                            is_error: true,
+                            filename: filename,
+                            offset: right_range.start,
+                            message: format!(
+                                "type definition return type must be preceded by `->`"
+                            ),
+                            note: None,
+                            help: None,
+                            labels: vec![(right_range, "return type here".to_string())],
+                        });
+                    }
+                    _ => panic!(),
+                };
                 return Err(());
             }
-            let mut params = left.fn_app_flatten();
+            let mut params = left.special_app_flatten("fn");
             if params.len() < 2 {
                 panic!();
             }
