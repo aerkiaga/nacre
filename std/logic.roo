@@ -1,0 +1,173 @@
+// A proposition that cannot be proven,
+// or a type that cannot be constructed.
+//
+// A proof of `False` can be used to
+// prove any other proposition.
+type False(T: Type) -> T;
+
+// The logical product of two proposition,
+// or the cartesian product of two types.
+//
+// `And A B` can be constructed from both `A` and `B`.
+fn And(P: Type, Q: Type) {
+    type(T: Type, f: P -> Q -> T) -> T
+};
+
+impl And {
+    // Construct from both sides.
+    fn from_both(P: Type, Q: Type)(left: P, right: Q) {
+        fn(T: Type, f: P -> Q -> T) {
+            f left right
+        }
+    };
+    
+    // Get left side.
+    fn left(P: Type, Q: Type)(self: And P Q) {
+        fn getter(p: P, q: Q) {p};
+        self P getter
+    };
+    
+    // Get right side.
+    fn right(P: Type, Q: Type)(self: And P Q) {
+        fn getter(p: P, q: Q) {q};
+        self Q getter
+    };
+    
+    // Exchange both sides.
+    fn symmetric(P: Type, Q: Type)(self: And P Q) {
+        let left = And::left P Q self;
+        let right = And::right P Q self;
+        And::from_both Q P right left
+    }
+};
+
+// The logical sum of two proposition,
+// or the union of two types.
+//
+// `Or A B` can be constructed from either `A` or `B`.
+fn Or(P: Type, Q: Type) {
+    type(T: Type, p: P -> T, q: Q -> T) -> T
+};
+impl Or {
+    // Construct from left side.
+    fn from_left(P: Type, Q: Type)(left: P) {
+        fn(T: Type, p: P -> T, q: Q -> T) {
+            p left
+        }
+    };
+    
+    // Construct from right side.
+    fn from_right(P: Type, Q: Type)(right: Q) {
+        fn(T: Type, p: P -> T, q: Q -> T) {
+            q right
+        }
+    }
+};
+
+// The negation of a proposition.
+//
+// `Not P` can only be constructed if `P` cannot.
+// Note that `Not (Not P)` can be constructed
+// if _a proof that P cannot_ cannot, which
+// does not imply that `P` can. In other words,
+// double negation of a proposition does not imply it.
+fn Not(P: Type) {
+    type(T: Type, p: P) -> T
+};
+
+// Existential quantifier.
+//
+// `Exists P Q` can only be constructed if there exists
+// some `x: P` such that `Q x` can be constructed.
+// `x` and the proof of `Q x` cannot be recovered
+// from a proof of `Exists P Q`.
+fn Exists(P: Type, Q: P -> Type) {
+    type(T: Type)
+    -> (type(x: P) -> Q x -> T)
+    -> T
+};
+
+impl Exists {
+    // Construct from example and proof that it
+    // fulfills the criterion.
+    fn from_example(P: Type, Q: P -> Type)(example: P, proof: Q example) {
+        fn(T: Type)(f: type(x: P) -> Q x -> T) {
+            f example proof
+        }
+    }
+};
+
+// Conditional operator, or map.
+//
+// `If P Q` is the type of functions
+// mapping P to Q. It can only be constructed
+// if such functions exist, so
+// if `P` and `Q` are propositions,
+// `If P Q` can only be constructed if
+// `P` implies `Q` (if `P` then `Q`).
+fn If(P: Type, Q: Type) {
+    P -> Q
+};
+
+impl If {
+    // Construct an implication of a type onto itself.
+    fn reflexive(P: Type) {
+        fn(p: P) {p}
+    }
+};
+
+// Biconditional operator, or bidirectional map.
+//
+// `Iff P Q` is the type of pairs of functions
+// where one member maps `P` to `Q` and the other
+// maps `Q` back to `P`. It can only be constructed
+// if both such functions exist, so
+// if `P` and `Q` are propositions,
+// `Iff P Q` can only be constructed if
+// either implies the other (iff `P` then `Q`).
+fn Iff(P: Type, Q: Type) {
+    And (P -> Q) (Q -> P)
+};
+
+impl Iff {
+    // Construct from implications from either side to the other.
+    fn from_if(P: Type, Q: Type)(forward: P -> Q, backward: Q -> P) {
+        And::from_both (P -> Q) (Q -> P) forward backward
+    };
+    
+    // Construct an implication of a type onto itself.
+    fn reflexive(P: Type) {
+        let proof = If::reflexive P;
+        And::from_both (P -> P) (P -> P) proof proof
+    };
+    
+    // Exchange both sides.
+    fn symmetric(P: Type, Q: Type)(self: Iff P Q) {
+        And::symmetric (P -> Q) (Q -> P) self
+    }
+    
+};
+
+// Equality.
+//
+// Can only be constructed if both sides
+// are indistinguishable.
+fn Eq(P: Type, a: P, b: P) {
+    type(T: P -> Type) -> Iff (T a) (T b) 
+};
+
+impl Eq {
+    // Construct an equality of an object to itself.
+    fn reflexive(P: Type, p: P) {
+        fn(T: P -> Type) {
+            Iff::reflexive (T p)
+        }
+    };
+    
+    // Exchange both sides.
+    fn symmetric(P: Type, a: P, b: P)(self: Eq P a b) {
+        fn(T: P -> Type) {
+            Iff::symmetric (T a) (T b) (self T)
+        }
+    }
+}
