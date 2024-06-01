@@ -1,131 +1,131 @@
 // A type that cannot be built
-let False = type(T: Type) -> T;
+type False(T: Type) -> T;
 
 // The unit type, with a single inhabitant
-let Void = type(T: Type, t: T) -> T;
+type Unit(T: Type, t: T) -> T;
 
 // Basic logical operators
-let And = fn(P: Type, Q: Type) {
+fn And(P: Type, Q: Type) {
     type(T: Type, f: P -> Q -> T) -> T
 };
-let And::prove = fn(P: Type, Q: Type)(left: P, right: Q) {
+fn And::prove(P: Type, Q: Type)(left: P, right: Q) {
     fn(T: Type, f: P -> Q -> T) {
         f left right
     }
 };
-let And::left = fn(P: Type, Q: Type)(self: And P Q) {
-    let getter = fn(p: P, q: Q) {p};
+fn And::left(P: Type, Q: Type)(self: And P Q) {
+    fn getter(p: P, q: Q) {p};
     self P getter
 };
-let And::right = fn(P: Type, Q: Type)(self: And P Q) {
-    let getter = fn(p: P, q: Q) {q};
+fn And::right(P: Type, Q: Type)(self: And P Q) {
+    fn getter(p: P, q: Q) {q};
     self Q getter
 };
-let And::symmetric = fn(P: Type, Q: Type)(self: And P Q) {
+fn And::symmetric(P: Type, Q: Type)(self: And P Q) {
     let left = And::left P Q self;
     let right = And::right P Q self;
     And::prove Q P right left
 };
 
-let Or = fn(P: Type, Q: Type) {
+fn Or(P: Type, Q: Type) {
     type(T: Type, p: P -> T, q: Q -> T) -> T
 };
-let Or::prove_left = fn(P: Type, Q: Type)(left: P) {
+fn Or::prove_left(P: Type, Q: Type)(left: P) {
     fn(T: Type, p: P -> T, q: Q -> T) {
         p left
     }
 };
-let Or::prove_right = fn(P: Type, Q: Type)(right: Q) {
+fn Or::prove_right(P: Type, Q: Type)(right: Q) {
     fn(T: Type, p: P -> T, q: Q -> T) {
         q right
     }
 };
 
-let Not = fn(P: Type) {
+fn Not(P: Type) {
     type(T: Type, p: P) -> T
 };
 
 // Existential quantifier
-let Exists = fn(P: Type, Q: P -> Type) {
+fn Exists(P: Type, Q: P -> Type) {
     type(T: Type)
     -> (type(x: P) -> Q x -> T)
     -> T
 };
-let Exists::prove = fn(P: Type, Q: P -> Type)(example: P, proof: Q example) {
+fn Exists::prove(P: Type, Q: P -> Type)(example: P, proof: Q example) {
     fn(T: Type)(f: type(x: P) -> Q x -> T) {
         f example proof
     }
 };
 
 // Conditional operator
-let If = fn(P: Type, Q: Type) {
+fn If(P: Type, Q: Type) {
     P -> Q
 };
-let If::reflexive = fn(P: Type) {
+fn If::reflexive(P: Type) {
     fn(p: P) {p}
 };
 
 // Biconditional operator
-let Iff = fn(P: Type, Q: Type) {
+fn Iff(P: Type, Q: Type) {
     And (P -> Q) (Q -> P)
 };
-let Iff::prove = fn(P: Type, Q: Type)(forward: P -> Q, backward: Q -> P) {
+fn Iff::prove(P: Type, Q: Type)(forward: P -> Q, backward: Q -> P) {
     And::prove (P -> Q) (Q -> P) forward backward
 };
-let Iff::reflexive = fn(P: Type) {
+fn Iff::reflexive(P: Type) {
     let proof = If::reflexive P;
     And::prove (P -> P) (P -> P) proof proof
 };
-let Iff::symmetric = fn(P: Type, Q: Type)(self: Iff P Q) {
+fn Iff::symmetric(P: Type, Q: Type)(self: Iff P Q) {
     And::symmetric (P -> Q) (Q -> P) self
 };
 
 // Equality
-let Eq = fn(P: Type, a: P, b: P) {
+fn Eq(P: Type, a: P, b: P) {
     type(T: P -> Type) -> Iff (T a) (T b) 
 };
-let Eq::reflexive = fn(P: Type, p: P) {
+fn Eq::reflexive(P: Type, p: P) {
     fn(T: P -> Type) {
         Iff::reflexive (T p)
     }
 };
-let Eq::symmetric = fn(P: Type, a: P, b: P)(self: Eq P a b) {
+fn Eq::symmetric(P: Type, a: P, b: P)(self: Eq P a b) {
     fn(T: P -> Type) {
         Iff::symmetric (T a) (T b) (self T)
     }
 };
 
 // An enum with two variants
-let Bool = type(T: Type, a: T, b: T) -> T;
-let Bool::true = fn(T: Type, a: T, b: T) {a};
-let Bool::false = fn(T: Type, a: T, b: T) {b};
-let Bool::not = fn(self: Bool) {
+type Bool(T: Type, a: T, b: T) -> T;
+fn Bool::true(T: Type, a: T, b: T) {a};
+fn Bool::false(T: Type, a: T, b: T) {b};
+fn Bool::not(self: Bool) {
     self Bool Bool::false Bool::true
 };
-let Bool::and = fn(self: Bool, other: Bool) {
+fn Bool::and(self: Bool, other: Bool) {
     self Bool other Bool::false
 };
-let Bool::or = fn(self: Bool, other: Bool) {
+fn Bool::or(self: Bool, other: Bool) {
     self Bool Bool::true other
 };
-let Bool::xor = fn(self: Bool, other: Bool) {
+fn Bool::xor(self: Bool, other: Bool) {
     self Bool (Bool::not other) other
 };
 
 // An enum with two variants, where one of them contains data of type A
-let Option = fn(A: Type) {
+fn Option(A: Type) {
     type(T: Type, a: A -> T, b: T) -> T
 };
-let Option::some = fn(A: Type)(inner: A) {
+fn Option::some(A: Type)(inner: A) {
     fn(T: Type, a: A -> T, b: T) {
         a inner
     }
 };
-let Option::none = fn(A: Type)(T: Type, a: A -> T, b: T) {
+fn Option::none(A: Type)(T: Type, a: A -> T, b: T) {
     b
 };
-let Option::map = fn(A: Type, B: Type)(self: Option A, mapper: A -> B) {
-    let a = fn(inner: A) {
+fn Option::map(A: Type, B: Type)(self: Option A, mapper: A -> B) {
+    fn a(inner: A) {
         Option::some B (mapper inner)
     };
     let b = Option::none B;
@@ -133,58 +133,58 @@ let Option::map = fn(A: Type, B: Type)(self: Option A, mapper: A -> B) {
 };
 
 // A struct containing members A and B
-let Pair = fn(A: Type, B: Type) {
+fn Pair(A: Type, B: Type) {
     And A B
     // Expands to:
     //type(T: Type, f: A -> B -> T) -> T
 };
 
 // A type for Peano arithmetic using Church numerals
-let Church = type(T: Type, f: T -> T, x: T) -> T;
-let Church::0 = fn(T: Type, f: T -> T, x: T) {x};
-let Church::s = fn(self: Church) {
+type Church(T: Type, f: T -> T, x: T) -> T;
+fn Church::0(T: Type, f: T -> T, x: T) {x};
+fn Church::s(self: Church) {
     fn(T: Type, f: T -> T, x: T) {
         f (self T f x)
     }
 };
-let Church::add = fn(self: Church, other: Church) {
+fn Church::add(self: Church, other: Church) {
     self Church Church::s other
 };
-let Church::mul = fn(self: Church, other: Church) {
+fn Church::mul(self: Church, other: Church) {
     self Church (other Church Church::s) Church::0
 };
 /* Cannot define induction principle in CoC */
 
 // A linked list containing inner type A
-let List = fn(A: Type) {
+fn List(A: Type) {
     type(T: Type, f: T -> A -> T, x: T) -> T
 };
-let List::new = fn(A: Type) {
+fn List::new(A: Type) {
     fn(T: Type, f: T -> A -> T, x: T) {x}
 };
-let List::push_back = fn(A: Type)(self: List A, element: A) {
+fn List::push_back(A: Type)(self: List A, element: A) {
     fn(T: Type, f: T -> A -> T, x: T) {
         f (self T f x) element
     }
 };
-let List::push_front = fn(A: Type)(self: List A, element: A) {
+fn List::push_front(A: Type)(self: List A, element: A) {
     fn(T: Type, f: T -> A -> T, x: T) {
         self T f (f x element)
     }
 };
-let List::map = fn(A: Type, B: Type)(self: List A, f: A -> B) {
-    let mapper = fn(r: List B, a: A) {
+fn List::map(A: Type, B: Type)(self: List A, f: A -> B) {
+    fn mapper(r: List B, a: A) {
         let new_element = f a;
         List::push_back B r new_element
     };
     self (List B) mapper (List::new B)
 };
-let List::filter = fn(A: Type)(self: List A, f: A -> Bool) {
-    let filter_fn = fn(r: List A, a: A) {
+fn List::filter(A: Type)(self: List A, f: A -> Bool) {
+    fn filterer(r: List A, a: A) {
         let do_append = f a;
         let if_true = List::push_back A r a;
         let if_false = r;
         do_append (List A) if_true if_false
     };
-    self (List A) filter_fn (List::new A)
+    self (List A) filterer (List::new A)
 }

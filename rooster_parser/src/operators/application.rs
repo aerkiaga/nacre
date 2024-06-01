@@ -93,6 +93,8 @@ pub(crate) fn application_handler(
             }
             let mut r = right;
             params.remove(0);
+            let mut n = 0;
+            let max_n = params.len() - 1;
             for param_group in params.into_iter().rev() {
                 if let AbstractSyntaxTree::Enclosed(inner, ch, param_group_range) = param_group {
                     if ch == '(' {
@@ -172,7 +174,7 @@ pub(crate) fn application_handler(
                             message: "function parameters must be enclosed in parentheses"
                                 .to_string(),
                             note: Some(
-                                "correct syntax is `fn (<name>: <type>, ...) ... <body>`"
+                                "correct syntax is `fn (<name>: <type>, ...) ... {<body>}`"
                                     .to_string(),
                             ),
                             help: None,
@@ -191,8 +193,24 @@ pub(crate) fn application_handler(
                         return Err(());
                     }
                 } else {
-                    panic!();
+                    if n == max_n {
+                        if let AbstractSyntaxTree::Identifier(_, _) = param_group {
+                            let range_start = param_group.get_range().start;
+                            let range_end = r.get_range().end;
+                            return Ok(AbstractSyntaxTree::Assignment(
+                                Box::new(param_group),
+                                Box::new(r),
+                                true,
+                                range_start..range_end,
+                            ));
+                        } else {
+                            panic!();
+                        }
+                    } else {
+                        panic!();
+                    }
                 }
+                n += 1;
             }
             Ok(r)
         }
