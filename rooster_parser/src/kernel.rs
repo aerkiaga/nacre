@@ -7,6 +7,7 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
+use tokio::task::yield_now;
 use tokio::task::JoinSet;
 
 // A counter to assign indices to top-level definitions
@@ -37,7 +38,7 @@ fn kernel_loader(
 ) -> Pin<Box<dyn Future<Output = Result<(Arc<Term>, Arc<Term>, usize), ()>> + Send + '_>> {
     let logical_path_string = logical_path.to_string();
     Box::pin(async move {
-        println!("Verifying {}", logical_path);
+        println!("Computing dependencies for {}", logical_path);
         // First we compute all dependencies, so the operation can be parallelized
         // TODO: move into new function that can be used by API users
         let deps = semantics::get_direct_dependencies(logical_path).await?;
@@ -50,6 +51,7 @@ fn kernel_loader(
             result.or(Err(()))?;
         }
         // Then we verify the current definition
+        println!("Verifying {}", logical_path);
         // Start by loading the definition term
         let (ast, filename) = get_ast(logical_path).await.unwrap();
         let definition =
