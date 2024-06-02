@@ -14,7 +14,7 @@ fn compute_dependencies(ast: &AbstractSyntaxTree, locals: &HashSet<String>) -> H
             let mut new_locals = locals.clone();
             for statement in statements {
                 match &**statement {
-                    AbstractSyntaxTree::Assignment(name, _, is_definition, _) => {
+                    AbstractSyntaxTree::Assignment(name, _, is_definition, _, _) => {
                         if *is_definition {
                             if let AbstractSyntaxTree::Identifier(components, _) = &**name {
                                 if components.len() > 1 {
@@ -51,7 +51,7 @@ fn compute_dependencies(ast: &AbstractSyntaxTree, locals: &HashSet<String>) -> H
             }
             r
         }
-        AbstractSyntaxTree::Assignment(_, value, _, _) => compute_dependencies(value, locals),
+        AbstractSyntaxTree::Assignment(_, value, _, _, _) => compute_dependencies(value, locals),
         AbstractSyntaxTree::Application(left, right, _) => {
             &compute_dependencies(left, locals) | &compute_dependencies(right, locals)
         }
@@ -93,7 +93,10 @@ pub(crate) async fn convert_to_term(
             let mut n = 0;
             for statement in statements {
                 match &**statement {
-                    AbstractSyntaxTree::Assignment(name, value, is_definition, _) => {
+                    AbstractSyntaxTree::Assignment(name, value, is_definition, def_type, _) => {
+                        if def_type.is_some() {
+                            panic!();
+                        }
                         if *is_definition {
                             if let AbstractSyntaxTree::Identifier(components, _) = &**name {
                                 if components.len() > 1 {
@@ -154,7 +157,7 @@ pub(crate) async fn convert_to_term(
                     .map(|n| Term::Global(n)),
             }
         }
-        AbstractSyntaxTree::Assignment(_, _, _, _) => panic!(),
+        AbstractSyntaxTree::Assignment(_, _, _, _, _) => panic!(),
         AbstractSyntaxTree::Application(left, right, _) => {
             let left_term = convert_to_term(left, locals, level, filename).await?;
             let right_term = convert_to_term(right, locals, level, filename).await?;

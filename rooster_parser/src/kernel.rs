@@ -59,7 +59,10 @@ fn kernel_loader(
         let all_deps = semantics::get_all_dependencies(logical_path).await?;
         let mut env = create_environment(all_deps).await?;
         // And finally call into the kernel
-        let type_term = Arc::new(definition.get_type(&env).unwrap());
+        let type_term = Arc::new(match get_type_ast(logical_path).await.unwrap().0 {
+            Some(ast) => semantics::convert_to_term(ast, &HashMap::new(), 0, &filename).await?,
+            None => definition.get_type(&env).unwrap(),
+        });
         env.add_definition(Some(definition.clone()), type_term.clone())
             .unwrap();
         println!("Verified {}", logical_path);

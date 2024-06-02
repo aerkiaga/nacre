@@ -82,6 +82,7 @@ fn equals_handler(
             Box::new(left),
             Box::new(right),
             false,
+            None,
             left_start..right_end,
         )),
         AbstractSyntaxTree::Application(app_left, app_right, _) => {
@@ -91,6 +92,7 @@ fn equals_handler(
                         Box::new(*app_right),
                         Box::new(right),
                         true,
+                        None,
                         left_start..right_end,
                     ))
                 } else {

@@ -27,6 +27,8 @@ pub enum AbstractSyntaxTree {
         Box<AbstractSyntaxTree>,
         /// Whether the assignment is a definition (starts with `let`).
         bool,
+        /// If a definition, its type.
+        Option<Box<AbstractSyntaxTree>>,
         Range<usize>,
     ),
     /// A function application.
@@ -81,7 +83,7 @@ impl AbstractSyntaxTree {
             AbstractSyntaxTree::List(_, range) => range,
             AbstractSyntaxTree::Enclosed(_, _, range) => range,
             AbstractSyntaxTree::Identifier(_, range) => range,
-            AbstractSyntaxTree::Assignment(_, _, _, range) => range,
+            AbstractSyntaxTree::Assignment(_, _, _, _, range) => range,
             AbstractSyntaxTree::Application(_, _, range) => range,
             AbstractSyntaxTree::Forall(_, _, _, range) => range,
             AbstractSyntaxTree::Lambda(_, _, _, range) => range,
@@ -147,9 +149,12 @@ impl AbstractSyntaxTree {
                 }
                 write!(f, "\n")?;
             }
-            AbstractSyntaxTree::Assignment(identifier, value, is_let, _) => {
-                write!(f, "Assignment {}\n", is_let)?;
+            AbstractSyntaxTree::Assignment(identifier, value, is_let, def_type, _) => {
+                write!(f, "Assignment {} {}\n", is_let, def_type.is_some())?;
                 levels.push(true);
+                if let Some(dt) = def_type {
+                    dt.fmt_rec(f, levels, false)?;
+                }
                 identifier.fmt_rec(f, levels, false)?;
                 value.fmt_rec(f, levels, true)?;
                 levels.pop();
@@ -213,6 +218,19 @@ impl AbstractSyntaxTree {
         }
     }
 
+    pub(crate) fn lambda_typify(&self, return_type: AbstractSyntaxTree) -> AbstractSyntaxTree {
+        if let AbstractSyntaxTree::Lambda(identifier, var_type, term, range) = self {
+            AbstractSyntaxTree::Forall(
+                Some(identifier.clone()),
+                var_type.clone(),
+                Box::new(term.lambda_typify(return_type)),
+                range.clone(),
+            )
+        } else {
+            return_type
+        }
+    }
+
     pub(crate) fn into_list(self) -> Vec<Box<AbstractSyntaxTree>> {
         match self {
             AbstractSyntaxTree::List(elements, _) => elements,
@@ -220,7 +238,10 @@ impl AbstractSyntaxTree {
         }
     }
 
-    pub(crate) fn get_definition(&self, name: &str) -> Result<&AbstractSyntaxTree, ()> {
+    pub(crate) fn get_definition(
+        &self,
+        name: &str,
+    ) -> Result<(&AbstractSyntaxTree, Option<&AbstractSyntaxTree>), ()> {
         match self {
             AbstractSyntaxTree::Block(statements, _) => {
                 for statement in statements {
@@ -231,11 +252,11 @@ impl AbstractSyntaxTree {
                 }
                 Err(())
             }
-            AbstractSyntaxTree::Assignment(def_name, value, is_def, _) => {
+            AbstractSyntaxTree::Assignment(def_name, value, is_def, def_type, _) => {
                 if *is_def {
                     if let AbstractSyntaxTree::Identifier(components, _) = &**def_name {
                         if components.join("::") == name {
-                            Ok(value)
+                            Ok((value, def_type.as_deref()))
                         } else {
                             Err(())
                         }
@@ -259,7 +280,7 @@ impl AbstractSyntaxTree {
                     .collect(),
                 range,
             ),
-            AbstractSyntaxTree::Assignment(def_name, value, is_def, range) => {
+            AbstractSyntaxTree::Assignment(def_name, value, is_def, def_type, range) => {
                 if is_def {
                     if let AbstractSyntaxTree::Identifier(components2, identifier_range) = *def_name
                     {
@@ -267,7 +288,13 @@ impl AbstractSyntaxTree {
                         full_name.extend_from_slice(&components2);
                         let new_identifier =
                             AbstractSyntaxTree::Identifier(full_name, identifier_range);
-                        AbstractSyntaxTree::Assignment(Box::new(new_identifier), value, true, range)
+                        AbstractSyntaxTree::Assignment(
+                            Box::new(new_identifier),
+                            value,
+                            true,
+                            def_type,
+                            range,
+                        )
                     } else {
                         panic!();
                     }

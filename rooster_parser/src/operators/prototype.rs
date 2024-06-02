@@ -143,6 +143,7 @@ pub(crate) fn parse_prototype(
                             Box::new(param_group),
                             Box::new(r),
                             true,
+                            None,
                             range_start..range_end,
                         ));
                     }

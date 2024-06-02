@@ -11,7 +11,7 @@ impl Bool {
     
     fn not(self: Bool) {
         self Bool Bool::false Bool::true
-    };
+    } -> Bool;
     
     fn and(self: Bool, other: Bool) {
         self Bool other Bool::false

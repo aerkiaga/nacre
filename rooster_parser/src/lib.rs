@@ -80,7 +80,23 @@ pub async fn get_file_ast(filename: &str) -> Result<Arc<AbstractSyntaxTree>, ()>
 
 fn definition_loader(
     logical_path: &str,
-) -> Pin<Box<dyn Future<Output = Result<(&'static AbstractSyntaxTree, String), ()>> + Send + '_>> {
+) -> Pin<
+    Box<
+        dyn Future<
+                Output = Result<
+                    (
+                        (
+                            &'static AbstractSyntaxTree,
+                            Option<&'static AbstractSyntaxTree>,
+                        ),
+                        String,
+                    ),
+                    (),
+                >,
+            > + Send
+            + '_,
+    >,
+> {
     let logical_path_string = logical_path.to_string();
     Box::pin(async move {
         let (filename, identifier) = path::get_physical_path(&logical_path_string).await;
@@ -90,15 +106,25 @@ fn definition_loader(
         // r effectively has a 'static lifetime even though Rust won't see it.
         // Let's manually give it that lifetime.
         // REMEMBER TO DO SOMETHING ABOUT THIS if Cache ever implements eviction
-        Ok((unsafe { &*(r as *const AbstractSyntaxTree) }, filename))
+        Ok((
+            unsafe {
+                (
+                    &*(r.0 as *const AbstractSyntaxTree),
+                    r.1.map(|x| &*(x as *const AbstractSyntaxTree)),
+                )
+            },
+            filename,
+        ))
     })
 }
 
 // The global cache storing all parsed top-level definitions
-static DEFINITION_CACHE: cache::Cache<(&AbstractSyntaxTree, String)> =
-    cache::Cache::new(definition_loader as _);
+static DEFINITION_CACHE: cache::Cache<(
+    (&AbstractSyntaxTree, Option<&AbstractSyntaxTree>),
+    String,
+)> = cache::Cache::new(definition_loader as _);
 
-/// Get the [AbstractSyntaxTree] for a particular top-level definition.
+// Get the [AbstractSyntaxTree] for a particular top-level definition.
 pub(crate) async fn get_ast(
     logical_path: &str,
 ) -> Result<(&'static AbstractSyntaxTree, String), ()> {
@@ -106,5 +132,16 @@ pub(crate) async fn get_ast(
     DEFINITION_CACHE
         .get(&logical_path)
         .await
-        .map(|x| (*x).clone())
+        .map(|x| (x.0 .0, x.1.clone()))
+}
+
+// Get the [AbstractSyntaxTree] for a particular top-level definition.
+pub(crate) async fn get_type_ast(
+    logical_path: &str,
+) -> Result<(Option<&'static AbstractSyntaxTree>, String), ()> {
+    // TODO: normalize filename
+    DEFINITION_CACHE
+        .get(&logical_path)
+        .await
+        .map(|x| (x.0 .1, x.1.clone()))
 }
