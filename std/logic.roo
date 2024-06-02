@@ -5,7 +5,7 @@
 // prove any other proposition.
 type False(T: Type) -> T;
 
-// The logical product of two proposition,
+// The logical product of two propositions,
 // or the cartesian product of two types.
 //
 // `And A B` can be constructed from both `A` and `B`.
@@ -41,7 +41,7 @@ impl And {
     }
 };
 
-// The logical sum of two proposition,
+// The logical sum of two propositions,
 // or the union of two types.
 //
 // `Or A B` can be constructed from either `A` or `B`.

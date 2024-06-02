@@ -7,4 +7,3 @@ A programming language for verified software.
   - Implement explicit return types.
   - Allow trailing semicolons.
   - Allow trailing commas.
-* Refactor fn/type/impl parser code.
