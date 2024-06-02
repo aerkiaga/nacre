@@ -19,26 +19,26 @@ impl And {
         fn(T: Type, f: P -> Q -> T) {
             f left right
         }
-    };
+    } -> And P Q;
     
     // Get left side.
     fn left(P: Type, Q: Type)(self: And P Q) {
         fn getter(p: P, q: Q) {p};
         self P getter
-    };
+    } -> P;
     
     // Get right side.
     fn right(P: Type, Q: Type)(self: And P Q) {
         fn getter(p: P, q: Q) {q};
         self Q getter
-    };
+    } -> Q;
     
     // Exchange both sides.
     fn symmetric(P: Type, Q: Type)(self: And P Q) {
         let left = And::left P Q self;
         let right = And::right P Q self;
         And::from_both Q P right left
-    }
+    } -> And Q P
 };
 
 // The logical sum of two propositions,
@@ -54,14 +54,14 @@ impl Or {
         fn(T: Type, p: P -> T, q: Q -> T) {
             p left
         }
-    };
+    } -> Or P Q;
     
     // Construct from right side.
     fn from_right(P: Type, Q: Type)(right: Q) {
         fn(T: Type, p: P -> T, q: Q -> T) {
             q right
         }
-    }
+    } -> Or P Q
 };
 
 // The negation of a proposition.
@@ -94,7 +94,7 @@ impl Exists {
         fn(T: Type)(f: type(x: P) -> Q x -> T) {
             f example proof
         }
-    }
+    } -> Exists P Q
 };
 
 // Conditional operator, or map.
@@ -113,7 +113,7 @@ impl If {
     // Construct an implication of a type onto itself.
     fn reflexive(P: Type) {
         fn(p: P) {p}
-    }
+    } -> If P P
 };
 
 // Biconditional operator, or bidirectional map.
@@ -133,18 +133,18 @@ impl Iff {
     // Construct from implications from either side to the other.
     fn from_if(P: Type, Q: Type)(forward: P -> Q, backward: Q -> P) {
         And::from_both (P -> Q) (Q -> P) forward backward
-    };
+    } -> Iff P Q;
     
     // Construct an implication of a type onto itself.
     fn reflexive(P: Type) {
         let proof = If::reflexive P;
         And::from_both (P -> P) (P -> P) proof proof
-    };
+    } -> Iff P P;
     
     // Exchange both sides.
     fn symmetric(P: Type, Q: Type)(self: Iff P Q) {
         And::symmetric (P -> Q) (Q -> P) self
-    }
+    } -> Iff Q P
     
 };
 
@@ -162,12 +162,12 @@ impl Eq {
         fn(T: P -> Type) {
             Iff::reflexive (T p)
         }
-    };
+    } -> Eq P p p;
     
     // Exchange both sides.
     fn symmetric(P: Type, a: P, b: P)(self: Eq P a b) {
         fn(T: P -> Type) {
             Iff::symmetric (T a) (T b) (self T)
         }
-    }
+    } -> Eq P b a
 }

@@ -51,7 +51,13 @@ fn compute_dependencies(ast: &AbstractSyntaxTree, locals: &HashSet<String>) -> H
             }
             r
         }
-        AbstractSyntaxTree::Assignment(_, value, _, _, _) => compute_dependencies(value, locals),
+        AbstractSyntaxTree::Assignment(_, value, _, def_type, _) => {
+            let type_deps = match def_type {
+                Some(dt) => compute_dependencies(dt, locals),
+                None => HashSet::new(),
+            };
+            &compute_dependencies(value, locals) | &type_deps
+        }
         AbstractSyntaxTree::Application(left, right, _) => {
             &compute_dependencies(left, locals) | &compute_dependencies(right, locals)
         }
@@ -194,8 +200,13 @@ fn dependency_loader(
     Box::pin(async move {
         let (ast, filename) = get_ast(&logical_path_string).await.unwrap();
         let deps = compute_dependencies(&ast, &HashSet::new());
+        let (type_ast, _) = get_type_ast(&logical_path_string).await.unwrap();
+        let type_deps = match type_ast {
+            Some(ast) => compute_dependencies(&ast, &HashSet::new()),
+            None => HashSet::new(),
+        };
         // TODO: transform relative (to filename) paths to be absolute
-        Ok(deps
+        Ok((&deps | &type_deps)
             .iter()
             .map(|dep| path::make_absolute(dep, &filename))
             .collect())

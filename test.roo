@@ -15,15 +15,15 @@ impl Bool {
     
     fn and(self: Bool, other: Bool) {
         self Bool other Bool::false
-    };
+    } -> Bool;
     
     fn or(self: Bool, other: Bool) {
         self Bool Bool::true other
-    };
+    } -> Bool;
     
     fn xor(self: Bool, other: Bool) {
         self Bool (Bool::not other) other
-    }
+    } -> Bool
 };
 
 // An enum with two variants, where one of them contains data of type A
@@ -48,7 +48,7 @@ impl Option {
         };
         let b = Option::none B;
         self (Option B) a b
-    }
+    } -> Option B
 };
 
 // A struct containing members A and B
@@ -68,15 +68,15 @@ impl Church {
         fn(T: Type, f: T -> T, x: T) {
             f (self T f x)
         }
-    };
+    } -> Church;
     
     fn add(self: Church, other: Church) {
         self Church Church::s other
-    };
+    } -> Church;
     
     fn mul(self: Church, other: Church) {
         self Church (other Church Church::s) Church::0
-    }
+    } -> Church
     /* Cannot define induction principle in CoC */
 };
 
@@ -88,19 +88,19 @@ fn List(A: Type) {
 impl List {
     fn new(A: Type) {
         fn(T: Type, f: T -> A -> T, x: T) {x}
-    };
+    } -> List A;
     
     fn push_back(A: Type)(self: List A, element: A) {
         fn(T: Type, f: T -> A -> T, x: T) {
             f (self T f x) element
         }
-    };
+    } -> List A;
     
     fn push_front(A: Type)(self: List A, element: A) {
         fn(T: Type, f: T -> A -> T, x: T) {
             self T f (f x element)
         }
-    };
+    } -> List A;
     
     fn map(A: Type, B: Type)(self: List A, f: A -> B) {
         fn mapper(r: List B, a: A) {
@@ -108,7 +108,7 @@ impl List {
             List::push_back B r new_element
         };
         self (List B) mapper (List::new B)
-    };
+    } -> List B;
     
     fn filter(A: Type)(self: List A, f: A -> Bool) {
         fn filterer(r: List A, a: A) {
@@ -118,5 +118,5 @@ impl List {
             do_append (List A) if_true if_false
         };
         self (List A) filterer (List::new A)
-    }
+    } -> List A
 }
