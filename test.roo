@@ -24,7 +24,7 @@ impl Bool {
     fn xor(self: Bool, other: Bool) {
         self Bool (Bool::not other) other
     }
-}
+};
 
 // An enum with two variants, where one of them contains data of type A
 fn Option(A: Type) {

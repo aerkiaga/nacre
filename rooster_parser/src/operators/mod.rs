@@ -7,6 +7,9 @@ use std::ops::Range;
 
 // TODO: recover from more errors
 
+mod prototype;
+use prototype::*;
+
 mod namespace;
 use namespace::*;
 
