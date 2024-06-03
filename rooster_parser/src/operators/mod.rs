@@ -27,11 +27,25 @@ fn colon_handler(
 ) -> Result<AbstractSyntaxTree, ()> {
     let left_start = left.get_range().start;
     let right_end = right.get_range().end;
-    Ok(AbstractSyntaxTree::Typed(
-        Box::new(left),
-        Box::new(right),
-        left_start..right_end,
-    ))
+    match left {
+        AbstractSyntaxTree::Assignment(identifier, value, is_let, def_type, _) => {
+            if let Some(_) = def_type {
+                panic!();
+            }
+            Ok(AbstractSyntaxTree::Assignment(
+                identifier,
+                value,
+                is_let,
+                Some(Box::new(right)),
+                left_start..right_end,
+            ))
+        }
+        _ => Ok(AbstractSyntaxTree::Typed(
+            Box::new(left),
+            Box::new(right),
+            left_start..right_end,
+        )),
+    }
 }
 
 // TODO: accept trailing comma
@@ -169,9 +183,9 @@ pub(crate) static OPERATOR_TABLE: Lazy<
     r.insert("::".to_string(), (6., true, namespace_handler as _)); // Namespace
     r.insert("".to_string(), (5., false, application_handler as _)); // Application
     r.insert("->".to_string(), (4., true, arrow_handler as _)); // If/function type
-    r.insert(":".to_string(), (3., false, colon_handler as _)); // Type
-    r.insert(",".to_string(), (2., true, comma_handler as _)); // Comma
-    r.insert("=".to_string(), (1., false, equals_handler as _)); // Assignment
+    r.insert("=".to_string(), (3., false, equals_handler as _)); // Assignment
+    r.insert(":".to_string(), (2., false, colon_handler as _)); // Type
+    r.insert(",".to_string(), (1., true, comma_handler as _)); // Comma
     r.insert(";".to_string(), (0., true, semicolon_handler as _)); // Statement
     r
 });

@@ -3,7 +3,7 @@
 //
 // A proof of `False` can be used to
 // prove any other proposition.
-type False(T: Type) -> T;
+type False(T: Type) -> T: Type;
 
 // The logical product of two propositions,
 // or the cartesian product of two types.
@@ -11,7 +11,7 @@ type False(T: Type) -> T;
 // `And A B` can be constructed from both `A` and `B`.
 fn And(P: Type, Q: Type) {
     type(T: Type, f: P -> Q -> T) -> T
-};
+} -> Type;
 
 impl And {
     // Construct from both sides.
@@ -54,7 +54,8 @@ impl And {
 // `Or A B` can be constructed from either `A` or `B`.
 fn Or(P: Type, Q: Type) {
     type(T: Type, p: P -> T, q: Q -> T) -> T
-};
+} -> Type;
+
 impl Or {
     // Construct from left side.
     fn from_left(P: Type, Q: Type)(left: P) {
@@ -80,7 +81,7 @@ impl Or {
 // double negation of a proposition does not imply it.
 fn Not(P: Type) {
     type(T: Type, p: P) -> T
-};
+} -> Type;
 
 // Existential quantifier.
 //
@@ -92,7 +93,7 @@ fn Exists(P: Type, Q: P -> Type) {
     type(T: Type)
     -> (type(x: P) -> Q x -> T)
     -> T
-};
+} -> Type;
 
 impl Exists {
     // Construct from example and proof that it
@@ -114,7 +115,7 @@ impl Exists {
 // `P` implies `Q` (if `P` then `Q`).
 fn If(P: Type, Q: Type) {
     P -> Q
-};
+} -> Type;
 
 impl If {
     // Construct an implication of a type onto itself.
@@ -141,7 +142,7 @@ impl If {
 // either implies the other (iff `P` then `Q`).
 fn Iff(P: Type, Q: Type) {
     And (P -> Q) (Q -> P)
-};
+} -> Type;
 
 impl Iff {
     // Construct from implications from either side to the other.
@@ -189,7 +190,7 @@ impl Iff {
 // are indistinguishable.
 fn Eq(P: Type, a: P, b: P) {
     type(T: P -> Type) -> Iff (T a) (T b) 
-};
+} -> Type;
 
 impl Eq {
     // Construct an equality of an object to itself.

@@ -1,21 +1,30 @@
 let Eq = super::logic::Eq;
 let Eq::reflexive = super::logic::Eq::reflexive;
+let Not = super::logic::Not;
+let Or = super::logic::Or;
 let Church = super::super::test::Church;
+
+type ExcludedMiddle(P: Type) -> Or P (Not P): Type;
 
 /*
 Since Rooster uses a single sort for
 both propositions and data types,
 proof irrelevance is inconsistent.
-This implies that classical logic is
-also inconsistent, since the axiom of
-excluded middle implies proof irrelevance.
+
+Since excluded middle + functional choice
+implies proof irrelevance, functional choice
+must be false if excluded middle is true.
+
+Uniqueness of proofs must be axiomatized
+in a case by case basis, so it cannot apply
+to types that carry information.
 */
 
 type StreicherK(A: Type, x: A)(P: Eq A x x -> Type) ->
-    P (Eq::reflexive A x) -> type(p: Eq A x x) -> P p;
+    P (Eq::reflexive A x) -> type(p: Eq A x x) -> P p: Type;
 
-type UniquenesOfIdentityProofs(A: Type, x: A, y: A)
-    (p1: Eq A x y, p2: Eq A x y) -> Eq (Eq A x y) p1 p2;
+type UniquenessOfIdentityProofs(A: Type, x: A, y: A)
+    (p1: Eq A x y, p2: Eq A x y) -> Eq (Eq A x y) p1 p2: Type;
 
 type UniquenessOfReflexivityProofs(A: Type, x: A)
-    (p: Eq A x x) -> Eq (Eq A x x) p (Eq::reflexive A x)
+    (p: Eq A x x) -> Eq (Eq A x x) p (Eq::reflexive A x): Type

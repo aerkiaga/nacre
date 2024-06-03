@@ -1,13 +1,13 @@
 // The unit type, with a single inhabitant
-type Unit(T: Type, t: T) -> T;
+type Unit(T: Type, t: T) -> T: Type;
 
 // An enum with two variants
-type Bool(T: Type, a: T, b: T) -> T;
+type Bool(T: Type, a: T, b: T) -> T: Type;
 
 impl Bool {
-    fn true(T: Type, a: T, b: T) {a};
+    fn true(T: Type, a: T, b: T) {a}: Bool;
     
-    fn false(T: Type, a: T, b: T) {b};
+    fn false(T: Type, a: T, b: T) {b}: Bool;
     
     fn not(self: Bool) {
         self Bool Bool::false Bool::true
@@ -29,18 +29,20 @@ impl Bool {
 // An enum with two variants, where one of them contains data of type A
 fn Option(A: Type) {
     type(T: Type, a: A -> T, b: T) -> T
-};
+} -> Type;
 
 impl Option {
     fn some(A: Type)(inner: A) {
         fn(T: Type, a: A -> T, b: T) {
             a inner
         }
-    };
+    } -> Option A;
     
-    fn none(A: Type)(T: Type, a: A -> T, b: T) {
-        b
-    };
+    fn none(A: Type) {
+        fn(T: Type, a: A -> T, b: T) {
+            b
+        }
+    } -> Option A;
     
     fn map(A: Type, B: Type)(self: Option A, mapper: A -> B) {
         fn a(inner: A) {
@@ -53,16 +55,15 @@ impl Option {
 
 // A struct containing members A and B
 fn Pair(A: Type, B: Type) {
-    And A B
-    // Expands to:
-    //type(T: Type, f: A -> B -> T) -> T
-};
+    //And A B
+    type(T: Type, f: A -> B -> T) -> T
+} -> Type;
 
 // A type for Peano arithmetic using Church numerals
-type Church(T: Type, f: T -> T, x: T) -> T;
+type Church(T: Type, f: T -> T, x: T) -> T: Type;
 
 impl Church {
-    fn 0(T: Type, f: T -> T, x: T) {x};
+    fn 0(T: Type, f: T -> T, x: T) {x}: Church;
     
     fn s(self: Church) {
         fn(T: Type, f: T -> T, x: T) {
@@ -83,7 +84,7 @@ impl Church {
 // A linked list containing inner type A
 fn List(A: Type) {
     type(T: Type, f: T -> A -> T, x: T) -> T
-};
+} -> Type;
 
 impl List {
     fn new(A: Type) {
