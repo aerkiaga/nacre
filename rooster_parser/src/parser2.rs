@@ -364,11 +364,17 @@ pub(crate) async fn build_tree(
                 });
             }
             parser::ParserToken::Operator(s, range) => {
-                let definition = operators::OPERATOR_TABLE.get(&s).unwrap();
-                let handler = definition.2;
-                let right = ast_stack.pop().unwrap();
-                let left = ast_stack.pop().unwrap();
-                ast_stack.push(handler(left, right, filename.clone(), range)?);
+                if ast_stack.len() >= 2 {
+                    let definition = operators::OPERATOR_TABLE.get(&s).unwrap();
+                    let handler = definition.2;
+                    let right = ast_stack.pop().unwrap();
+                    let left = ast_stack.pop().unwrap();
+                    ast_stack.push(handler(left, right, filename.clone(), range)?);
+                } else {
+                    if s != ";" && s != "," {
+                        panic!();
+                    }
+                }
             }
         }
     }

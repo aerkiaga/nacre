@@ -27,4 +27,4 @@ type UniquenessOfIdentityProofs(A: Type, x: A, y: A)
     (p1: Eq A x y, p2: Eq A x y) -> Eq (Eq A x y) p1 p2: Type;
 
 type UniquenessOfReflexivityProofs(A: Type, x: A)
-    (p: Eq A x x) -> Eq (Eq A x x) p (Eq::reflexive A x): Type
+    (p: Eq A x x) -> Eq (Eq A x x) p (Eq::reflexive A x): Type;

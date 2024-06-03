@@ -23,7 +23,7 @@ impl Bool {
     
     fn xor(self: Bool, other: Bool) {
         self Bool (Bool::not other) other
-    } -> Bool
+    } -> Bool;
 };
 
 // An enum with two variants, where one of them contains data of type A
@@ -50,7 +50,7 @@ impl Option {
         };
         let b = Option::none B;
         self (Option B) a b
-    } -> Option B
+    } -> Option B;
 };
 
 // A struct containing members A and B
@@ -77,7 +77,7 @@ impl Church {
     
     fn mul(self: Church, other: Church) {
         self Church (other Church Church::s) Church::0
-    } -> Church
+    } -> Church;
     /* Cannot define induction principle in CoC */
 };
 
@@ -119,5 +119,5 @@ impl List {
             do_append (List A) if_true if_false
         };
         self (List A) filterer (List::new A)
-    } -> List A
-}
+    } -> List A;
+};
