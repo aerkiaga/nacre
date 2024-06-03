@@ -1,0 +1,21 @@
+let Eq = super::logic::Eq;
+let Eq::reflexive = super::logic::Eq::reflexive;
+let Church = super::super::test::Church;
+
+/*
+Since Rooster uses a single sort for
+both propositions and data types,
+proof irrelevance is inconsistent.
+This implies that classical logic is
+also inconsistent, since the axiom of
+excluded middle implies proof irrelevance.
+*/
+
+type StreicherK(A: Type, x: A)(P: Eq A x x -> Type) ->
+    P (Eq::reflexive A x) -> type(p: Eq A x x) -> P p;
+
+type UniquenesOfIdentityProofs(A: Type, x: A, y: A)
+    (p1: Eq A x y, p2: Eq A x y) -> Eq (Eq A x y) p1 p2;
+
+type UniquenessOfReflexivityProofs(A: Type, x: A)
+    (p: Eq A x x) -> Eq (Eq A x x) p (Eq::reflexive A x)

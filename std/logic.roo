@@ -235,6 +235,6 @@ impl Eq {
     //
     // See [Eq::apply_forwards] for an example.
     fn apply_backwards(P: Type, a: P, b: P)(self: Eq P a b, Term: P -> Type, proof: Term b) {
-        Eq::apply_forwards P b a (Eq::symmetric P a b self) Term proof
-    }
+        Iff::backwards (Term a) (Term b) (self Term) proof
+    } -> Term a
 }
