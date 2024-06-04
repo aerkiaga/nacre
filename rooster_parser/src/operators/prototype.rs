@@ -135,7 +135,7 @@ pub(crate) fn parse_prototype(
                             if ch != '{' {
                                 panic!();
                             }
-                            return Ok(inner.do_namespace(components));
+                            return Ok(inner.do_namespace(components, &filename));
                         }
                         panic!();
                     } else {

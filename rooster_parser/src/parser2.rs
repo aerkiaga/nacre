@@ -271,12 +271,16 @@ impl AbstractSyntaxTree {
         }
     }
 
-    pub(crate) fn do_namespace(self, components: &Vec<String>) -> AbstractSyntaxTree {
+    pub(crate) fn do_namespace(
+        self,
+        components: &Vec<String>,
+        filename: &str,
+    ) -> AbstractSyntaxTree {
         match self {
             AbstractSyntaxTree::Block(statements, range) => AbstractSyntaxTree::Block(
                 statements
                     .into_iter()
-                    .map(|statement| Box::new(statement.do_namespace(components)))
+                    .map(|statement| Box::new(statement.do_namespace(components, filename)))
                     .collect(),
                 range,
             ),
@@ -302,7 +306,20 @@ impl AbstractSyntaxTree {
                     panic!();
                 }
             }
-            _ => panic!(),
+            _ => {
+                let range = self.get_range();
+                report::send(Report {
+                    is_error: true,
+                    filename: filename.to_string(),
+                    offset: range.start,
+                    message: "expected definition within `impl` block".to_string(),
+                    note: None,
+                    help: None,
+                    labels: vec![(range, "not a definition".to_string())],
+                });
+                // TODO: AbstractSyntaxTree::Ignore or similar
+                AbstractSyntaxTree::Empty
+            }
         }
     }
 }
@@ -372,11 +389,26 @@ pub(crate) async fn build_tree(
                     ast_stack.push(handler(left, right, filename.clone(), range)?);
                 } else {
                     if s != ";" && s != "," {
-                        panic!();
+                        report::send(Report {
+                            is_error: true,
+                            filename: filename,
+                            offset: range.start,
+                            message: "binary operator is missing right operand".to_string(),
+                            note: None,
+                            help: None,
+                            labels: vec![(
+                                range,
+                                format!("operator `{}` requires two operands", s),
+                            )],
+                        });
+                        return Err(());
                     }
                 }
             }
         }
+    }
+    if ast_stack.len() < 1 {
+        return Err(());
     }
     Ok(ast_stack.pop().unwrap())
 }

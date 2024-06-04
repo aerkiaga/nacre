@@ -198,9 +198,9 @@ fn dependency_loader(
 ) -> Pin<Box<dyn Future<Output = Result<HashSet<String>, ()>> + Send + '_>> {
     let logical_path_string = logical_path.to_string();
     Box::pin(async move {
-        let (ast, filename) = get_ast(&logical_path_string).await.unwrap();
+        let (ast, filename) = get_ast(&logical_path_string).await?;
         let deps = compute_dependencies(&ast, &HashSet::new());
-        let (type_ast, _) = get_type_ast(&logical_path_string).await.unwrap();
+        let (type_ast, _) = get_type_ast(&logical_path_string).await?;
         let type_deps = match type_ast {
             Some(ast) => compute_dependencies(&ast, &HashSet::new()),
             None => HashSet::new(),

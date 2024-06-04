@@ -38,7 +38,7 @@ fn kernel_loader(
 ) -> Pin<Box<dyn Future<Output = Result<(Arc<Term>, Arc<Term>, usize), ()>> + Send + '_>> {
     let logical_path_string = logical_path.to_string();
     Box::pin(async move {
-        println!("Computing dependencies for {}", logical_path);
+        //println!("Computing dependencies for {}", logical_path);
         // First we compute all dependencies, so the operation can be parallelized
         // TODO: move into new function that can be used by API users
         let deps = semantics::get_direct_dependencies(logical_path).await?;
@@ -51,7 +51,7 @@ fn kernel_loader(
             result.or(Err(()))?;
         }
         // Then we verify the current definition
-        println!("Verifying {}", logical_path);
+        //println!("Verifying {}", logical_path);
         // Start by loading the definition term
         let (ast, filename) = get_ast(logical_path).await.unwrap();
         let definition =
@@ -67,7 +67,7 @@ fn kernel_loader(
         });
         env.add_definition(Some(definition.clone()), type_term.clone())
             .unwrap();
-        println!("Verified {}", logical_path);
+        //println!("Verified {}", logical_path);
         let index = INDEX_COUNTER.fetch_add(1, Ordering::Relaxed);
         Ok((definition, type_term, index))
     })

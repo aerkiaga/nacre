@@ -113,7 +113,9 @@ pub(crate) async fn tokenize_chunk(
 ) -> Result<(), ()> {
     let mut state = TokenizerState::Normal;
     let mut char_stack = vec![];
+    let first_offset = offset;
     let mut initial_offset = None;
+    let mut token_count = 0;
     for ch in chunk.chars().chain(" ".chars()) {
         let ch_type = classify_char(ch);
         match state {
@@ -126,6 +128,7 @@ pub(crate) async fn tokenize_chunk(
                                 initial_offset.unwrap()..offset,
                             ))
                             .unwrap();
+                        token_count += 1;
                         char_stack.clear();
                         initial_offset = None;
                     }
@@ -190,6 +193,12 @@ pub(crate) async fn tokenize_chunk(
                 }
             }
             TokenizerState::ShortComment(prev_state) => {
+                match *prev_state {
+                    TokenizerState::Delimiters(_) => {
+                        char_stack.push(ch);
+                    }
+                    _ => {}
+                }
                 if ch == '\n' {
                     state = *prev_state;
                 } else {
@@ -197,6 +206,12 @@ pub(crate) async fn tokenize_chunk(
                 }
             }
             TokenizerState::LongComment(tentative_end, start_offset, prev_state) => {
+                match *prev_state {
+                    TokenizerState::Delimiters(_) => {
+                        char_stack.push(ch);
+                    }
+                    _ => {}
+                }
                 if ch == '*' {
                     state = TokenizerState::LongComment(true, start_offset, prev_state);
                 } else if ch == '/' && tentative_end {
@@ -217,6 +232,7 @@ pub(crate) async fn tokenize_chunk(
                                 start_offset..offset + 1,
                             ))
                             .unwrap();
+                        token_count += 1;
                         char_stack.clear();
                         initial_offset = None;
                         state = TokenizerState::Normal;
@@ -261,6 +277,7 @@ pub(crate) async fn tokenize_chunk(
                                 start_offset..offset + 1,
                             ))
                             .unwrap();
+                        token_count += 1;
                         char_stack.clear();
                         initial_offset = None;
                         state = TokenizerState::Normal;
@@ -297,12 +314,12 @@ pub(crate) async fn tokenize_chunk(
                 CharType::Operator => {
                     if char_stack.len() > 0 && char_stack[char_stack.len() - 1] == '/' {
                         if ch == '/' {
-                            char_stack.pop();
+                            char_stack.push(ch);
                             state = TokenizerState::ShortComment(
                                 TokenizerState::Delimiters(stack).into(),
                             );
                         } else if ch == '*' {
-                            char_stack.pop();
+                            char_stack.push(ch);
                             state = TokenizerState::LongComment(
                                 false,
                                 offset - 1,
@@ -354,6 +371,7 @@ pub(crate) async fn tokenize_chunk(
                                 _ => panic!(),
                             })
                             .unwrap();
+                        token_count += 1;
                         char_stack.clear();
                         initial_offset = None;
                         state = TokenizerState::Normal;
@@ -369,6 +387,33 @@ pub(crate) async fn tokenize_chunk(
             },
         }
         offset += 1;
+    }
+    if token_count < 1 {
+        if first_offset == 0 {
+            report::send(Report {
+                is_error: true,
+                filename: filename.clone(),
+                offset: first_offset,
+                message: format!("file {} is empty", filename),
+                note: None,
+                help: None,
+                labels: vec![],
+            });
+        } else {
+            report::send(Report {
+                is_error: true,
+                filename: filename,
+                offset: first_offset,
+                message: "empty delimited scope".to_string(),
+                note: None,
+                help: None,
+                labels: vec![(
+                    first_offset - 1..offset,
+                    "no tokens between these delimiters".to_string(),
+                )],
+            });
+        }
+        return Err(());
     }
     match state {
         TokenizerState::Normal => Ok(()),

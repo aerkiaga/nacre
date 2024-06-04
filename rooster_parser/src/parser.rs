@@ -88,7 +88,7 @@ pub(crate) async fn parse_stream(
                         }
                         let stack_operator = &operator_stack[operator_stack.len() - 1];
                         let stack_definition = match stack_operator {
-                            ParserToken::Terminal(_) => panic!(),
+                            ParserToken::Terminal(_) => unreachable!(),
                             ParserToken::Operator(s, _) => {
                                 operators::OPERATOR_TABLE.get(s).unwrap()
                             }
