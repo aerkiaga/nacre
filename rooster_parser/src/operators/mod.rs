@@ -25,6 +25,7 @@ fn colon_handler(
     filename: String,
     _range: Range<usize>,
 ) -> Result<AbstractSyntaxTree, ()> {
+    right.must_be_expression(&filename)?;
     let left_start = left.get_range().start;
     let right_range = right.get_range();
     match left {
@@ -53,11 +54,14 @@ fn colon_handler(
                 left_start..right_range.end,
             ))
         }
-        _ => Ok(AbstractSyntaxTree::Typed(
-            Box::new(left),
-            Box::new(right),
-            left_start..right_range.end,
-        )),
+        _ => {
+            left.must_be_expression(&filename)?;
+            Ok(AbstractSyntaxTree::Typed(
+                Box::new(left),
+                Box::new(right),
+                left_start..right_range.end,
+            ))
+        }
     }
 }
 
@@ -102,6 +106,7 @@ fn equals_handler(
     filename: String,
     _range: Range<usize>,
 ) -> Result<AbstractSyntaxTree, ()> {
+    right.must_be_expression(&filename)?;
     let left_start = left.get_range().start;
     let right_end = right.get_range().end;
     let lrg = left.get_range();

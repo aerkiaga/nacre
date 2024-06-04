@@ -12,8 +12,26 @@ pub(crate) fn arrow_handler(
 ) -> Result<AbstractSyntaxTree, ()> {
     match left {
         AbstractSyntaxTree::SpecialApp(_, _, ref keyword, _) => {
-            if keyword != "type" {
-                panic!();
+            match &**keyword {
+                "type" => {}
+                "fn" => {
+                    let right_range = right.get_range();
+                    report::send(Report {
+                        is_error: true,
+                        filename: filename,
+                        offset: right_range.start,
+                        message: "function return type must be specified after function body"
+                            .to_string(),
+                        note: Some(
+                            "the syntax for return types is `fn <name> <params> {...} -> <type>`"
+                                .to_string(),
+                        ),
+                        help: None,
+                        labels: vec![(right_range, "return type here".to_string())],
+                    });
+                    return Err(());
+                }
+                _ => unreachable!(),
             }
             prototype::parse_prototype(&left, right, filename, &keyword)
         }
@@ -44,8 +62,10 @@ pub(crate) fn arrow_handler(
                 panic!();
             }
         }
-        // TODO: be more selective
         _ => {
+            // TODO: check both, then return error if appropriate
+            left.must_be_expression(&filename)?;
+            right.must_be_expression(&filename)?;
             let left_start = left.get_range().start;
             let right_end = right.get_range().end;
             Ok(AbstractSyntaxTree::Forall(

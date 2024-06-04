@@ -334,6 +334,106 @@ impl AbstractSyntaxTree {
             }
         }
     }
+
+    // only checks top level
+    // TODO: add error reporting
+    pub(crate) fn must_be_expression(&self, filename: &str) -> Result<(), ()> {
+        match self {
+            AbstractSyntaxTree::Block(_, _) => Ok(()),
+            AbstractSyntaxTree::List(_, _) => Err(()),
+            AbstractSyntaxTree::Enclosed(ast, ch, range) => match ch {
+                '(' | '{' => ast.must_be_expression(filename),
+                _ => {
+                    report::send(Report {
+                        is_error: true,
+                        filename: filename.to_string(),
+                        offset: range.start,
+                        message: "Expected expression, found bracket-delimited code".to_string(),
+                        note: Some("Bracket notation is reserved for future use".to_string()),
+                        help: None,
+                        labels: vec![(range.clone(), "enclosed in brackets".to_string())],
+                    });
+                    Err(())
+                }
+            },
+            AbstractSyntaxTree::Identifier(components, range) => {
+                if components.len() == 1 {
+                    // TODO refactor out this
+                    match &*components[0] {
+                        "fn" | "type" | "impl" | "let" => {
+                            report::send(Report {
+                                is_error: true,
+                                filename: filename.to_string(),
+                                offset: range.start,
+                                message: "Expected valid expression, found reserved keyword"
+                                    .to_string(),
+                                note: None,
+                                help: None,
+                                labels: vec![(
+                                    range.clone(),
+                                    format!("reserved keyword `{}`", components[0]),
+                                )],
+                            });
+                            Err(())
+                        }
+                        _ => Ok(()),
+                    }
+                } else {
+                    Ok(())
+                }
+            }
+            AbstractSyntaxTree::Assignment(_, _, _, _, range) => {
+                report::send(Report {
+                    is_error: true,
+                    filename: filename.to_string(),
+                    offset: range.start,
+                    message: "Expected valid expression, found assignment".to_string(),
+                    note: None,
+                    help: Some(
+                        "use `==` for boolean equality, `===` for equality proposition".to_string(),
+                    ), // TODO: update if operators change
+                    labels: vec![(range.clone(), "assignment statement".to_string())],
+                });
+                Err(())
+            }
+            AbstractSyntaxTree::Application(_, _, _) => Ok(()),
+            AbstractSyntaxTree::Forall(_, _, _, _) => Ok(()),
+            AbstractSyntaxTree::Lambda(_, _, _, _) => Ok(()),
+            AbstractSyntaxTree::Empty => Err(()),
+            AbstractSyntaxTree::Typed(_, _, range) => {
+                report::send(Report {
+                    is_error: true,
+                    filename: filename.to_string(),
+                    offset: range.start,
+                    message: "Explicit types are only allowed for definitions".to_string(),
+                    note: None,
+                    help: Some("remove trailing `: <type>` from expression".to_string()),
+                    labels: vec![(range.clone(), "has explicit type".to_string())],
+                });
+                Err(())
+            }
+            AbstractSyntaxTree::SpecialApp(_, _, keyword, range) => {
+                report::send(Report {
+                    is_error: true,
+                    filename: filename.to_string(),
+                    offset: range.start,
+                    message: format!(
+                        "Incomplete {} in expression",
+                        match &**keyword {
+                            "fn" => "function declaration",
+                            "type" => "type declaration",
+                            "impl" => "`impl` block",
+                            _ => unreachable!(),
+                        }
+                    ),
+                    note: None,
+                    help: None,
+                    labels: vec![(range.clone(), "missing body".to_string())],
+                });
+                Err(())
+            }
+        }
+    }
 }
 
 impl std::fmt::Debug for AbstractSyntaxTree {

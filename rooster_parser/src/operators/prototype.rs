@@ -11,12 +11,13 @@ pub(crate) fn parse_prototype(
 ) -> Result<AbstractSyntaxTree, ()> {
     let mut params = left.clone().special_app_flatten(keyword);
     if params.len() < 2 {
-        panic!();
+        unreachable!();
     }
     let mut r = right;
     params.remove(0);
     let mut n = 0;
     let max_n = params.len() - 1;
+    let mut at_least_one = false;
     for param_group in params.into_iter().rev() {
         if let AbstractSyntaxTree::Enclosed(inner, ch, param_group_range) = param_group {
             if &*keyword == "impl" {
@@ -59,6 +60,7 @@ pub(crate) fn parse_prototype(
                                 ),
                                 _ => panic!(),
                             };
+                            at_least_one = true;
                         } else {
                             let identifier_range = var_name.get_range();
                             report::send(Report {
@@ -129,7 +131,7 @@ pub(crate) fn parse_prototype(
         } else {
             if n == max_n {
                 if let AbstractSyntaxTree::Identifier(ref components, _) = param_group {
-                    let range_start = param_group.get_range().start;
+                    let param_group_range = param_group.get_range();
                     let range_end = r.get_range().end;
                     if &*keyword == "impl" {
                         if let AbstractSyntaxTree::Enclosed(inner, ch, _) = r {
@@ -140,12 +142,27 @@ pub(crate) fn parse_prototype(
                         }
                         panic!();
                     } else {
+                        if !at_least_one {
+                            report::send(Report {
+                                is_error: true,
+                                filename: filename,
+                                offset: param_group_range.start,
+                                message: "paremeter definition expected".to_string(),
+                                note: None,
+                                help: None,
+                                labels: vec![(
+                                    param_group_range.start..param_group_range.end,
+                                    "has no parameters".to_string(),
+                                )],
+                            });
+                            return Err(());
+                        }
                         return Ok(AbstractSyntaxTree::Assignment(
                             Box::new(param_group),
                             Box::new(r),
                             true,
                             None,
-                            range_start..range_end,
+                            param_group_range.start..range_end,
                         ));
                     }
                 } else {
@@ -156,6 +173,9 @@ pub(crate) fn parse_prototype(
             }
         }
         n += 1;
+    }
+    if !at_least_one {
+        panic!();
     }
     Ok(r)
 }
