@@ -7,7 +7,11 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 
 // TODO: use CoW
-fn compute_dependencies(ast: &AbstractSyntaxTree, locals: &HashSet<String>) -> HashSet<String> {
+fn compute_dependencies(
+    ast: &AbstractSyntaxTree,
+    locals: &HashSet<String>,
+    filename: &str,
+) -> HashSet<String> {
     match ast {
         AbstractSyntaxTree::Block(statements, _) => {
             let mut r = HashSet::new();
@@ -28,16 +32,16 @@ fn compute_dependencies(ast: &AbstractSyntaxTree, locals: &HashSet<String>) -> H
                     }
                     _ => {}
                 }
-                r = &r | &compute_dependencies(statement, &new_locals);
+                r = &r | &compute_dependencies(statement, &new_locals, filename);
             }
             r
         }
         AbstractSyntaxTree::List(expressions, _) => expressions
             .into_iter()
-            .map(|x| compute_dependencies(x, locals))
+            .map(|x| compute_dependencies(x, locals, filename))
             .reduce(|a, x| &a | &x)
             .unwrap_or_default(),
-        AbstractSyntaxTree::Enclosed(inner, _, _) => compute_dependencies(inner, locals),
+        AbstractSyntaxTree::Enclosed(inner, _, _) => compute_dependencies(inner, locals, filename),
         AbstractSyntaxTree::Identifier(components, _) => {
             let name = components.join("::");
             if name.get(..4) == Some("Type")
@@ -53,34 +57,61 @@ fn compute_dependencies(ast: &AbstractSyntaxTree, locals: &HashSet<String>) -> H
         }
         AbstractSyntaxTree::Assignment(_, value, _, def_type, _) => {
             let type_deps = match def_type {
-                Some(dt) => compute_dependencies(dt, locals),
+                Some(dt) => compute_dependencies(dt, locals, filename),
                 None => HashSet::new(),
             };
-            &compute_dependencies(value, locals) | &type_deps
+            &compute_dependencies(value, locals, filename) | &type_deps
         }
         AbstractSyntaxTree::Application(left, right, _) => {
-            &compute_dependencies(left, locals) | &compute_dependencies(right, locals)
+            &compute_dependencies(left, locals, filename)
+                | &compute_dependencies(right, locals, filename)
         }
         AbstractSyntaxTree::Forall(name, var_type, value, _) => {
-            &compute_dependencies(var_type, locals)
+            &compute_dependencies(var_type, locals, filename)
                 | &match name {
                     Some(s) => {
                         let mut new_locals = locals.clone();
                         new_locals.insert(s.clone());
-                        compute_dependencies(value, &new_locals)
+                        compute_dependencies(value, &new_locals, filename)
                     }
-                    None => compute_dependencies(value, locals),
+                    None => compute_dependencies(value, locals, filename),
                 }
         }
         AbstractSyntaxTree::Lambda(name, var_type, value, _) => {
-            &compute_dependencies(var_type, locals)
+            &compute_dependencies(var_type, locals, filename)
                 | &{
                     let mut new_locals = locals.clone();
                     new_locals.insert(name.clone());
-                    compute_dependencies(value, &new_locals)
+                    compute_dependencies(value, &new_locals, filename)
                 }
         }
-        _ => panic!(),
+        AbstractSyntaxTree::Empty => {
+            panic!();
+        }
+        AbstractSyntaxTree::Typed(_, _, range) => {
+            report::send(Report {
+                is_error: true,
+                filename: filename.to_string(),
+                offset: range.start,
+                message: "Invalid statement".to_string(),
+                note: None,
+                help: None,
+                labels: vec![(range.clone(), "not a statement".to_string())],
+            });
+            HashSet::new()
+        }
+        AbstractSyntaxTree::SpecialApp(_, _, _, range) => {
+            report::send(Report {
+                is_error: true,
+                filename: filename.to_string(),
+                offset: range.start,
+                message: "Incomplete expression".to_string(),
+                note: None,
+                help: None,
+                labels: vec![(range.clone(), "unfinished expression".to_string())],
+            });
+            HashSet::new()
+        }
     }
 }
 
@@ -123,11 +154,27 @@ pub(crate) async fn convert_to_term(
                     }
                     _ => {
                         if n != statements.len() - 1 {
-                            panic!();
+                            let range = statement.get_range();
+                            report::send(Report {
+                                is_error: false,
+                                filename: filename.to_string(),
+                                offset: range.start,
+                                message: "This statement has no effect".to_string(),
+                                note: None,
+                                help: None,
+                                labels: vec![(
+                                    range.clone(),
+                                    "Not a definition, assignment, or last expression in scope"
+                                        .to_string(),
+                                )],
+                            });
+                            // TODO: change this when global instrumenting is in place
+                        } else {
+                            rv.push(
+                                convert_to_term(statement, &new_locals, new_level, filename)
+                                    .await?,
+                            );
                         }
-                        rv.push(
-                            convert_to_term(statement, &new_locals, new_level, filename).await?,
-                        );
                     }
                 }
                 n += 1;
@@ -199,10 +246,10 @@ fn dependency_loader(
     let logical_path_string = logical_path.to_string();
     Box::pin(async move {
         let (ast, filename) = get_ast(&logical_path_string).await?;
-        let deps = compute_dependencies(&ast, &HashSet::new());
+        let deps = compute_dependencies(&ast, &HashSet::new(), &filename);
         let (type_ast, _) = get_type_ast(&logical_path_string).await?;
         let type_deps = match type_ast {
-            Some(ast) => compute_dependencies(&ast, &HashSet::new()),
+            Some(ast) => compute_dependencies(&ast, &HashSet::new(), &filename),
             None => HashSet::new(),
         };
         // TODO: transform relative (to filename) paths to be absolute

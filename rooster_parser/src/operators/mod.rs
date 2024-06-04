@@ -31,18 +31,14 @@ fn colon_handler(
     match left {
         AbstractSyntaxTree::Assignment(identifier, value, is_let, def_type, _) => {
             if let Some(dt) = def_type {
-                let dtrg = dt.get_range();
                 report::send(Report {
                     is_error: true,
                     filename: filename.to_string(),
-                    offset: dtrg.start,
+                    offset: right_range.start,
                     message: "duplicate type specification in definition".to_string(),
                     note: None,
                     help: Some("remove extra specification".to_string()),
-                    labels: vec![
-                        (right_range, "duplicate type".to_string()),
-                        (dtrg, "previous type was here".to_string()),
-                    ],
+                    labels: vec![(right_range, "duplicate type".to_string())],
                 });
                 return Err(());
             }
@@ -54,14 +50,11 @@ fn colon_handler(
                 left_start..right_range.end,
             ))
         }
-        _ => {
-            left.must_be_expression(&filename)?;
-            Ok(AbstractSyntaxTree::Typed(
-                Box::new(left),
-                Box::new(right),
-                left_start..right_range.end,
-            ))
-        }
+        _ => Ok(AbstractSyntaxTree::Typed(
+            Box::new(left),
+            Box::new(right),
+            left_start..right_range.end,
+        )),
     }
 }
 

@@ -340,7 +340,18 @@ impl AbstractSyntaxTree {
     pub(crate) fn must_be_expression(&self, filename: &str) -> Result<(), ()> {
         match self {
             AbstractSyntaxTree::Block(_, _) => Ok(()),
-            AbstractSyntaxTree::List(_, _) => Err(()),
+            AbstractSyntaxTree::List(_, range) => {
+                report::send(Report {
+                    is_error: true,
+                    filename: filename.to_string(),
+                    offset: range.start,
+                    message: "Expected expression, found comma-separated list".to_string(),
+                    note: None,
+                    help: None,
+                    labels: vec![(range.clone(), "not a valid expression".to_string())],
+                });
+                Err(())
+            }
             AbstractSyntaxTree::Enclosed(ast, ch, range) => match ch {
                 '(' | '{' => ast.must_be_expression(filename),
                 _ => {

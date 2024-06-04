@@ -5,7 +5,6 @@ A programming language for verified software.
 * Perform more thorough error reporting.
   - Implement recovery mechanism through "ignore" AST variant.
   - Implement error reporting infrastructure at kernel level.
-  - Make sure the `_ =>` in the parser are not accepting invalid input.
 * Accept a simpler call syntax.
   - Allow omitting any preceding type parameters.
   - Allow omitting non-type preceding parameters.

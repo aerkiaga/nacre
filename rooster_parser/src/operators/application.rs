@@ -66,6 +66,10 @@ pub(crate) fn application_handler(
                     ));
                 }
             }
+            if &*components[0] != "let" {
+                left.must_be_expression(&filename)
+                    .and(right.must_be_expression(&filename))?;
+            }
             Ok(AbstractSyntaxTree::Application(
                 Box::new(left),
                 Box::new(right),
