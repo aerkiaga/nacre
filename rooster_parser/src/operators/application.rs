@@ -86,22 +86,75 @@ pub(crate) fn application_handler(
                         left_start..right_end,
                     ));
                 } else {
-                    if !match &**keyword {
-                        "fn" | "impl" => *ch == '{',
-                        "type" => false,
+                    match &**keyword {
+                        "fn" => match *ch {
+                            '{' => {}
+                            '[' => {
+                                report::send(Report {
+                                    is_error: true,
+                                    filename: filename,
+                                    offset: right_range.start,
+                                    message: "function definition body must be enclosed in braces"
+                                        .to_string(),
+                                    note: None,
+                                    help: None,
+                                    labels: vec![(
+                                        right_range.clone(),
+                                        "enclosed in brackets".to_string(),
+                                    )],
+                                });
+                                return Err(());
+                            }
+                            _ => unreachable!(),
+                        },
+                        "impl" => match *ch {
+                            '{' => {}
+                            '[' => {
+                                report::send(Report {
+                                    is_error: true,
+                                    filename: filename,
+                                    offset: right_range.start,
+                                    message: "`impl` block must be enclosed in braces".to_string(),
+                                    note: None,
+                                    help: None,
+                                    labels: vec![(
+                                        right_range.clone(),
+                                        "enclosed in brackets".to_string(),
+                                    )],
+                                });
+                                return Err(());
+                            }
+                            '(' => {
+                                report::send(Report {
+                                    is_error: true,
+                                    filename: filename,
+                                    offset: right_range.start,
+                                    message: "`impl` block must be enclosed in braces".to_string(),
+                                    note: Some("`impl` blocks do not take parameters".to_string()),
+                                    help: None,
+                                    labels: vec![(
+                                        right_range.clone(),
+                                        "enclosed in parentheses".to_string(),
+                                    )],
+                                });
+                                return Err(());
+                            }
+                            _ => unreachable!(),
+                        },
+                        "type" => {
+                            report::send(Report {
+                                is_error: true,
+                                filename: filename,
+                                offset: right_range.start,
+                                message: "type definition return type must be preceded by `->`"
+                                    .to_string(),
+                                note: None,
+                                help: None,
+                                labels: vec![(right_range.clone(), "return type here".to_string())],
+                            });
+                            return Err(());
+                        }
                         _ => unreachable!(),
-                    } {
-                        report::send(Report {
-                            is_error: true,
-                            filename: filename,
-                            offset: right_range.start,
-                            message: "type definition return type must be preceded by `->`"
-                                .to_string(),
-                            note: None,
-                            help: None,
-                            labels: vec![(right_range.clone(), "return type here".to_string())],
-                        });
-                        return Err(());
                     }
                 }
             } else {

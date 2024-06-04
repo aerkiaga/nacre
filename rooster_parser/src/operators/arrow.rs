@@ -43,12 +43,6 @@ pub(crate) fn arrow_handler(
             left_range,
         ) => {
             if let AbstractSyntaxTree::Lambda(_, _, _, _) = &*left_right {
-                if !is_definition {
-                    panic!();
-                }
-                if let Some(_) = def_type {
-                    panic!();
-                }
                 let right_range = right.get_range();
                 let new_def_type = left_right.lambda_typify(right);
                 Ok(AbstractSyntaxTree::Assignment(
@@ -59,12 +53,29 @@ pub(crate) fn arrow_handler(
                     left_range.start..right_range.end,
                 ))
             } else {
-                panic!();
+                unreachable!();
             }
         }
         _ => {
             // TODO: check both, then return error if appropriate
             left.must_be_expression(&filename)?;
+            if let AbstractSyntaxTree::Lambda(_, _, _, ref left_range) = left {
+                let right_range = right.get_range();
+                report::send(Report {
+                    is_error: false,
+                    filename: filename.clone(),
+                    offset: left_range.start,
+                    message: "type definition using `->` operator likely not intended".to_string(),
+                    note: Some(
+                        "anonymous functions cannot have an explicit return type".to_string(),
+                    ),
+                    help: None,
+                    labels: vec![(
+                        left_range.start..right_range.end,
+                        "interpreted as `... -> ...`".to_string(),
+                    )],
+                });
+            }
             right.must_be_expression(&filename)?;
             let left_start = left.get_range().start;
             let right_end = right.get_range().end;

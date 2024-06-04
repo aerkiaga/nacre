@@ -81,7 +81,7 @@ fn get_opening_char(ch: char) -> char {
     }
 }
 
-fn get_closing_char(ch: char) -> char {
+pub(crate) fn get_closing_char(ch: char) -> char {
     if ch == '(' {
         ')'
     } else if ch == '[' {

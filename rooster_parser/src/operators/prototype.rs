@@ -18,10 +18,24 @@ pub(crate) fn parse_prototype(
     let mut n = 0;
     let max_n = params.len() - 1;
     let mut at_least_one = false;
+    let left_start = left.get_range().start;
     for param_group in params.into_iter().rev() {
         if let AbstractSyntaxTree::Enclosed(inner, ch, param_group_range) = param_group {
             if &*keyword == "impl" {
-                panic!();
+                let left_range = left.get_range();
+                report::send(Report {
+                    is_error: true,
+                    filename: filename,
+                    offset: param_group_range.start,
+                    message: "`impl` block is missing a namespace".to_string(),
+                    note: Some("correct syntax is `impl <namespace> {...}`".to_string()),
+                    help: None,
+                    labels: vec![(
+                        left_range.start..param_group_range.end,
+                        "`impl` block here".to_string(),
+                    )],
+                });
+                return Err(());
             }
             if ch == '(' {
                 for element in inner.into_list().into_iter().rev() {
@@ -45,20 +59,25 @@ pub(crate) fn parse_prototype(
                                 return Err(());
                             }
                             let rr = r.get_range();
+                            let start_range = if n == max_n {
+                                left_start
+                            } else {
+                                identifier_range.start
+                            };
                             r = match keyword {
                                 "fn" => AbstractSyntaxTree::Lambda(
                                     components[0].clone(),
                                     var_type,
                                     Box::new(r),
-                                    identifier_range.start..rr.end,
+                                    start_range..rr.end,
                                 ),
                                 "type" => AbstractSyntaxTree::Forall(
                                     Some(components[0].clone()),
                                     var_type,
                                     Box::new(r),
-                                    identifier_range.start..rr.end,
+                                    start_range..rr.end,
                                 ),
-                                _ => panic!(),
+                                _ => unreachable!(),
                             };
                             at_least_one = true;
                         } else {
@@ -111,7 +130,7 @@ pub(crate) fn parse_prototype(
                             "correct syntax is `type (<name>: <type>, ...) ... -> <return type>`"
                                 .to_string()
                         }
-                        _ => panic!(),
+                        _ => unreachable!(),
                     }),
                     help: None,
                     labels: vec![(
@@ -121,7 +140,7 @@ pub(crate) fn parse_prototype(
                             match ch {
                                 '[' => "brackets",
                                 '{' => "braces",
-                                _ => panic!(),
+                                _ => unreachable!(),
                             }
                         ),
                     )],
@@ -135,12 +154,10 @@ pub(crate) fn parse_prototype(
                     let range_end = r.get_range().end;
                     if &*keyword == "impl" {
                         if let AbstractSyntaxTree::Enclosed(inner, ch, _) = r {
-                            if ch != '{' {
-                                panic!();
-                            }
                             return Ok(inner.do_namespace(components, &filename));
+                        } else {
+                            unreachable!();
                         }
-                        panic!();
                     } else {
                         if !at_least_one {
                             report::send(Report {
@@ -166,16 +183,13 @@ pub(crate) fn parse_prototype(
                         ));
                     }
                 } else {
-                    panic!();
+                    unreachable!();
                 }
             } else {
-                panic!();
+                unreachable!();
             }
         }
         n += 1;
-    }
-    if !at_least_one {
-        panic!();
     }
     Ok(r)
 }

@@ -60,7 +60,12 @@ async fn main() {
                     );
                 }
                 // TODO: get filename somehow
-                let mut r = ariadne::Report::<(&str, Range<usize>)>::build(ariadne::ReportKind::Error, &*report.filename, report.offset)
+                let kind = if report.is_error {
+                    ariadne::ReportKind::Error
+                } else {
+                    ariadne::ReportKind::Warning
+                };
+                let mut r = ariadne::Report::<(&str, Range<usize>)>::build(kind, &*report.filename, report.offset)
                     .with_message(format_text(report.message))
                     .with_labels(labels);
                 if let Some(note) = report.note {
