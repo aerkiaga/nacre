@@ -382,18 +382,31 @@ impl AbstractSyntaxTree {
                     Ok(())
                 }
             }
-            AbstractSyntaxTree::Assignment(_, _, _, _, range) => {
-                report::send(Report {
-                    is_error: true,
-                    filename: filename.to_string(),
-                    offset: range.start,
-                    message: "Expected valid expression, found assignment".to_string(),
-                    note: None,
-                    help: Some(
-                        "use `==` for boolean equality, `===` for equality proposition".to_string(),
-                    ), // TODO: update if operators change
-                    labels: vec![(range.clone(), "assignment statement".to_string())],
-                });
+            AbstractSyntaxTree::Assignment(_, _, is_let, _, range) => {
+                if *is_let {
+                    report::send(Report {
+                        is_error: true,
+                        filename: filename.to_string(),
+                        offset: range.start,
+                        message: "Expected valid expression, found definition".to_string(),
+                        note: None,
+                        help: None,
+                        labels: vec![(range.clone(), "definition statement".to_string())],
+                    });
+                } else {
+                    report::send(Report {
+                        is_error: true,
+                        filename: filename.to_string(),
+                        offset: range.start,
+                        message: "Expected valid expression, found assignment".to_string(),
+                        note: None,
+                        help: Some(
+                            "use `==` for boolean equality, `===` for equality proposition"
+                                .to_string(),
+                        ), // TODO: update if operators change
+                        labels: vec![(range.clone(), "assignment statement".to_string())],
+                    });
+                }
                 Err(())
             }
             AbstractSyntaxTree::Application(_, _, _) => Ok(()),

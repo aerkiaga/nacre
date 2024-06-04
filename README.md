@@ -4,7 +4,6 @@ A programming language for verified software.
 ## TODO
 * Perform more thorough error reporting.
   - Implement recovery mechanism through "ignore" AST variant.
-  - Replace all parser panics with error, unreachable or todo.
   - Implement error reporting infrastructure at kernel level.
   - Make sure the `_ =>` in the parser are not accepting invalid input.
 * Accept a simpler call syntax.

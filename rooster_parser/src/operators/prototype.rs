@@ -179,7 +179,7 @@ pub(crate) fn parse_prototype(
                             Box::new(r),
                             true,
                             None,
-                            param_group_range.start..range_end,
+                            left_start..range_end,
                         ));
                     }
                 } else {

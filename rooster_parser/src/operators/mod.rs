@@ -65,7 +65,6 @@ fn colon_handler(
     }
 }
 
-// TODO: accept trailing comma
 fn comma_handler(
     left: AbstractSyntaxTree,
     right: AbstractSyntaxTree,
@@ -182,7 +181,6 @@ fn equals_handler(
     }
 }
 
-// TODO: accept trailing semicolon
 // TODO: check if they are actually statements
 // TODO: ignore parser2::AbstractSyntaxTree::Empty if present
 fn semicolon_handler(
@@ -237,7 +235,6 @@ pub(crate) static OPERATOR_TABLE: Lazy<
         ),
     >,
 > = Lazy::new(|| {
-    // TODO: implement actual handlers
     let mut r = HashMap::new();
     //name, (precedence, right associative)
     r.insert("::".to_string(), (6., true, namespace_handler as _)); // Namespace

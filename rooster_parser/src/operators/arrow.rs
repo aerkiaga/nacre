@@ -57,8 +57,8 @@ pub(crate) fn arrow_handler(
             }
         }
         _ => {
-            // TODO: check both, then return error if appropriate
-            left.must_be_expression(&filename)?;
+            left.must_be_expression(&filename)
+                .and(right.must_be_expression(&filename))?;
             if let AbstractSyntaxTree::Lambda(_, _, _, ref left_range) = left {
                 let right_range = right.get_range();
                 report::send(Report {
@@ -76,7 +76,6 @@ pub(crate) fn arrow_handler(
                     )],
                 });
             }
-            right.must_be_expression(&filename)?;
             let left_start = left.get_range().start;
             let right_end = right.get_range().end;
             Ok(AbstractSyntaxTree::Forall(

@@ -201,9 +201,8 @@ pub(crate) fn application_handler(
             prototype::parse_prototype(&left, right, filename, keyword)
         }
         _ => {
-            // TODO: check both, then return error if appropriate
-            left.must_be_expression(&filename)?;
-            right.must_be_expression(&filename)?;
+            left.must_be_expression(&filename)
+                .and(right.must_be_expression(&filename))?;
             let left_start = left.get_range().start;
             let right_end = right.get_range().end;
             Ok(AbstractSyntaxTree::Application(
