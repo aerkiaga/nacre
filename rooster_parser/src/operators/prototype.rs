@@ -43,18 +43,19 @@ pub(crate) fn parse_prototype(
                                 });
                                 return Err(());
                             }
+                            let rr = r.get_range();
                             r = match keyword {
                                 "fn" => AbstractSyntaxTree::Lambda(
                                     components[0].clone(),
                                     var_type,
                                     Box::new(r),
-                                    identifier_range,
+                                    identifier_range.start..rr.end,
                                 ),
                                 "type" => AbstractSyntaxTree::Forall(
                                     Some(components[0].clone()),
                                     var_type,
                                     Box::new(r),
-                                    identifier_range,
+                                    identifier_range.start..rr.end,
                                 ),
                                 _ => panic!(),
                             };

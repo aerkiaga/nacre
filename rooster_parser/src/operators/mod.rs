@@ -22,28 +22,41 @@ use arrow::*;
 fn colon_handler(
     left: AbstractSyntaxTree,
     right: AbstractSyntaxTree,
-    _filename: String,
+    filename: String,
     _range: Range<usize>,
 ) -> Result<AbstractSyntaxTree, ()> {
     let left_start = left.get_range().start;
-    let right_end = right.get_range().end;
+    let right_range = right.get_range();
     match left {
         AbstractSyntaxTree::Assignment(identifier, value, is_let, def_type, _) => {
-            if let Some(_) = def_type {
-                panic!();
+            if let Some(dt) = def_type {
+                let dtrg = dt.get_range();
+                report::send(Report {
+                    is_error: true,
+                    filename: filename.to_string(),
+                    offset: dtrg.start,
+                    message: "duplicate type specification in definition".to_string(),
+                    note: None,
+                    help: Some("remove extra specification".to_string()),
+                    labels: vec![
+                        (right_range, "duplicate type".to_string()),
+                        (dtrg, "previous type was here".to_string()),
+                    ],
+                });
+                return Err(());
             }
             Ok(AbstractSyntaxTree::Assignment(
                 identifier,
                 value,
                 is_let,
                 Some(Box::new(right)),
-                left_start..right_end,
+                left_start..right_range.end,
             ))
         }
         _ => Ok(AbstractSyntaxTree::Typed(
             Box::new(left),
             Box::new(right),
-            left_start..right_end,
+            left_start..right_range.end,
         )),
     }
 }
@@ -86,11 +99,12 @@ fn comma_handler(
 fn equals_handler(
     left: AbstractSyntaxTree,
     right: AbstractSyntaxTree,
-    _filename: String,
+    filename: String,
     _range: Range<usize>,
 ) -> Result<AbstractSyntaxTree, ()> {
     let left_start = left.get_range().start;
     let right_end = right.get_range().end;
+    let lrg = left.get_range();
     match left {
         AbstractSyntaxTree::Identifier(_, _) => Ok(AbstractSyntaxTree::Assignment(
             Box::new(left),
@@ -102,22 +116,63 @@ fn equals_handler(
         AbstractSyntaxTree::Application(app_left, app_right, _) => {
             if let AbstractSyntaxTree::Identifier(components, _) = *app_left {
                 if components.len() == 1 && components[0] == "let" {
-                    Ok(AbstractSyntaxTree::Assignment(
-                        Box::new(*app_right),
-                        Box::new(right),
-                        true,
-                        None,
-                        left_start..right_end,
-                    ))
+                    if let AbstractSyntaxTree::Identifier(_, _) = *app_right {
+                        Ok(AbstractSyntaxTree::Assignment(
+                            Box::new(*app_right),
+                            Box::new(right),
+                            true,
+                            None,
+                            left_start..right_end,
+                        ))
+                    } else {
+                        let arrg = app_right.get_range();
+                        report::send(Report {
+                            is_error: true,
+                            filename: filename.to_string(),
+                            offset: arrg.start,
+                            message: "expected valid identifier in definition".to_string(),
+                            note: None,
+                            help: None,
+                            labels: vec![(arrg, "not a valid identifier".to_string())],
+                        });
+                        Err(())
+                    }
                 } else {
-                    panic!();
+                    report::send(Report {
+                        is_error: true,
+                        filename: filename.to_string(),
+                        offset: lrg.start,
+                        message: "expected lvalue in assignment".to_string(),
+                        note: None,
+                        help: Some("you might have meant to write `let ...`".to_string()),
+                        labels: vec![(lrg, "not an lvalue".to_string())],
+                    });
+                    Err(())
                 }
             } else {
-                panic!();
+                report::send(Report {
+                    is_error: true,
+                    filename: filename.to_string(),
+                    offset: lrg.start,
+                    message: "expected lvalue in assignment".to_string(),
+                    note: None,
+                    help: None,
+                    labels: vec![(lrg, "not an lvalue".to_string())],
+                });
+                Err(())
             }
         }
         _ => {
-            panic!();
+            report::send(Report {
+                is_error: true,
+                filename: filename.to_string(),
+                offset: lrg.start,
+                message: "expected lvalue in assignment".to_string(),
+                note: None,
+                help: None,
+                labels: vec![(lrg, "not an lvalue".to_string())],
+            });
+            Err(())
         }
     }
 }

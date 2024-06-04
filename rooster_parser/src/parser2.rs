@@ -300,10 +300,22 @@ impl AbstractSyntaxTree {
                             range,
                         )
                     } else {
-                        panic!();
+                        unreachable!();
                     }
                 } else {
-                    panic!();
+                    report::send(Report {
+                        is_error: true,
+                        filename: filename.to_string(),
+                        offset: range.start,
+                        message: "expected definition within `impl` block".to_string(),
+                        note: None,
+                        help: Some(
+                            "use keyword `let` to make assignment into a definition".to_string(),
+                        ),
+                        labels: vec![(range, "not a definition".to_string())],
+                    });
+                    // TODO: AbstractSyntaxTree::Ignore or similar
+                    AbstractSyntaxTree::Empty
                 }
             }
             _ => {
