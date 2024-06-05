@@ -59,7 +59,7 @@ pub enum AbstractSyntaxTree {
         Box<AbstractSyntaxTree>,
         Range<usize>,
     ),
-    /// Empty AST, should only occur internally.
+    /// Empty AST, indicates a parser error.
     Empty,
     /// Typed parameter, should only occur internally.
     Typed(
@@ -87,7 +87,7 @@ impl AbstractSyntaxTree {
             AbstractSyntaxTree::Application(_, _, range) => range,
             AbstractSyntaxTree::Forall(_, _, _, range) => range,
             AbstractSyntaxTree::Lambda(_, _, _, range) => range,
-            AbstractSyntaxTree::Empty => panic!(),
+            AbstractSyntaxTree::Empty => &(0..0),
             AbstractSyntaxTree::Typed(_, _, range) => range,
             AbstractSyntaxTree::SpecialApp(_, _, _, range) => range,
         }
@@ -314,7 +314,6 @@ impl AbstractSyntaxTree {
                         ),
                         labels: vec![(range, "not a definition".to_string())],
                     });
-                    // TODO: AbstractSyntaxTree::Ignore or similar
                     AbstractSyntaxTree::Empty
                 }
             }
@@ -329,7 +328,6 @@ impl AbstractSyntaxTree {
                     help: None,
                     labels: vec![(range, "not a definition".to_string())],
                 });
-                // TODO: AbstractSyntaxTree::Ignore or similar
                 AbstractSyntaxTree::Empty
             }
         }
@@ -522,7 +520,10 @@ pub(crate) async fn build_tree(
                     let handler = definition.2;
                     let right = ast_stack.pop().unwrap();
                     let left = ast_stack.pop().unwrap();
-                    ast_stack.push(handler(left, right, filename.clone(), range)?);
+                    ast_stack.push(match handler(left, right, filename.clone(), range) {
+                        Ok(x) => x,
+                        Err(_) => AbstractSyntaxTree::Empty,
+                    });
                 } else {
                     if s != ";" && s != "," {
                         report::send(Report {

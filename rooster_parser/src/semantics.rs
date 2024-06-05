@@ -85,9 +85,7 @@ fn compute_dependencies(
                     compute_dependencies(value, &new_locals, filename)
                 }
         }
-        AbstractSyntaxTree::Empty => {
-            panic!();
-        }
+        AbstractSyntaxTree::Empty => HashSet::new(),
         AbstractSyntaxTree::Typed(_, _, range) => {
             report::send(Report {
                 is_error: true,
@@ -236,7 +234,7 @@ pub(crate) async fn convert_to_term(
             let value_term = convert_to_term(value, &new_locals, new_level, filename).await?;
             Ok(Term::Lambda(Box::new(type_term), Box::new(value_term)))
         }
-        _ => panic!(),
+        _ => Err(()),
     }
 }
 
