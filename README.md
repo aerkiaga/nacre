@@ -10,6 +10,9 @@ A programming language for verified software.
   - Allow dot syntax for "self" function call.
 * Improve logical foundation.
   - Allow axiomatization of inductive principles.
-  - Consider separating `Prop` and `Set` for compatibility with proof irrelevance.
-  - Consider allowing axiomatization of axiom K or equivalent.
+  - Explore whether axiomatization of type-specific
+    indefinite description is consistent and sufficient
+    to prove the types' uniqueness.
+  - Investigate what types should be given this
+    axiomatization at minimum (e.g. equality).
 * Check all TODOs in code.
