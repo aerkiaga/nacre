@@ -63,10 +63,12 @@ fn kernel_loader(
         // And finally call into the kernel
         let type_term = Arc::new(match get_type_ast(logical_path).await.unwrap().0 {
             Some(ast) => semantics::convert_to_term(ast, &HashMap::new(), 0, &filename).await?,
-            None => definition.get_type(&env).unwrap(),
+            None => definition
+                .get_type(&env)
+                .map_err(|e| kernel_err::report(e, &filename))?,
         });
         env.add_definition(Some(definition.clone()), type_term.clone())
-            .unwrap();
+            .map_err(|e| kernel_err::report(e, &filename))?;
         println!("Verified {}", logical_path);
         let index = INDEX_COUNTER.fetch_add(1, Ordering::Relaxed);
         Ok((definition, type_term, index))

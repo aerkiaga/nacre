@@ -8,6 +8,7 @@ use tokio::io::AsyncReadExt;
 
 mod cache;
 mod kernel;
+mod kernel_err;
 mod lexer;
 mod operators;
 mod parser;

@@ -1,3 +1,5 @@
+use crate::*;
+
 use std::sync::Arc;
 
 type GlobalRef = usize;
@@ -36,7 +38,7 @@ impl Term {
 
     // Adds n levels of abstraction around the term.
     // Returns Err(()) if an integer overflow occurred.
-    pub(crate) fn make_inner_by_n_rec(&self, n: usize, at_least: usize) -> Result<Term, ()> {
+    pub(crate) fn make_inner_by_n_rec(&self, n: usize, at_least: usize) -> Result<Term, Error> {
         match self {
             Term::Prop => Ok(Term::Prop),
             Term::Type(n) => Ok(Term::Type(*n)),
@@ -45,7 +47,7 @@ impl Term {
                 if *v >= at_least {
                     match v.checked_add(n) {
                         Some(r) => Ok(Term::Variable(r)),
-                        None => Err(()),
+                        None => Err(Error::Other),
                     }
                 } else {
                     Ok(Term::Variable(*v))
@@ -53,11 +55,11 @@ impl Term {
             }
             Term::Forall(a, b) => Ok(Term::Forall(
                 Box::new(a.make_inner_by_n_rec(n, at_least)?),
-                Box::new(b.make_inner_by_n_rec(n, at_least.checked_add(1).ok_or(())?)?),
+                Box::new(b.make_inner_by_n_rec(n, at_least.checked_add(1).ok_or(Error::Other)?)?),
             )),
             Term::Lambda(a, b) => Ok(Term::Lambda(
                 Box::new(a.make_inner_by_n_rec(n, at_least)?),
-                Box::new(b.make_inner_by_n_rec(n, at_least.checked_add(1).ok_or(())?)?),
+                Box::new(b.make_inner_by_n_rec(n, at_least.checked_add(1).ok_or(Error::Other)?)?),
             )),
             Term::Apply(a, b) => Ok(Term::Apply(
                 Box::new(a.make_inner_by_n_rec(n, at_least)?),
@@ -65,21 +67,21 @@ impl Term {
             )),
             Term::Let(a, b) => Ok(Term::Apply(
                 Box::new(a.make_inner_by_n_rec(n, at_least)?),
-                Box::new(b.make_inner_by_n_rec(n, at_least.checked_add(1).ok_or(())?)?),
+                Box::new(b.make_inner_by_n_rec(n, at_least.checked_add(1).ok_or(Error::Other)?)?),
             )),
         }
     }
 
     // Adds n levels of abstraction around the term.
-    // Returns Err(()) if an integer overflow occurred.
-    pub(crate) fn make_inner_by_n(&self, n: usize) -> Result<Term, ()> {
+    // Returns Err(...) if an integer overflow occurred.
+    pub(crate) fn make_inner_by_n(&self, n: usize) -> Result<Term, Error> {
         self.make_inner_by_n_rec(n, 0)
     }
 
     // Replaces all occurrences of the v-th variable with t in a,
     // and deletes the variable, returning a new Term.
-    // Returns Err(()) if an integer over-/underflow occurred.
-    pub(crate) fn replace_variable(&self, v: VariableRef, t: &Term) -> Result<Term, ()> {
+    // Returns Err(...) if an integer over-/underflow occurred.
+    pub(crate) fn replace_variable(&self, v: VariableRef, t: &Term) -> Result<Term, Error> {
         match self {
             Term::Prop => Ok(Term::Prop),
             Term::Type(n) => Ok(Term::Type(*n)),
@@ -92,7 +94,7 @@ impl Term {
                 } else {
                     match v2.checked_sub(1) {
                         Some(r) => Ok(Term::Variable(r)),
-                        None => Err(()),
+                        None => Err(Error::Other),
                     }
                 }
             }
@@ -101,14 +103,14 @@ impl Term {
                     Box::new(a.replace_variable(v, t)?),
                     Box::new(b.replace_variable(r, t)?),
                 )),
-                None => Err(()),
+                None => Err(Error::Other),
             },
             Term::Lambda(a, b) => match v.checked_add(1) {
                 Some(r) => Ok(Term::Lambda(
                     Box::new(a.replace_variable(v, t)?),
                     Box::new(b.replace_variable(r, t)?),
                 )),
-                None => Err(()),
+                None => Err(Error::Other),
             },
             Term::Apply(a, b) => Ok(Term::Apply(
                 Box::new(a.replace_variable(v, t)?),
@@ -119,15 +121,15 @@ impl Term {
                     Box::new(a.replace_variable(v, t)?),
                     Box::new(b.replace_variable(r, t)?),
                 )),
-                None => Err(()),
+                None => Err(Error::Other),
             },
         }
     }
 
     // Replaces all occurrences of the g-th global with t in self,
     // returning a new Term.
-    // Returns Err(()) if an integer overflow occurred.
-    pub(crate) fn replace_global(&self, g: GlobalRef, t: &Term) -> Result<Term, ()> {
+    // Returns Err(...) if an integer overflow occurred.
+    pub(crate) fn replace_global(&self, g: GlobalRef, t: &Term) -> Result<Term, Error> {
         match self {
             Term::Prop => Ok(Term::Prop),
             Term::Type(n) => Ok(Term::Type(*n)),
@@ -144,14 +146,14 @@ impl Term {
                     Box::new(a.replace_global(g, t)?),
                     Box::new(b.replace_global(r, t)?),
                 )),
-                None => Err(()),
+                None => Err(Error::Other),
             },
             Term::Lambda(a, b) => match g.checked_add(1) {
                 Some(r) => Ok(Term::Lambda(
                     Box::new(a.replace_global(g, t)?),
                     Box::new(b.replace_global(r, t)?),
                 )),
-                None => Err(()),
+                None => Err(Error::Other),
             },
             Term::Apply(a, b) => Ok(Term::Apply(
                 Box::new(a.replace_global(g, t)?),
@@ -162,7 +164,7 @@ impl Term {
                     Box::new(a.replace_global(g, t)?),
                     Box::new(b.replace_global(r, t)?),
                 )),
-                None => Err(()),
+                None => Err(Error::Other),
             },
         }
     }
@@ -270,19 +272,19 @@ impl Environment {
         &mut self,
         global_def: Option<Arc<Term>>,
         global_type: Arc<Term>,
-    ) -> Result<(), ()> {
+    ) -> Result<(), Error> {
         if self.global_is_legal(global_def.as_deref(), &global_type) {
             if let Some(def) = &global_def {
                 let ctdef = def.get_type(self)?.normalize(self)?;
                 let cglobal_type = global_type.normalize(self)?;
                 if ctdef != cglobal_type {
-                    return Err(());
+                    return Err(Error::MismatchedType);
                 }
             }
             self.inner.insert(0, (global_def, global_type));
             Ok(())
         } else {
-            Err(())
+            Err(Error::Other)
         }
     }
 }

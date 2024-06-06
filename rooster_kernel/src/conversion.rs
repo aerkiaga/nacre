@@ -3,13 +3,13 @@ use crate::*;
 impl Term {
     // Applies beta and delta reduction to fully convert a term.
     // Returns Err(()) if an error occurred.
-    fn convert(&self, env: &Environment, ctx: &mut Context) -> Result<(Term, bool), ()> {
+    fn convert(&self, env: &Environment, ctx: &mut Context) -> Result<(Term, bool), Error> {
         match self {
             Term::Prop => Ok((Term::Prop, false)),
             Term::Type(n) => Ok((Term::Type(*n), false)),
             Term::Global(g) => match env.global_value(*g) {
                 Some(t) => Ok((t.clone(), true)), // Delta-Global
-                None => Err(()),
+                None => Err(Error::Other),
             },
             Term::Variable(v) => match ctx.variable_value(*v) {
                 Some(t) => Ok((t.make_inner_by_n(*v + 1)?, true)), // Delta-Local
@@ -51,12 +51,12 @@ impl Term {
 
     // Applies successive reduction steps to fully normalize a term.
     //
-    // Returns `Err(())` if an error occurred.
+    // Returns `Err(...)` if an error occurred.
     pub(crate) fn normalize_in_ctx(
         &self,
         env: &Environment,
         ctx: &mut Context,
-    ) -> Result<Term, ()> {
+    ) -> Result<Term, Error> {
         let mut r = self.clone();
         let mut pending = true;
         while pending {
@@ -67,8 +67,8 @@ impl Term {
 
     /// Applies successive reduction steps to fully normalize a term.
     ///
-    /// Returns `Err(())` if an error occurred.
-    pub fn normalize(&self, env: &Environment) -> Result<Term, ()> {
+    /// Returns `Err(...)` if an error occurred.
+    pub fn normalize(&self, env: &Environment) -> Result<Term, Error> {
         self.normalize_in_ctx(env, &mut Context::new())
     }
 }
