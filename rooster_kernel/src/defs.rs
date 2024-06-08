@@ -364,6 +364,17 @@ pub struct Context<T: Meta> {
     inner: Vec<(Option<Term<T>>, Term<T>)>,
 }
 
+impl<T: Meta> Clone for Context<T> {
+    fn clone(&self) -> Context<T> {
+        Context {
+            inner: (&self.inner)
+                .into_iter()
+                .map(|x| (x.0.as_ref().map(|y| y.clone()), x.1.clone()))
+                .collect(),
+        }
+    }
+}
+
 impl<T: Meta> Context<T> {
     pub fn new() -> Context<T> {
         Context { inner: vec![] }

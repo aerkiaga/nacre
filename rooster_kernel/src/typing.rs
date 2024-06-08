@@ -1,5 +1,7 @@
 use crate::*;
 
+use std::sync::Arc;
+
 // Returns the type of a forall x:A, B expression, where ta and tb are the types of the inner terms.
 // Returns Err(()) if the term does not have a type or an error occurred.
 fn combine_forall_types<T: Meta>(
@@ -7,6 +9,7 @@ fn combine_forall_types<T: Meta>(
     tb: &Term<T>,
     env: &Environment<T>,
     ctx: &mut Context<T>,
+    meta_a: &Arc<T>,
 ) -> Result<Term<T>, Error<T>> {
     let cta = ta.normalize_in_ctx(env, ctx)?;
     let ctb = tb.normalize_in_ctx(env, ctx)?; /* x:A is not necessary */
@@ -16,13 +19,19 @@ fn combine_forall_types<T: Meta>(
             if cta.is_sort() {
                 Ok((TermInner::Prop, &ctb.meta).into())
             } else {
-                Err(Error::Other)
+                Err(Error::NonSort {
+                    expr: meta_a.clone(),
+                    offending: Arc::new(ta.clone()),
+                })
             }
         }
         TermInner::Type(j) => match cta.inner {
             TermInner::Prop => Ok((TermInner::Type(j), &ctb.meta).into()), /* ? */
             TermInner::Type(i) => Ok((TermInner::Type(i.max(j)), &ctb.meta).into()),
-            _ => Err(Error::Other),
+            _ => Err(Error::NonSort {
+                expr: meta_a.clone(),
+                offending: Arc::new(ta.clone()),
+            }),
         },
         _ => Err(Error::Other),
     }
@@ -54,7 +63,7 @@ impl<T: Meta> Term<T> {
                 ctx.add_inner(None, *a.clone());
                 let tb = b.compute_type(env, ctx)?;
                 ctx.remove_inner();
-                combine_forall_types(&ta, &tb, env, ctx)
+                combine_forall_types(&ta, &tb, env, ctx, &a.meta)
             }
             TermInner::Lambda(a, b) => {
                 let ta = a.compute_type(env, ctx)?;
@@ -62,7 +71,7 @@ impl<T: Meta> Term<T> {
                 let tb = b.compute_type(env, ctx)?;
                 let ttb = tb.compute_type(env, ctx)?;
                 ctx.remove_inner();
-                combine_forall_types(&ta, &ttb, env, ctx)?;
+                combine_forall_types(&ta, &ttb, env, ctx, &a.meta)?;
                 Ok((
                     TermInner::Forall(Box::new(*a.clone()), Box::new(tb)),
                     &self.meta,
@@ -79,7 +88,13 @@ impl<T: Meta> Term<T> {
                         if ctb == cc {
                             d.replace_variable(0, &b)
                         } else {
-                            Err(Error::Other)
+                            Err(Error::AppMismatchedType {
+                                lhs: Arc::new(*a.clone()),
+                                expected: Arc::new(cc),
+                                found: Arc::new(tb),
+                                env: env.clone(),
+                                ctx: ctx.clone(),
+                            })
                         }
                     }
                     _ => {
@@ -92,7 +107,13 @@ impl<T: Meta> Term<T> {
                                 if ctb == cc {
                                     d.replace_variable(0, &b)
                                 } else {
-                                    Err(Error::Other)
+                                    Err(Error::AppMismatchedType {
+                                        lhs: Arc::new(*a.clone()),
+                                        expected: Arc::new(cc),
+                                        found: Arc::new(tb),
+                                        env: env.clone(),
+                                        ctx: ctx.clone(),
+                                    })
                                 }
                             }
                             _ => Err(Error::Other),

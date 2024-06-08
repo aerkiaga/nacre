@@ -414,7 +414,7 @@ pub(crate) fn report(error: Error<TermMeta>, filename: &str) {
             report::send(Report {
                 is_error: true,
                 filename: filename.to_string(),
-                offset: 0,
+                offset: found.meta.range.start,
                 message: "mismatched type in definition".to_string(),
                 note: {
                     let (exp, fnd) = produce_comparison(&expected, &found, &env, &mut ctx);
@@ -431,6 +431,47 @@ pub(crate) fn report(error: Error<TermMeta>, filename: &str) {
                     ),
                     (found.meta.range.clone(), "has unexpected type".to_string()),
                 ],
+            });
+        }
+        Error::AppMismatchedType {
+            lhs,
+            expected,
+            found,
+            env,
+            mut ctx,
+        } => {
+            report::send(Report {
+                is_error: true,
+                filename: filename.to_string(),
+                offset: lhs.meta.range.start,
+                message: "mismatched type in parameter".to_string(),
+                note: {
+                    let (exp, fnd) = produce_comparison(&expected, &found, &env, &mut ctx);
+                    Some(format!(
+                        "mismatched types\nexpected `{}`\nfound    `{}`",
+                        exp, fnd
+                    ))
+                },
+                help: None,
+                labels: vec![
+                    (
+                        expected.meta.range.clone(),
+                        "type constrained by this".to_string(),
+                    ),
+                    (found.meta.range.clone(), "has unexpected type".to_string()),
+                    (lhs.meta.range.clone(), "function here".to_string()),
+                ],
+            });
+        }
+        Error::NonSort { expr, offending } => {
+            report::send(Report {
+                is_error: true,
+                filename: filename.to_string(),
+                offset: expr.range.start,
+                message: "type of expression must be `Type` or some `Type`N".to_string(),
+                note: Some(format!("its type is `{}`", produce_term(&offending))),
+                help: None,
+                labels: vec![(expr.range.clone(), "has incorrect type".to_string())],
             });
         }
         Error::Other => {
