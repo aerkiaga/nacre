@@ -71,8 +71,7 @@ impl<T: Meta> Term<T> {
             }
             TermInner::Apply(a, b) => {
                 let ta = a.compute_type(env, ctx)?;
-                let cta = ta.normalize_in_ctx(env, ctx)?;
-                match cta.inner {
+                match ta.inner {
                     TermInner::Forall(c, d) => {
                         let tb = b.compute_type(env, ctx)?;
                         let ctb = tb.normalize_in_ctx(env, ctx)?;
@@ -83,7 +82,22 @@ impl<T: Meta> Term<T> {
                             Err(Error::Other)
                         }
                     }
-                    _ => Err(Error::Other),
+                    _ => {
+                        let cta = ta.normalize_in_ctx(env, ctx)?;
+                        match cta.inner {
+                            TermInner::Forall(c, d) => {
+                                let tb = b.compute_type(env, ctx)?;
+                                let ctb = tb.normalize_in_ctx(env, ctx)?;
+                                let cc = c.normalize_in_ctx(env, ctx)?;
+                                if ctb == cc {
+                                    d.replace_variable(0, &b)
+                                } else {
+                                    Err(Error::Other)
+                                }
+                            }
+                            _ => Err(Error::Other),
+                        }
+                    }
                 }
             }
             TermInner::Let(a, b) => {
