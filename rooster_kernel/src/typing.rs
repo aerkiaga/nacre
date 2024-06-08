@@ -2,72 +2,83 @@ use crate::*;
 
 // Returns the type of a forall x:A, B expression, where ta and tb are the types of the inner terms.
 // Returns Err(()) if the term does not have a type or an error occurred.
-fn combine_forall_types(
-    ta: &Term,
-    tb: &Term,
-    env: &Environment,
-    ctx: &mut Context,
-) -> Result<Term, Error> {
+fn combine_forall_types<T: Meta>(
+    ta: &Term<T>,
+    tb: &Term<T>,
+    env: &Environment<T>,
+    ctx: &mut Context<T>,
+) -> Result<Term<T>, Error<T>> {
     let cta = ta.normalize_in_ctx(env, ctx)?;
-    match tb.normalize_in_ctx(env, ctx)? /* x:A is not necessary */ {
-        Term::Prop => {
+    let ctb = tb.normalize_in_ctx(env, ctx)?; /* x:A is not necessary */
+    // TODO: improve metadata handling
+    match ctb.inner {
+        TermInner::Prop => {
             if cta.is_sort() {
-                Ok(Term::Prop)
+                Ok((TermInner::Prop, &ctb.meta).into())
             } else {
                 Err(Error::Other)
             }
         }
-        Term::Type(j) => match cta {
-            Term::Prop => Ok(Term::Type(j)), /* ? */
-            Term::Type(i) => Ok(Term::Type(i.max(j))),
+        TermInner::Type(j) => match cta.inner {
+            TermInner::Prop => Ok((TermInner::Type(j), &ctb.meta).into()), /* ? */
+            TermInner::Type(i) => Ok((TermInner::Type(i.max(j)), &ctb.meta).into()),
             _ => Err(Error::Other),
         },
         _ => Err(Error::Other),
     }
 }
 
-impl Term {
+impl<T: Meta> Term<T> {
     // Returns the type of a term in an environment and context, if it exists.
     // Assumes that both the environment and context are well-formed.
     // Returns Err(()) if the term does not have a type or an error occurred.
-    pub(crate) fn compute_type(&self, env: &Environment, ctx: &mut Context) -> Result<Term, Error> {
+    pub(crate) fn compute_type(
+        &self,
+        env: &Environment<T>,
+        ctx: &mut Context<T>,
+    ) -> Result<Term<T>, Error<T>> {
         debug_assert!(self.is_well_formed(env, ctx));
-        match self {
-            Term::Prop => Ok(Term::Type(0)),
-            Term::Type(n) => {
+        match &self.inner {
+            TermInner::Prop => Ok((TermInner::Type(0), &self.meta).into()),
+            TermInner::Type(n) => {
                 let r = n.checked_add(1).ok_or(Error::Other)?;
-                Ok(Term::Type(r))
+                Ok((TermInner::Type(r), &self.meta).into())
             }
-            Term::Global(g) => env.global_type(*g).map(|x| x.clone()).ok_or(Error::Other),
-            Term::Variable(v) => ctx
+            TermInner::Global(g) => env.global_type(*g).map(|x| x.clone()).ok_or(Error::Other),
+            TermInner::Variable(v) => ctx
                 .variable_type(*v)
-                .map(|x| x.make_inner_by_n(*v + 1))
+                .map(|x| x.make_inner_by_n(v + 1))
                 .ok_or(Error::Other)?,
-            Term::Forall(a, b) => {
+            TermInner::Forall(a, b) => {
                 let ta = a.compute_type(env, ctx)?;
                 ctx.add_inner(None, *a.clone());
                 let tb = b.compute_type(env, ctx)?;
                 ctx.remove_inner();
                 combine_forall_types(&ta, &tb, env, ctx)
             }
-            Term::Lambda(a, b) => {
+            TermInner::Lambda(a, b) => {
                 let ta = a.compute_type(env, ctx)?;
                 ctx.add_inner(None, *a.clone());
                 let tb = b.compute_type(env, ctx)?;
                 let ttb = tb.compute_type(env, ctx)?;
                 ctx.remove_inner();
                 combine_forall_types(&ta, &ttb, env, ctx)?;
-                Ok(Term::Forall(Box::new(*a.clone()), Box::new(tb)))
+                Ok((
+                    TermInner::Forall(Box::new(*a.clone()), Box::new(tb)),
+                    &self.meta,
+                )
+                    .into())
             }
-            Term::Apply(a, b) => {
+            TermInner::Apply(a, b) => {
                 let ta = a.compute_type(env, ctx)?;
-                match ta.normalize_in_ctx(env, ctx)? {
-                    Term::Forall(c, d) => {
+                let cta = ta.normalize_in_ctx(env, ctx)?;
+                match cta.inner {
+                    TermInner::Forall(c, d) => {
                         let tb = b.compute_type(env, ctx)?;
                         let ctb = tb.normalize_in_ctx(env, ctx)?;
                         let cc = c.normalize_in_ctx(env, ctx)?;
                         if ctb == cc {
-                            d.replace_variable(0, b)
+                            d.replace_variable(0, &b)
                         } else {
                             Err(Error::Other)
                         }
@@ -75,12 +86,12 @@ impl Term {
                     _ => Err(Error::Other),
                 }
             }
-            Term::Let(a, b) => {
+            TermInner::Let(a, b) => {
                 let ta = a.compute_type(env, ctx)?;
                 ctx.add_inner(Some(*a.clone()), ta);
                 let tb = b.compute_type(env, ctx)?;
                 ctx.remove_inner();
-                tb.replace_variable(0, a)
+                tb.replace_variable(0, &a)
             }
         }
     }
@@ -88,7 +99,7 @@ impl Term {
     /// Returns the type of a top-level term.
     ///
     /// Returns `Err(())` if the term does not have a type or an error occurred.
-    pub fn get_type(&self, env: &Environment) -> Result<Term, Error> {
+    pub fn get_type(&self, env: &Environment<T>) -> Result<Term<T>, Error<T>> {
         self.compute_type(env, &mut Context::new())
     }
 }

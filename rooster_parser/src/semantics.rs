@@ -1,8 +1,11 @@
+use crate::kernel_err::TermMeta;
 use crate::parser2::AbstractSyntaxTree;
 use crate::*;
 
 use async_recursion::async_recursion;
+use rooster_kernel::Meta;
 use rooster_kernel::Term;
+use rooster_kernel::TermInner;
 use std::collections::HashMap;
 use std::collections::HashSet;
 
@@ -119,16 +122,23 @@ pub(crate) async fn convert_to_term(
     locals: &HashMap<String, usize>,
     level: usize,
     filename: &str,
-) -> Result<Term, ()> {
+) -> Result<Term<TermMeta>, ()> {
     match ast {
         AbstractSyntaxTree::Block(statements, _) => {
             let mut rv = vec![];
+            let mut metas = vec![];
             let mut new_locals = locals.clone();
             let mut new_level = level;
             let mut n = 0;
             for statement in statements {
                 match &**statement {
-                    AbstractSyntaxTree::Assignment(name, value, is_definition, def_type, _) => {
+                    AbstractSyntaxTree::Assignment(
+                        name,
+                        value,
+                        is_definition,
+                        def_type,
+                        assignment_range,
+                    ) => {
                         if def_type.is_some() {
                             panic!();
                         }
@@ -141,6 +151,9 @@ pub(crate) async fn convert_to_term(
                                     convert_to_term(value, &new_locals, new_level, filename)
                                         .await?,
                                 );
+                                metas.push(Arc::new(TermMeta {
+                                    range: assignment_range.clone(),
+                                }));
                                 new_locals.insert(components[0].clone(), new_level);
                                 new_level += 1;
                             } else {
@@ -179,7 +192,9 @@ pub(crate) async fn convert_to_term(
             }
             let mut r = rv.pop().unwrap();
             for value in rv.into_iter().rev() {
-                r = Term::Let(Box::new(value), Box::new(r));
+                let meta = metas.pop().unwrap();
+                r = (TermInner::Let(Box::new(value), Box::new(r)), &meta).into();
+                n += 1;
             }
             Ok(r)
         }
@@ -187,34 +202,44 @@ pub(crate) async fn convert_to_term(
         AbstractSyntaxTree::Enclosed(inner, _, _) => {
             convert_to_term(inner, locals, level, filename).await
         }
-        AbstractSyntaxTree::Identifier(components, _) => {
+        AbstractSyntaxTree::Identifier(components, identifier_range) => {
             let name = components.join("::");
+            let meta = Arc::new(TermMeta {
+                range: identifier_range.clone(),
+            });
             if name.get(..4) == Some("Type") {
                 if name.len() == 4 {
-                    return Ok(Term::Prop);
+                    return Ok((TermInner::Prop, &meta).into());
                 }
                 if let Ok(n) = name[4..].parse::<usize>() {
                     if n > 0 {
-                        return Ok(Term::Type(n - 1));
+                        return Ok((TermInner::Type(n - 1), &meta).into());
                     } else {
                         panic!("No Type0");
                     }
                 }
             }
             match locals.get(&name) {
-                Some(n) => Ok(Term::Variable(level - n - 1)),
+                Some(n) => Ok((TermInner::Variable(level - n - 1), &meta).into()),
                 None => kernel::get_global_index(&path::make_absolute(&name, filename))
                     .await
-                    .map(|n| Term::Global(n)),
+                    .map(|n| (TermInner::Global(n), &meta).into()),
             }
         }
         AbstractSyntaxTree::Assignment(_, _, _, _, _) => panic!(),
-        AbstractSyntaxTree::Application(left, right, _) => {
+        AbstractSyntaxTree::Application(left, right, application_range) => {
             let left_term = convert_to_term(left, locals, level, filename).await?;
             let right_term = convert_to_term(right, locals, level, filename).await?;
-            Ok(Term::Apply(Box::new(left_term), Box::new(right_term)))
+            let meta = Arc::new(TermMeta {
+                range: application_range.clone(),
+            });
+            Ok((
+                TermInner::Apply(Box::new(left_term), Box::new(right_term)),
+                &meta,
+            )
+                .into())
         }
-        AbstractSyntaxTree::Forall(name, var_type, value, _) => {
+        AbstractSyntaxTree::Forall(name, var_type, value, forall_range) => {
             let type_term = convert_to_term(var_type, locals, level, filename).await?;
             let mut new_locals = locals.clone();
             if let Some(s) = name {
@@ -223,16 +248,30 @@ pub(crate) async fn convert_to_term(
             let mut new_level = level;
             new_level += 1;
             let value_term = convert_to_term(value, &new_locals, new_level, filename).await?;
-            Ok(Term::Forall(Box::new(type_term), Box::new(value_term)))
+            let meta = Arc::new(TermMeta {
+                range: forall_range.clone(),
+            });
+            Ok((
+                TermInner::Forall(Box::new(type_term), Box::new(value_term)),
+                &meta,
+            )
+                .into())
         }
-        AbstractSyntaxTree::Lambda(name, var_type, value, _) => {
+        AbstractSyntaxTree::Lambda(name, var_type, value, lambda_range) => {
             let type_term = convert_to_term(var_type, locals, level, filename).await?;
             let mut new_locals = locals.clone();
             new_locals.insert(name.to_string(), level);
             let mut new_level = level;
             new_level += 1;
             let value_term = convert_to_term(value, &new_locals, new_level, filename).await?;
-            Ok(Term::Lambda(Box::new(type_term), Box::new(value_term)))
+            let meta = Arc::new(TermMeta {
+                range: lambda_range.clone(),
+            });
+            Ok((
+                TermInner::Lambda(Box::new(type_term), Box::new(value_term)),
+                &meta,
+            )
+                .into())
         }
         _ => Err(()),
     }

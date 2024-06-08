@@ -1,19 +1,25 @@
+use crate::kernel_err::TermMeta;
 use crate::parser2::AbstractSyntaxTree;
 use crate::*;
 
 use rooster_kernel::Environment;
+use rooster_kernel::Meta;
 use rooster_kernel::Term;
+use rooster_kernel::TermInner;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
+use std::sync::Arc;
 use tokio::task::yield_now;
 use tokio::task::JoinSet;
 
 // A counter to assign indices to top-level definitions
 static INDEX_COUNTER: AtomicUsize = AtomicUsize::new(0);
 
-async fn create_environment(dependencies: Arc<HashSet<String>>) -> Result<Environment, ()> {
+async fn create_environment(
+    dependencies: Arc<HashSet<String>>,
+) -> Result<Environment<TermMeta>, ()> {
     let mut map_index_to_def = HashMap::new();
     let mut max_index = 0;
     for dep in dependencies.iter() {
@@ -22,7 +28,8 @@ async fn create_environment(dependencies: Arc<HashSet<String>>) -> Result<Enviro
         max_index = max_index.max(*index);
     }
     let mut env_vec = vec![];
-    let null = (None, Arc::new(Term::Prop));
+    let meta = Arc::new(TermMeta::default());
+    let null = (None, Arc::new((TermInner::Prop, &meta).into()));
     for index in 0..max_index + 1 {
         let def = match map_index_to_def.remove(&index) {
             Some(prev) => prev,
@@ -35,7 +42,13 @@ async fn create_environment(dependencies: Arc<HashSet<String>>) -> Result<Enviro
 
 fn kernel_loader(
     logical_path: &str,
-) -> Pin<Box<dyn Future<Output = Result<(Arc<Term>, Arc<Term>, usize), ()>> + Send + '_>> {
+) -> Pin<
+    Box<
+        dyn Future<Output = Result<(Arc<Term<TermMeta>>, Arc<Term<TermMeta>>, usize), ()>>
+            + Send
+            + '_,
+    >,
+> {
     let logical_path_string = logical_path.to_string();
     Box::pin(async move {
         println!("Computing dependencies for {}", logical_path);
@@ -76,7 +89,7 @@ fn kernel_loader(
 }
 
 // The global cache storing definition, type and index for each verified definition
-static KERNEL__CACHE: cache::Cache<(Arc<Term>, Arc<Term>, usize)> =
+static KERNEL__CACHE: cache::Cache<(Arc<Term<TermMeta>>, Arc<Term<TermMeta>>, usize)> =
     cache::Cache::new(kernel_loader as _);
 
 /// Parse and verify the CoC expression corresponding to a particular logical path.
