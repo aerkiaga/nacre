@@ -82,6 +82,7 @@ fn produce_term(t: &Term<TermMeta>) -> String {
     }
 }
 
+#[derive(PartialEq)]
 enum ComparisonResult {
     Equal,
     Similar,
@@ -94,6 +95,26 @@ impl ComparisonResult {
             ComparisonResult::Equal => true,
             _ => false,
         }
+    }
+}
+
+impl PartialOrd for ComparisonResult {
+    fn partial_cmp(&self, other: &ComparisonResult) -> Option<std::cmp::Ordering> {
+        Some(match self {
+            ComparisonResult::Equal => match other {
+                ComparisonResult::Equal => std::cmp::Ordering::Equal,
+                _ => std::cmp::Ordering::Greater,
+            },
+            ComparisonResult::Similar => match other {
+                ComparisonResult::Equal => std::cmp::Ordering::Less,
+                ComparisonResult::Similar => std::cmp::Ordering::Equal,
+                ComparisonResult::Different => std::cmp::Ordering::Greater,
+            },
+            ComparisonResult::Different => match other {
+                ComparisonResult::Different => std::cmp::Ordering::Equal,
+                _ => std::cmp::Ordering::Less,
+            },
+        })
     }
 }
 
@@ -235,16 +256,63 @@ fn produce_comparison_rec(
     match &t1.inner {
         TermInner::Forall(l1, r1) => {
             if let TermInner::Forall(l2, r2) = &t2.inner {
-                // TODO: implement more complex reporting here
                 // Get two lists of parameters
                 let mut params1 = list_forall_params(t1);
                 let mut params2 = list_forall_params(t2);
-                let ret1 = params1.pop().unwrap();
-                let ret2 = params2.pop().unwrap();
+                let mut ret1 = params1.pop().unwrap();
+                let mut ret2 = params2.pop().unwrap();
                 // Map insertions, replacements and deletions
-                let (opt_params1, opt_params2) = levenshtein_compare(params1, params2, env, ctx);
-                // Handle return value specially
-                // TODO: do this
+                let (mut opt_params1, mut opt_params2) =
+                    levenshtein_compare(params1, params2, env, ctx);
+                // Handle trailing parameters
+                let ((rets1, rets2), retres) = produce_comparison_rec(ret1, ret2, env, ctx);
+                let mut trailing = false;
+                let is_none1 = opt_params1.last().unwrap().is_none();
+                let is_none2 = opt_params2.last().unwrap().is_none();
+                let mut op_trailing = &mut opt_params1;
+                let mut op_other = &mut opt_params2;
+                let mut this_ret = &mut ret1;
+                let mut other_ret = &ret2;
+                if is_none1 {
+                    op_trailing = &mut opt_params2;
+                    op_other = &mut opt_params1;
+                    this_ret = &mut ret2;
+                    other_ret = &ret1;
+                    trailing = true;
+                } else if is_none2 {
+                    trailing = true;
+                }
+                let mut best_res = retres;
+                let mut best_n = op_trailing.len();
+                if trailing {
+                    for n in (0..op_trailing.len()).rev() {
+                        if let None = op_other[n] {
+                            match &op_trailing[n] {
+                                Some(t1) => {
+                                    let t2 = other_ret;
+                                    let (_, res) = produce_comparison_rec(t1, t2, env, ctx);
+                                    if res > best_res {
+                                        *this_ret = *t1;
+                                        best_n = n;
+                                        if res.is_equal() {
+                                            break;
+                                        }
+                                        best_res = res;
+                                    }
+                                }
+                                None => {
+                                    break;
+                                }
+                            }
+                        } else {
+                            break;
+                        }
+                    }
+                    for _ in best_n..op_trailing.len() {
+                        op_trailing.pop();
+                        op_other.pop();
+                    }
+                }
                 // Format arguments correctly
                 let mut r1 = vec![];
                 let mut r2 = vec![];
