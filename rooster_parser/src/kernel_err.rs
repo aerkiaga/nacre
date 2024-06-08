@@ -34,6 +34,71 @@ fn get_type(t: &Term<TermMeta>) -> &Term<TermMeta> {
     }
 }
 
+fn eq_weak(a: &Term<TermMeta>, b: &Term<TermMeta>, level: usize) -> bool {
+    match &a.inner {
+        TermInner::Prop => {
+            if let TermInner::Prop = b.inner {
+                true
+            } else {
+                false
+            }
+        }
+        TermInner::Type(n1) => {
+            if let TermInner::Type(n2) = b.inner {
+                *n1 == n2
+            } else {
+                false
+            }
+        }
+        TermInner::Global(g1) => {
+            if let TermInner::Global(g2) = b.inner {
+                *g1 == g2
+            } else {
+                false
+            }
+        }
+        TermInner::Variable(v1) => {
+            if let TermInner::Variable(v2) = b.inner {
+                if *v1 < level {
+                    *v1 == v2
+                } else {
+                    a.meta.name == b.meta.name
+                }
+            } else {
+                false
+            }
+        }
+        TermInner::Forall(l1, r1) => {
+            if let TermInner::Forall(l2, r2) = &b.inner {
+                eq_weak(l1, l2, level) && eq_weak(r1, r2, level + 1)
+            } else {
+                false
+            }
+        }
+        TermInner::Lambda(l1, r1) => {
+            if let TermInner::Lambda(l2, r2) = &b.inner {
+                eq_weak(l1, l2, level) && eq_weak(r1, r2, level + 1)
+            } else {
+                false
+            }
+        }
+        TermInner::Apply(l1, r1) => {
+            if let TermInner::Apply(l2, r2) = &b.inner {
+                eq_weak(l1, l2, level) && eq_weak(r1, r2, level)
+            } else {
+                false
+            }
+        }
+        TermInner::Let(l1, r1) => {
+            if let TermInner::Let(l2, r2) = &b.inner {
+                eq_weak(l1, l2, level) && eq_weak(r1, r2, level + 1)
+            } else {
+                false
+            }
+        }
+    }
+}
+
 fn list_params(t: &Term<TermMeta>, is_lambda: bool) -> Vec<&Term<TermMeta>> {
     let mut rv = vec![t];
     if is_lambda {
@@ -461,7 +526,7 @@ fn produce_comparison_rec(
     simplified: bool,
 ) -> ((String, String), ComparisonResult) {
     // same subterm
-    if t1 == t2 {
+    if eq_weak(t1, t2, 0) {
         let (s1, s2) = adjust_strings(produce_term(t1), produce_term(t2));
         return (
             if s1.len() > 16 {
