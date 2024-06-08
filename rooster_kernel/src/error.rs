@@ -13,6 +13,7 @@ pub enum Error<T: Meta> {
     AppMismatchedType {
         lhs: Arc<Term<T>>,
         expected: Arc<Term<T>>,
+        rhs: Arc<Term<T>>,
         found: Arc<Term<T>>,
         env: Environment<T>,
         ctx: Context<T>,

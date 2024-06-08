@@ -28,3 +28,16 @@ type UniquenessOfIdentityProofs(A: Type, x: A, y: A)
 
 type UniquenessOfReflexivityProofs(A: Type, x: A)
     (p: Eq A x x) -> Eq (Eq A x x) p (Eq::reflexive A x): Type;
+
+impl UniquenessOfReflexivityProofs {
+    fn from_streicher_k(sk: StreicherK) {
+        fn(A: Type, x: A) {
+            let x_refl = Eq::reflexive A x;
+            fn equals_refl(h: Eq A x x) {
+                Eq (Eq A x x) h x_refl
+            };
+            let trivial_case = Eq::reflexive (Eq A x x) x_refl;
+            sk A x equals_refl trivial_case
+        }
+    } -> UniquenessOfReflexivityProofs;
+}

@@ -95,6 +95,7 @@ impl<T: Meta> Term<T> {
                             Err(Error::AppMismatchedType {
                                 lhs: Arc::new(*a.clone()),
                                 expected: Arc::new(cc),
+                                rhs: Arc::new(*b.clone()),
                                 found: Arc::new(tb),
                                 env: env.clone(),
                                 ctx: ctx.clone(),
@@ -114,6 +115,7 @@ impl<T: Meta> Term<T> {
                                     Err(Error::AppMismatchedType {
                                         lhs: Arc::new(*a.clone()),
                                         expected: Arc::new(cc),
+                                        rhs: Arc::new(*b.clone()),
                                         found: Arc::new(tb),
                                         env: env.clone(),
                                         ctx: ctx.clone(),

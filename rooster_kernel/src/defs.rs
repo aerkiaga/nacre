@@ -198,7 +198,7 @@ impl<T: Meta> Term<T> {
             )
                 .into()),
             TermInner::Let(a, b) => Ok((
-                TermInner::Apply(
+                TermInner::Let(
                     Box::new(a.make_inner_by_n_rec(n, at_least)?),
                     Box::new(
                         b.make_inner_by_n_rec(n, at_least.checked_add(1).ok_or(Error::Other)?)?,
@@ -342,6 +342,10 @@ impl<T: Meta> Term<T> {
             },
         }
     }
+
+    pub fn replace_inner(&self, other: &Term<T>) -> Result<Term<T>, Error<T>> {
+        self.replace_variable(0, other)
+    }
 }
 
 impl<T: Meta> std::fmt::Debug for Term<T> {
@@ -401,12 +405,12 @@ impl<T: Meta> Context<T> {
     }
 
     // Add a new variable with a definition to a context, at the innermost position.
-    pub(crate) fn add_inner(&mut self, var_def: Option<Term<T>>, var_type: Term<T>) {
+    pub fn add_inner(&mut self, var_def: Option<Term<T>>, var_type: Term<T>) {
         self.inner.push((var_def, var_type));
     }
 
     // Removes the innermost variable from a context.
-    pub(crate) fn remove_inner(&mut self) {
+    pub fn remove_inner(&mut self) {
         self.inner.pop();
     }
 

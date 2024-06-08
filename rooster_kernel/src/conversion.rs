@@ -65,7 +65,7 @@ impl<T: Meta> Term<T> {
     // Applies successive reduction steps to fully normalize a term.
     //
     // Returns `Err(...)` if an error occurred.
-    pub(crate) fn normalize_in_ctx(
+    pub fn normalize_in_ctx(
         &self,
         env: &Environment<T>,
         ctx: &mut Context<T>,
