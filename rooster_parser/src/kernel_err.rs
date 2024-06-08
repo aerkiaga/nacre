@@ -10,11 +10,15 @@ use std::ops::Range;
 
 pub(crate) struct TermMeta {
     pub(crate) range: Range<usize>,
+    pub(crate) name: Option<String>,
 }
 
 impl Default for TermMeta {
     fn default() -> TermMeta {
-        TermMeta { range: 0..0 }
+        TermMeta {
+            range: 0..0,
+            name: None,
+        }
     }
 }
 
@@ -26,11 +30,21 @@ fn adjust_strings(s1: String, s2: String) -> (String, String) {
 }
 
 fn produce_term(t: &Term<TermMeta>) -> String {
+    let name = match &t.meta.name {
+        Some(s) => s.clone(),
+        None => "_".to_string(),
+    };
     match &t.inner {
         TermInner::Prop => "Type".to_string(),
         TermInner::Type(n) => format!("Type{}", n + 1),
+        TermInner::Global(_) | TermInner::Variable(_) => name,
         TermInner::Forall(l, r) => {
-            format!("type(@: {}) -> {}", produce_term(&*l), produce_term(&*r))
+            format!(
+                "type({}: {}) -> {}",
+                name,
+                produce_term(&*l),
+                produce_term(&*r)
+            )
         }
         _ => "@".to_string(),
     }
@@ -70,14 +84,22 @@ fn produce_comparison(
         _ => {}
     }
     // different terms
+    let name1 = match &t1.meta.name {
+        Some(s) => s.clone(),
+        None => "_".to_string(),
+    };
+    let name2 = match &t2.meta.name {
+        Some(s) => s.clone(),
+        None => "_".to_string(),
+    };
     match &t1.inner {
         TermInner::Forall(l1, r1) => {
             if let TermInner::Forall(l2, r2) = &t2.inner {
                 // TODO: introduce variable
                 let l = produce_comparison(&*l1, &*l2, env, ctx);
                 let r = produce_comparison(&*r1, &*r2, env, ctx);
-                let s1 = format!("type(@: {}) -> {}", l.0, r.0);
-                let s2 = format!("type(@: {}) -> {}", l.1, r.1);
+                let s1 = format!("type({}: {}) -> {}", name1, l.0, r.0);
+                let s2 = format!("type({}: {}) -> {}", name2, l.1, r.1);
                 return (s1, s2);
             }
         }

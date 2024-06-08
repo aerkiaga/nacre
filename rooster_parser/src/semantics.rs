@@ -153,6 +153,7 @@ pub(crate) async fn convert_to_term(
                                 );
                                 metas.push(Arc::new(TermMeta {
                                     range: assignment_range.clone(),
+                                    name: Some(components.join("::")),
                                 }));
                                 new_locals.insert(components[0].clone(), new_level);
                                 new_level += 1;
@@ -206,6 +207,7 @@ pub(crate) async fn convert_to_term(
             let name = components.join("::");
             let meta = Arc::new(TermMeta {
                 range: identifier_range.clone(),
+                name: Some(name.clone()),
             });
             if name.get(..4) == Some("Type") {
                 if name.len() == 4 {
@@ -232,6 +234,7 @@ pub(crate) async fn convert_to_term(
             let right_term = convert_to_term(right, locals, level, filename).await?;
             let meta = Arc::new(TermMeta {
                 range: application_range.clone(),
+                name: None,
             });
             Ok((
                 TermInner::Apply(Box::new(left_term), Box::new(right_term)),
@@ -250,6 +253,7 @@ pub(crate) async fn convert_to_term(
             let value_term = convert_to_term(value, &new_locals, new_level, filename).await?;
             let meta = Arc::new(TermMeta {
                 range: forall_range.clone(),
+                name: name.clone(),
             });
             Ok((
                 TermInner::Forall(Box::new(type_term), Box::new(value_term)),
@@ -266,6 +270,7 @@ pub(crate) async fn convert_to_term(
             let value_term = convert_to_term(value, &new_locals, new_level, filename).await?;
             let meta = Arc::new(TermMeta {
                 range: lambda_range.clone(),
+                name: Some(name.clone()),
             });
             Ok((
                 TermInner::Lambda(Box::new(type_term), Box::new(value_term)),
