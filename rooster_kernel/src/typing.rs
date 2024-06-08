@@ -10,6 +10,7 @@ fn combine_forall_types<T: Meta>(
     env: &Environment<T>,
     ctx: &mut Context<T>,
     meta_a: &Arc<T>,
+    meta_b: &Arc<T>,
 ) -> Result<Term<T>, Error<T>> {
     let cta = ta.normalize_in_ctx(env, ctx)?;
     let ctb = tb.normalize_in_ctx(env, ctx)?; /* x:A is not necessary */
@@ -33,7 +34,10 @@ fn combine_forall_types<T: Meta>(
                 offending: Arc::new(ta.clone()),
             }),
         },
-        _ => Err(Error::Other),
+        _ => Err(Error::NonSort {
+            expr: meta_b.clone(),
+            offending: Arc::new(tb.clone()),
+        }),
     }
 }
 
@@ -63,7 +67,7 @@ impl<T: Meta> Term<T> {
                 ctx.add_inner(None, *a.clone());
                 let tb = b.compute_type(env, ctx)?;
                 ctx.remove_inner();
-                combine_forall_types(&ta, &tb, env, ctx, &a.meta)
+                combine_forall_types(&ta, &tb, env, ctx, &a.meta, &b.meta)
             }
             TermInner::Lambda(a, b) => {
                 let ta = a.compute_type(env, ctx)?;
@@ -71,7 +75,7 @@ impl<T: Meta> Term<T> {
                 let tb = b.compute_type(env, ctx)?;
                 let ttb = tb.compute_type(env, ctx)?;
                 ctx.remove_inner();
-                combine_forall_types(&ta, &ttb, env, ctx, &a.meta)?;
+                combine_forall_types(&ta, &ttb, env, ctx, &a.meta, &b.meta)?;
                 Ok((
                     TermInner::Forall(Box::new(*a.clone()), Box::new(tb)),
                     &self.meta,
@@ -116,7 +120,11 @@ impl<T: Meta> Term<T> {
                                     })
                                 }
                             }
-                            _ => Err(Error::Other),
+                            _ => Err(Error::AppInvalid {
+                                lhs: Arc::new(*a.clone()),
+                                ltype: Arc::new(ta),
+                                rhs: Arc::new(*b.clone()),
+                            }),
                         }
                     }
                 }

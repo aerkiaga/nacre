@@ -463,6 +463,23 @@ pub(crate) fn report(error: Error<TermMeta>, filename: &str) {
                 ],
             });
         }
+        Error::AppInvalid { lhs, ltype, rhs } => {
+            report::send(Report {
+                is_error: true,
+                filename: filename.to_string(),
+                offset: lhs.meta.range.start,
+                message: "applied expression is not a function".to_string(),
+                note: Some(format!("its type is `{}`", produce_term(&ltype))),
+                help: None,
+                labels: vec![
+                    (lhs.meta.range.clone(), "not a function".to_string()),
+                    (
+                        rhs.meta.range.clone(),
+                        "applied to this parameter".to_string(),
+                    ),
+                ],
+            });
+        }
         Error::NonSort { expr, offending } => {
             report::send(Report {
                 is_error: true,

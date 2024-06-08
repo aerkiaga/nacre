@@ -17,6 +17,11 @@ pub enum Error<T: Meta> {
         env: Environment<T>,
         ctx: Context<T>,
     },
+    AppInvalid {
+        lhs: Arc<Term<T>>,
+        ltype: Arc<Term<T>>,
+        rhs: Arc<Term<T>>,
+    },
     NonSort {
         expr: Arc<T>,
         offending: Arc<Term<T>>,
