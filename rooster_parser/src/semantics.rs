@@ -223,9 +223,26 @@ pub(crate) async fn convert_to_term(
             }
             match locals.get(&name) {
                 Some(n) => Ok((TermInner::Variable(level - n - 1), &meta).into()),
-                None => kernel::get_global_index(&path::make_absolute(&name, filename))
-                    .await
-                    .map(|n| (TermInner::Global(n), &meta).into()),
+                None => {
+                    match kernel::get_global_index(&path::make_absolute(&name, filename)).await {
+                        Ok(n) => Ok((TermInner::Global(n), &meta).into()),
+                        Err(_) => {
+                            report::send(Report {
+                                is_error: true,
+                                filename: filename.to_string(),
+                                offset: identifier_range.start,
+                                message: "Undefined identifier".to_string(),
+                                note: None,
+                                help: None,
+                                labels: vec![(
+                                    identifier_range.clone(),
+                                    "No definition found".to_string(),
+                                )],
+                            });
+                            Err(())
+                        }
+                    }
+                }
             }
         }
         AbstractSyntaxTree::Assignment(_, _, _, _, _) => panic!(),

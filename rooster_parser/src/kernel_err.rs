@@ -379,6 +379,7 @@ fn produce_comparison_rec(
                 let ((rets1, rets2), _) = produce_comparison_rec(ret1, ret2, env, ctx);
                 let rs1 = format!("type({}) -> {}", r1.join(""), rets1);
                 let rs2 = format!("type({}) -> {}", r2.join(""), rets2);
+                // TODO: count differences and choose a return value
                 return ((rs1, rs2), ComparisonResult::Different);
             }
         }

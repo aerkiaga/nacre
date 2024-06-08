@@ -69,13 +69,19 @@ fn kernel_loader(
         let (ast, filename) = get_ast(logical_path).await.unwrap();
         let definition =
             Arc::new(semantics::convert_to_term(ast, &HashMap::new(), 0, &filename).await?);
+        let tt_opt = match get_type_ast(logical_path).await.unwrap().0 {
+            Some(ast) => {
+                Some(semantics::convert_to_term(ast, &HashMap::new(), 0, &filename).await?)
+            }
+            None => None,
+        };
         // Then create an environment for the kernel
         // TODO: add indirect dependencies
         let all_deps = semantics::get_all_dependencies(logical_path).await?;
         let mut env = create_environment(all_deps).await?;
         // And finally call into the kernel
-        let type_term = Arc::new(match get_type_ast(logical_path).await.unwrap().0 {
-            Some(ast) => semantics::convert_to_term(ast, &HashMap::new(), 0, &filename).await?,
+        let type_term = Arc::new(match tt_opt {
+            Some(t) => t,
             None => definition
                 .get_type(&env)
                 .map_err(|e| kernel_err::report(e, &filename))?,

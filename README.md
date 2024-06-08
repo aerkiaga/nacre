@@ -2,8 +2,6 @@
 A programming language for verified software.
 
 ## TODO
-* Perform more thorough error reporting.
-  - Implement error reporting infrastructure at kernel level.
 * Accept a simpler call syntax.
   - Allow omitting any preceding type parameters.
   - Allow omitting non-type preceding parameters.
