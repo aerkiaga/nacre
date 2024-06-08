@@ -216,8 +216,13 @@ fn produce_comparison_rec(
 ) -> ((String, String), ComparisonResult) {
     // same subterm
     if t1 == t2 {
+        let (s1, s2) = adjust_strings(produce_term(t1), produce_term(t2));
         return (
-            adjust_strings(produce_term(t1), produce_term(t2)),
+            if s1.len() > 16 {
+                ("...".to_string(), "...".to_string())
+            } else {
+                (s1, s2)
+            },
             ComparisonResult::Equal,
         );
     }
