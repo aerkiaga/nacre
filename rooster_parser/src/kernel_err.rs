@@ -59,9 +59,14 @@ fn produce_comparison(
         _ => {}
     }
     match t2.inner {
-        TermInner::Global(_) | TermInner::Variable(_) => {
-            return produce_comparison_compl(t1, t2, env, ctx)
-        }
+        TermInner::Global(g) => match env.delta_replacement(g) {
+            Ok(ct2) => return produce_comparison(t1, &ct2, env, ctx),
+            Err(_) => {}
+        },
+        TermInner::Variable(v) => match ctx.delta_replacement(v) {
+            Ok(ct2) => return produce_comparison(t1, &ct2, env, ctx),
+            Err(_) => {}
+        },
         _ => {}
     }
     // different terms
@@ -82,16 +87,6 @@ fn produce_comparison(
         format!("`{}`", produce_term(t1)),
         format!("`{}`", produce_term(t2)),
     );
-}
-
-fn produce_comparison_compl(
-    t1: &Term<TermMeta>,
-    t2: &Term<TermMeta>,
-    env: &Environment<TermMeta>,
-    ctx: &mut Context<TermMeta>,
-) -> (String, String) {
-    let (a, b) = produce_comparison(t2, t1, env, ctx);
-    (b, a)
 }
 
 pub(crate) fn report(error: Error<TermMeta>, filename: &str) {
@@ -116,7 +111,10 @@ pub(crate) fn report(error: Error<TermMeta>, filename: &str) {
                 },
                 help: None,
                 labels: vec![
-                    (expected.meta.range.clone(), "expected type".to_string()),
+                    (
+                        expected.meta.range.clone(),
+                        "type specified here".to_string(),
+                    ),
                     (found.meta.range.clone(), "has wrong type".to_string()),
                 ],
             });

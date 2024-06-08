@@ -220,11 +220,13 @@ impl AbstractSyntaxTree {
 
     pub(crate) fn lambda_typify(&self, return_type: AbstractSyntaxTree) -> AbstractSyntaxTree {
         if let AbstractSyntaxTree::Lambda(identifier, var_type, term, range) = self {
+            let rg = return_type.get_range().clone();
             AbstractSyntaxTree::Forall(
                 Some(identifier.clone()),
                 var_type.clone(),
                 Box::new(term.lambda_typify(return_type)),
-                range.clone(),
+                //range.clone(),
+                rg,
             )
         } else {
             return_type
