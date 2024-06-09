@@ -17,7 +17,10 @@ pub(crate) fn namespace_handler(
                 left_range.start..right_range.end,
             ))
         } else {
-            let right_range = right.get_range();
+            let mut right_range = right.get_range();
+            if right_range == (0..0) {
+                right_range = left_range.end + 2..left_range.end + 2;
+            }
             report::send(Report {
                 is_error: true,
                 filename: filename,
@@ -30,7 +33,11 @@ pub(crate) fn namespace_handler(
             Err(())
         }
     } else {
-        let left_range = left.get_range();
+        let mut left_range = left.get_range();
+        if left_range == (0..0) {
+            let right_range = right.get_range();
+            left_range = right_range.start - 2..right_range.start - 2;
+        }
         report::send(Report {
             is_error: true,
             filename: filename,
