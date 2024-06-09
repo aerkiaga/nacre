@@ -9,7 +9,7 @@ type ExcludedMiddle(P: Type) -> Or P (Not P): Type;
 /*
 Since Rooster uses a single sort for
 both propositions and data types,
-proof irrelevance is inconsistent.
+proof irrelevance erases object information.
 
 Since excluded middle + functional choice
 implies proof irrelevance, functional choice
@@ -40,4 +40,4 @@ impl UniquenessOfReflexivityProofs {
             sk A x equals_refl trivial_case
         }
     } -> UniquenessOfReflexivityProofs;
-}
+};

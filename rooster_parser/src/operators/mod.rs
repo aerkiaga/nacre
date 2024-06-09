@@ -159,6 +159,7 @@ fn equals_handler(
                 Err(())
             }
         }
+        AbstractSyntaxTree::Empty => Err(()),
         _ => {
             report::send(Report {
                 is_error: true,

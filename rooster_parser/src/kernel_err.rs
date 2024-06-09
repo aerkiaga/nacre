@@ -11,6 +11,7 @@ use std::ops::Range;
 pub(crate) struct TermMeta {
     pub(crate) range: Range<usize>,
     pub(crate) name: Option<String>,
+    pub(crate) filename: String,
 }
 
 impl Default for TermMeta {
@@ -18,6 +19,7 @@ impl Default for TermMeta {
         TermMeta {
             range: 0..0,
             name: None,
+            filename: "".to_string(),
         }
     }
 }
@@ -506,7 +508,6 @@ fn handle_prototype(
     let ((rets1, rets2), _) = produce_comparison_rec(ret1, ret2, env, ctx1, ctx2, false);
     let rs1 = format!("type({}) -> {}", r1.join(""), rets1);
     let rs2 = format!("type({}) -> {}", r2.join(""), rets2);
-    // TODO: count differences and choose a return value
     return (
         (rs1, rs2),
         if at_least_one_equal {
@@ -677,6 +678,18 @@ fn produce_comparison(
     r
 }
 
+fn generate_labels(filename: &str, v: &[(&TermMeta, String)]) -> Vec<(Range<usize>, String)> {
+    let mut r = vec![];
+    for p in v {
+        let meta = p.0;
+        let s = &p.1;
+        if meta.filename == filename {
+            r.push((meta.range.clone(), s.clone()));
+        }
+    }
+    r
+}
+
 pub(crate) fn report(error: Error<TermMeta>, filename: &str) {
     match error {
         Error::MismatchedType {
@@ -698,13 +711,13 @@ pub(crate) fn report(error: Error<TermMeta>, filename: &str) {
                     ))
                 },
                 help: None,
-                labels: vec![
-                    (
-                        expected.meta.range.clone(),
-                        "type constrained by this".to_string(),
-                    ),
-                    (found.meta.range.clone(), "has unexpected type".to_string()),
-                ],
+                labels: generate_labels(
+                    filename,
+                    &[
+                        (&expected.meta, "type constrained by this".to_string()),
+                        (&found.meta, "has unexpected type".to_string()),
+                    ],
+                ),
             });
         }
         Error::AppMismatchedType {
@@ -728,14 +741,14 @@ pub(crate) fn report(error: Error<TermMeta>, filename: &str) {
                     ))
                 },
                 help: None,
-                labels: vec![
-                    (
-                        expected.meta.range.clone(),
-                        "type constrained by this".to_string(),
-                    ),
-                    (rhs.meta.range.clone(), "has unexpected type".to_string()),
-                    (lhs.meta.range.clone(), "function here".to_string()),
-                ],
+                labels: generate_labels(
+                    filename,
+                    &[
+                        (&expected.meta, "type constrained by this".to_string()),
+                        (&rhs.meta, "has unexpected type".to_string()),
+                        (&lhs.meta, "function here".to_string()),
+                    ],
+                ),
             });
         }
         Error::AppInvalid { lhs, ltype, rhs } => {
@@ -746,13 +759,13 @@ pub(crate) fn report(error: Error<TermMeta>, filename: &str) {
                 message: "applied expression is not a function".to_string(),
                 note: Some(format!("its type is `{}`", produce_term(&ltype))),
                 help: None,
-                labels: vec![
-                    (lhs.meta.range.clone(), "not a function".to_string()),
-                    (
-                        rhs.meta.range.clone(),
-                        "applied to this parameter".to_string(),
-                    ),
-                ],
+                labels: generate_labels(
+                    filename,
+                    &[
+                        (&lhs.meta, "not a function".to_string()),
+                        (&rhs.meta, "applied to this parameter".to_string()),
+                    ],
+                ),
             });
         }
         Error::NonSort { expr, offending } => {
@@ -763,7 +776,7 @@ pub(crate) fn report(error: Error<TermMeta>, filename: &str) {
                 message: "type of expression must be `Type` or some `Type`N".to_string(),
                 note: Some(format!("its type is `{}`", produce_term(&offending))),
                 help: None,
-                labels: vec![(expr.range.clone(), "has incorrect type".to_string())],
+                labels: generate_labels(filename, &[(&expr, "has incorrect type".to_string())]),
             });
         }
         Error::Other => {

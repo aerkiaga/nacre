@@ -154,6 +154,7 @@ pub(crate) async fn convert_to_term(
                                 metas.push(Arc::new(TermMeta {
                                     range: assignment_range.clone(),
                                     name: Some(components.join("::")),
+                                    filename: filename.to_string(),
                                 }));
                                 new_locals.insert(components[0].clone(), new_level);
                                 new_level += 1;
@@ -164,6 +165,7 @@ pub(crate) async fn convert_to_term(
                             todo!();
                         }
                     }
+                    AbstractSyntaxTree::Empty => {}
                     _ => {
                         if n != statements.len() - 1 {
                             let range = statement.get_range();
@@ -208,6 +210,7 @@ pub(crate) async fn convert_to_term(
             let meta = Arc::new(TermMeta {
                 range: identifier_range.clone(),
                 name: Some(name.clone()),
+                filename: filename.to_string(),
             });
             if name.get(..4) == Some("Type") {
                 if name.len() == 4 {
@@ -252,6 +255,7 @@ pub(crate) async fn convert_to_term(
             let meta = Arc::new(TermMeta {
                 range: application_range.clone(),
                 name: None,
+                filename: filename.to_string(),
             });
             Ok((
                 TermInner::Apply(Box::new(left_term), Box::new(right_term)),
@@ -271,6 +275,7 @@ pub(crate) async fn convert_to_term(
             let meta = Arc::new(TermMeta {
                 range: forall_range.clone(),
                 name: name.clone(),
+                filename: filename.to_string(),
             });
             Ok((
                 TermInner::Forall(Box::new(type_term), Box::new(value_term)),
@@ -288,6 +293,7 @@ pub(crate) async fn convert_to_term(
             let meta = Arc::new(TermMeta {
                 range: lambda_range.clone(),
                 name: Some(name.clone()),
+                filename: filename.to_string(),
             });
             Ok((
                 TermInner::Lambda(Box::new(type_term), Box::new(value_term)),
