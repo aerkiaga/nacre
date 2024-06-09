@@ -79,7 +79,10 @@ pub(crate) fn parse_prototype(
                             };
                             at_least_one = true;
                         } else {
-                            let identifier_range = var_name.get_range();
+                            let mut identifier_range = var_name.get_range();
+                            if identifier_range == (0..0) {
+                                identifier_range = param_group_range.start..param_group_range.start;
+                            }
                             report::send(Report {
                                 is_error: true,
                                 filename: filename,
