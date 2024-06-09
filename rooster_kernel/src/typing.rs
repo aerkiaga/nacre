@@ -57,7 +57,7 @@ impl<T: Meta> Term<T> {
                 let r = n.checked_add(1).ok_or(Error::Other)?;
                 Ok((TermInner::Type(r), &self.meta).into())
             }
-            TermInner::Global(g) => env.global_type(*g).map(|x| x.clone()).ok_or(Error::Other),
+            TermInner::Global(g) => env.global_type(*g).cloned().ok_or(Error::Other),
             TermInner::Variable(v) => ctx
                 .variable_type(*v)
                 .map(|x| x.make_inner_by_n(v + 1))
@@ -90,7 +90,7 @@ impl<T: Meta> Term<T> {
                         let ctb = tb.normalize_in_ctx(env, ctx)?;
                         let cc = c.normalize_in_ctx(env, ctx)?;
                         if ctb == cc {
-                            d.replace_variable(0, &b)
+                            d.replace_variable(0, b)
                         } else {
                             Err(Error::AppMismatchedType {
                                 lhs: Arc::new(*a.clone()),
@@ -112,7 +112,7 @@ impl<T: Meta> Term<T> {
                                     let ctb = tb.normalize_in_ctx(env, ctx)?;
                                     let cc = c.normalize_in_ctx(env, ctx)?;
                                     if ctb == cc {
-                                        break d.replace_variable(0, &b);
+                                        break d.replace_variable(0, b);
                                     } else {
                                         break Err(Error::AppMismatchedType {
                                             lhs: Arc::new(*a.clone()),
@@ -143,7 +143,7 @@ impl<T: Meta> Term<T> {
                 ctx.add_inner(Some(*a.clone()), ta);
                 let tb = b.compute_type(env, ctx)?;
                 ctx.remove_inner();
-                tb.replace_variable(0, &a)
+                tb.replace_variable(0, a)
             }
         }
     }

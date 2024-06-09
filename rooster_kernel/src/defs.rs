@@ -1,5 +1,6 @@
 use crate::*;
 
+use std::cmp::Ordering;
 use std::sync::Arc;
 
 type GlobalRef = usize;
@@ -48,11 +49,7 @@ impl<T: Meta> PartialEq<TermInner<T>> for TermInner<T> {
     fn eq(&self, other: &TermInner<T>) -> bool {
         match self {
             TermInner::Prop => {
-                if let TermInner::Prop = other {
-                    true
-                } else {
-                    false
-                }
+                matches!(other, TermInner::Prop)
             }
             TermInner::Type(n1) => {
                 if let TermInner::Type(n2) = other {
@@ -142,10 +139,7 @@ impl<T: Meta> From<(TermInner<T>, &Arc<T>)> for Term<T> {
 impl<T: Meta> Term<T> {
     // Whether a term is in {𝐏, 𝐓ₙ | n in ℕ}.
     pub(crate) fn is_sort(&self) -> bool {
-        match self.inner {
-            TermInner::Prop | TermInner::Type(_) => true,
-            _ => false,
-        }
+        matches!(self.inner, TermInner::Prop | TermInner::Type(_))
     }
 
     // Adds n levels of abstraction around the term.
@@ -228,18 +222,14 @@ impl<T: Meta> Term<T> {
             TermInner::Prop => Ok((TermInner::Prop, &self.meta).into()),
             TermInner::Type(n) => Ok((TermInner::Type(*n), &self.meta).into()),
             TermInner::Global(g) => Ok((TermInner::Global(*g), &self.meta).into()),
-            TermInner::Variable(v2) => {
-                if *v2 == v {
-                    t.make_inner_by_n(v)
-                } else if *v2 < v {
-                    Ok((TermInner::Variable(*v2), &self.meta).into())
-                } else {
-                    match v2.checked_sub(1) {
-                        Some(r) => Ok((TermInner::Variable(r), &self.meta).into()),
-                        None => Err(Error::Other),
-                    }
-                }
-            }
+            TermInner::Variable(v2) => match (*v2).cmp(&v) {
+                Ordering::Equal => t.make_inner_by_n(v),
+                Ordering::Less => Ok((TermInner::Variable(*v2), &self.meta).into()),
+                Ordering::Greater => match v2.checked_sub(1) {
+                    Some(r) => Ok((TermInner::Variable(r), &self.meta).into()),
+                    None => Err(Error::Other),
+                },
+            },
             TermInner::Forall(a, b) => match v.checked_add(1) {
                 Some(r) => Ok((
                     TermInner::Forall(
@@ -363,17 +353,20 @@ impl<T: Meta> std::fmt::Debug for Term<T> {
     }
 }
 
+pub type CtxDefinition<T> = (Option<Term<T>>, Term<T>);
+
 // The local context of a subterm, including all local variables in order of definition, from the inside out.
 pub struct Context<T: Meta> {
-    inner: Vec<(Option<Term<T>>, Term<T>)>,
+    inner: Vec<CtxDefinition<T>>,
 }
 
 impl<T: Meta> Clone for Context<T> {
     fn clone(&self) -> Context<T> {
         Context {
-            inner: (&self.inner)
-                .into_iter()
-                .map(|x| (x.0.as_ref().map(|y| y.clone()), x.1.clone()))
+            inner: self
+                .inner
+                .iter()
+                .map(|x| (x.0.clone(), x.1.clone()))
                 .collect(),
         }
     }
@@ -422,6 +415,12 @@ impl<T: Meta> Context<T> {
     }
 }
 
+impl<T: Meta> Default for Context<T> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl<T: Meta> std::fmt::Debug for Context<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "[")?;
@@ -435,16 +434,19 @@ impl<T: Meta> std::fmt::Debug for Context<T> {
     }
 }
 
+pub type EnvDefinition<T> = (Option<Arc<Term<T>>>, Arc<Term<T>>);
+
 /// The global environment that a term lives in, containing all global variables.
 pub struct Environment<T: Meta> {
-    inner: Vec<(Option<Arc<Term<T>>>, Arc<Term<T>>)>,
+    inner: Vec<EnvDefinition<T>>,
 }
 
 impl<T: Meta> Clone for Environment<T> {
     fn clone(&self) -> Environment<T> {
         Environment {
-            inner: (&self.inner)
-                .into_iter()
+            inner: self
+                .inner
+                .iter()
                 .map(|x| (x.0.as_ref().map(|y| y.clone()), x.1.clone()))
                 .collect(),
         }
@@ -456,7 +458,7 @@ impl<T: Meta> Environment<T> {
     ///
     /// Each definition consists of an optional value and a mandatory type.
     /// The definitions are not checked for well-foundedness or validity.
-    pub fn from_vec(list: Vec<(Option<Arc<Term<T>>>, Arc<Term<T>>)>) -> Environment<T> {
+    pub fn from_vec(list: Vec<EnvDefinition<T>>) -> Environment<T> {
         Environment { inner: list }
     }
 
@@ -515,8 +517,8 @@ impl<T: Meta> std::fmt::Debug for Environment<T> {
             if let Some(term) = &def.0 {
                 write!(f, "{:?}", term)?;
             }
-            write!(f, " : {:?}\n", def.1)?;
+            writeln!(f, " : {:?}", def.1)?;
         }
-        write!(f, "\n")
+        writeln!(f)
     }
 }

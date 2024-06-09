@@ -339,7 +339,7 @@ pub(crate) async fn tokenize_chunk(
                     state = TokenizerState::Delimiters(stack);
                 }
                 CharType::CloseDelimiter => {
-                    if stack.len() <= 0 {
+                    if stack.len() == 0 {
                         panic!();
                     }
                     let (opening, opening_offset) = stack.pop().unwrap();

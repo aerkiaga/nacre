@@ -33,7 +33,7 @@ impl<T: Meta> Term<T> {
                 match &a.inner {
                     TermInner::Lambda(_, d) => {
                         // Beta
-                        *self = d.replace_variable(0, &b)?;
+                        *self = d.replace_variable(0, b)?;
                         Ok(true)
                     }
                     _ => Ok(a.convert(env, ctx)? || b.convert(env, ctx)?),
@@ -41,7 +41,7 @@ impl<T: Meta> Term<T> {
             }
             TermInner::Let(a, b) => {
                 // Zeta
-                *self = b.replace_variable(0, &a)?;
+                *self = b.replace_variable(0, a)?;
                 Ok(true)
             }
             TermInner::Forall(a, b) | TermInner::Lambda(a, b) => Ok(a.convert(env, ctx)? || {
