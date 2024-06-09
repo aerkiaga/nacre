@@ -27,9 +27,9 @@ impl Default for TermMeta {
 impl Meta for TermMeta {}
 
 fn get_type(t: &Term<TermMeta>) -> &Term<TermMeta> {
-    if let TermInner::Forall(l, r) = &t.inner {
+    if let TermInner::Forall(l, _r) = &t.inner {
         l
-    } else if let TermInner::Lambda(l, r) = &t.inner {
+    } else if let TermInner::Lambda(l, _r) = &t.inner {
         l
     } else {
         unreachable!();
@@ -105,7 +105,7 @@ fn list_params(t: &Term<TermMeta>, is_lambda: bool) -> Vec<&Term<TermMeta>> {
     let mut rv = vec![t];
     if is_lambda {
         match &t.inner {
-            TermInner::Lambda(l, r) => {
+            TermInner::Lambda(_l, r) => {
                 let mut r2 = list_params(&r, is_lambda);
                 rv.append(&mut r2);
             }
@@ -113,7 +113,7 @@ fn list_params(t: &Term<TermMeta>, is_lambda: bool) -> Vec<&Term<TermMeta>> {
         }
     } else {
         match &t.inner {
-            TermInner::Forall(l, r) => {
+            TermInner::Forall(_l, r) => {
                 let mut r2 = list_params(&r, is_lambda);
                 rv.append(&mut r2);
             }
@@ -231,9 +231,9 @@ fn levenshtein_matrix(
 ) -> Vec<Vec<usize>> {
     // Create empty matrix
     let mut r = vec![];
-    for i in 0..v1.len() + 1 {
+    for _ in 0..v1.len() + 1 {
         let mut rr = vec![];
-        for j in 0..v2.len() + 1 {
+        for _ in 0..v2.len() + 1 {
             rr.push(0);
         }
         r.push(rr);
@@ -251,7 +251,6 @@ fn levenshtein_matrix(
             // TODO: update context appropriately if possible
             let t1 = get_type(&v1[i - 1]);
             let t2 = get_type(&v2[j - 1]);
-            let var_count = (i - 1).min(j - 1);
             for _ in 0..i - 1 {
                 ctx1.add_inner(
                     None,
@@ -365,7 +364,7 @@ fn handle_prototype(
             (TermInner::Prop, &Arc::new(TermMeta::default())).into(),
         );
     }
-    let ((rets1, rets2), retres) = produce_comparison_rec(ret1, ret2, env, ctx1, ctx2, false);
+    let (_, retres) = produce_comparison_rec(ret1, ret2, env, ctx1, ctx2, false);
     for _ in 0..nparam1 {
         ctx1.remove_inner();
     }
@@ -459,7 +458,7 @@ fn handle_prototype(
                             ctx2.remove_inner();
                         }
                         r1.push(format!("{}: {}", cname1, st1));
-                        r2.push(format!("{}: {}", cname1, st2));
+                        r2.push(format!("{}: {}", cname2, st2));
                         n2 += 1;
                     }
                     None => {
@@ -540,22 +539,14 @@ fn produce_comparison_rec(
     }
     // different terms
     if !simplified {
-        let name1 = match &t1.meta.name {
-            Some(s) => s.clone(),
-            None => "_".to_string(),
-        };
-        let name2 = match &t2.meta.name {
-            Some(s) => s.clone(),
-            None => "_".to_string(),
-        };
         match &t1.inner {
-            TermInner::Forall(l1, r1) => {
-                if let TermInner::Forall(l2, r2) = &t2.inner {
+            TermInner::Forall(_, _) => {
+                if let TermInner::Forall(_, _) = &t2.inner {
                     return handle_prototype(t1, t2, env, ctx1, ctx2, false);
                 }
             }
-            TermInner::Lambda(l1, r1) => {
-                if let TermInner::Lambda(l2, r2) = &t2.inner {
+            TermInner::Lambda(_, _) => {
+                if let TermInner::Lambda(_, _) = &t2.inner {
                     return handle_prototype(t1, t2, env, ctx1, ctx2, true);
                 }
             }
@@ -583,7 +574,7 @@ fn produce_comparison_rec(
             Err(_) => {}
         },
         TermInner::Apply(l, r) => match &l.inner {
-            TermInner::Lambda(ll, lr) => match lr.replace_inner(&r) {
+            TermInner::Lambda(_ll, lr) => match lr.replace_inner(&r) {
                 Ok(ct1) => {
                     let (s12, res) = produce_comparison_rec(&ct1, t2, env, ctx1, ctx2, false);
                     if res > ComparisonResult::Different {
@@ -594,7 +585,7 @@ fn produce_comparison_rec(
             },
             _ => match l.normalize_in_ctx(env, ctx1) {
                 Ok(cl) => match &cl.inner {
-                    TermInner::Lambda(ll, lr) => match lr.replace_inner(&r) {
+                    TermInner::Lambda(_ll, lr) => match lr.replace_inner(&r) {
                         Ok(ct1) => {
                             let (s12, res) =
                                 produce_comparison_rec(&ct1, t2, env, ctx1, ctx2, false);
@@ -631,7 +622,7 @@ fn produce_comparison_rec(
             Err(_) => {}
         },
         TermInner::Apply(l, r) => match &l.inner {
-            TermInner::Lambda(ll, lr) => match lr.replace_inner(&r) {
+            TermInner::Lambda(_ll, lr) => match lr.replace_inner(&r) {
                 Ok(ct2) => {
                     let (s12, res) = produce_comparison_rec(t1, &ct2, env, ctx1, ctx2, false);
                     if res > ComparisonResult::Different {
@@ -642,7 +633,7 @@ fn produce_comparison_rec(
             },
             _ => match l.normalize_in_ctx(env, ctx2) {
                 Ok(cl) => match &cl.inner {
-                    TermInner::Lambda(ll, lr) => match lr.replace_inner(&r) {
+                    TermInner::Lambda(_ll, lr) => match lr.replace_inner(&r) {
                         Ok(ct2) => {
                             let (s12, res) =
                                 produce_comparison_rec(t1, &ct2, env, ctx1, ctx2, false);

@@ -35,7 +35,7 @@ async fn main() {
     // we use a mpsc because Notify is not cancellation-safe
     let (notify_completion_send, mut notify_completion) = mpsc::channel(1);
     let task_handle = tokio::spawn(async move {
-        rooster_parser::verify(&logical_path).await;
+        let _ = rooster_parser::verify(&logical_path).await;
         notify_completion_send.send(()).await.unwrap();
     });
     let mut report_receiver = rooster_parser::REPORTS.subscribe();

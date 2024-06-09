@@ -162,7 +162,6 @@ pub(crate) fn application_handler(
                     }
                 }
             } else {
-                let right_start = right.get_range().start;
                 match &**keyword {
                     "fn" => {
                         report::send(Report {

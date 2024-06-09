@@ -3,7 +3,6 @@ use crate::parser2::AbstractSyntaxTree;
 use crate::*;
 
 use async_recursion::async_recursion;
-use rooster_kernel::Meta;
 use rooster_kernel::Term;
 use rooster_kernel::TermInner;
 use std::collections::HashMap;
@@ -201,7 +200,7 @@ pub(crate) async fn convert_to_term(
             }
             Ok(r)
         }
-        AbstractSyntaxTree::List(expressions, _) => panic!(),
+        AbstractSyntaxTree::List(_expressions, _) => panic!(),
         AbstractSyntaxTree::Enclosed(inner, _, _) => {
             convert_to_term(inner, locals, level, filename).await
         }

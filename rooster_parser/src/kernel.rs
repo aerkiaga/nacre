@@ -1,9 +1,7 @@
 use crate::kernel_err::TermMeta;
-use crate::parser2::AbstractSyntaxTree;
 use crate::*;
 
 use rooster_kernel::Environment;
-use rooster_kernel::Meta;
 use rooster_kernel::Term;
 use rooster_kernel::TermInner;
 use std::collections::HashMap;
@@ -11,7 +9,6 @@ use std::collections::HashSet;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
-use tokio::task::yield_now;
 use tokio::task::JoinSet;
 
 // A counter to assign indices to top-level definitions
@@ -49,7 +46,6 @@ fn kernel_loader(
             + '_,
     >,
 > {
-    let logical_path_string = logical_path.to_string();
     Box::pin(async move {
         println!("Computing dependencies for {}", logical_path);
         // First we compute all dependencies, so the operation can be parallelized
@@ -61,7 +57,7 @@ fn kernel_loader(
             join_set.spawn(async move { verify(&dep_string).await });
         }
         while let Some(result) = join_set.join_next().await {
-            result.or(Err(()))?;
+            let _ = result.or(Err(()))?;
         }
         // Then we verify the current definition
         println!("Verifying {}", logical_path);

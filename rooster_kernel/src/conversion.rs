@@ -12,7 +12,7 @@ impl<T: Meta> Term<T> {
     ) -> Result<bool, Error<T>> {
         match &mut self.inner {
             TermInner::Prop => Ok(false),
-            TermInner::Type(n) => Ok(false),
+            TermInner::Type(_) => Ok(false),
             TermInner::Global(g) => match env.global_value(*g) {
                 Some(t) => {
                     // Delta-Global

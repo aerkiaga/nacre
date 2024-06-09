@@ -3,7 +3,6 @@ A programming language for verified software.
 
 ## TODO
 * Checkpoint before further feature work.
-  - Fix Rust warnings.
   - Explore alternate compiler diagnostics crates.
   - Explore clippy usage.
 * Accept a simpler call syntax.
@@ -14,6 +13,7 @@ A programming language for verified software.
   - Variable naming-related warnings.
   - Namespace-related warnings.
   - Private path implementation.
+  - Batch import using asterisk.
 * Improve logical foundation.
   - Allow axioms from allowlisted paths.
   - Explore if a generalized induction axiom can be

@@ -287,7 +287,7 @@ impl<T: Meta> Term<T> {
     // Replaces all occurrences of the g-th global with t in self,
     // returning a new Term.
     // Returns Err(...) if an integer overflow occurred.
-    pub(crate) fn replace_global(&self, g: GlobalRef, t: &Term<T>) -> Result<Term<T>, Error<T>> {
+    /*pub(crate) fn replace_global(&self, g: GlobalRef, t: &Term<T>) -> Result<Term<T>, Error<T>> {
         match &self.inner {
             TermInner::Prop => Ok((TermInner::Prop, &self.meta).into()),
             TermInner::Type(n) => Ok((TermInner::Type(*n), &self.meta).into()),
@@ -341,7 +341,7 @@ impl<T: Meta> Term<T> {
                 None => Err(Error::Other),
             },
         }
-    }
+    }*/
 
     pub fn replace_inner(&self, other: &Term<T>) -> Result<Term<T>, Error<T>> {
         self.replace_variable(0, other)

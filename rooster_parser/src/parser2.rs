@@ -219,13 +219,13 @@ impl AbstractSyntaxTree {
     }
 
     pub(crate) fn lambda_typify(&self, return_type: AbstractSyntaxTree) -> AbstractSyntaxTree {
-        if let AbstractSyntaxTree::Lambda(identifier, var_type, term, range) = self {
+        if let AbstractSyntaxTree::Lambda(identifier, var_type, term, _range) = self {
             let rg = return_type.get_range().clone();
             AbstractSyntaxTree::Forall(
                 Some(identifier.clone()),
                 var_type.clone(),
                 Box::new(term.lambda_typify(return_type)),
-                //range.clone(),
+                //_range.clone(),
                 rg,
             )
         } else {
@@ -466,7 +466,7 @@ impl std::fmt::Debug for AbstractSyntaxTree {
     }
 }
 
-async fn perform_macro_call(logical_path: String, s: String) -> Result<AbstractSyntaxTree, ()> {
+async fn perform_macro_call(_logical_path: String, _s: String) -> Result<AbstractSyntaxTree, ()> {
     panic!("Macros are yet unimplemented");
 }
 

@@ -1,8 +1,6 @@
 use crate::parser2::AbstractSyntaxTree;
 use crate::*;
 
-use std::ops::Range;
-
 pub(crate) fn parse_prototype(
     left: &AbstractSyntaxTree,
     right: AbstractSyntaxTree,
@@ -153,7 +151,7 @@ pub(crate) fn parse_prototype(
                     let param_group_range = param_group.get_range();
                     let range_end = r.get_range().end;
                     if &*keyword == "impl" {
-                        if let AbstractSyntaxTree::Enclosed(inner, ch, _) = r {
+                        if let AbstractSyntaxTree::Enclosed(inner, _, _) = r {
                             return Ok(inner.do_namespace(components, &filename));
                         } else {
                             unreachable!();

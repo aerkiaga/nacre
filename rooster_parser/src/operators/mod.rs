@@ -8,7 +8,6 @@ use std::ops::Range;
 // TODO: recover from more errors
 
 mod prototype;
-use prototype::*;
 
 mod namespace;
 use namespace::*;
@@ -30,7 +29,7 @@ fn colon_handler(
     let right_range = right.get_range();
     match left {
         AbstractSyntaxTree::Assignment(identifier, value, is_let, def_type, _) => {
-            if let Some(dt) = def_type {
+            if let Some(_) = def_type {
                 report::send(Report {
                     is_error: true,
                     filename: filename.to_string(),

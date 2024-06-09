@@ -39,7 +39,7 @@ pub(crate) fn arrow_handler(
             left_left,
             left_right,
             is_definition,
-            def_type,
+            _def_type,
             left_range,
         ) => {
             if let AbstractSyntaxTree::Lambda(_, _, _, _) = &*left_right {
