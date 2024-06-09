@@ -1,9 +1,15 @@
 use crate::*;
 
 impl<T: Meta> Term<T> {
-    // Applies beta and delta reduction to fully convert a term.
-    // Returns Err(()) if an error occurred.
-    fn convert(&mut self, env: &Environment<T>, ctx: &mut Context<T>) -> Result<bool, Error<T>> {
+    /// Applies beta, delta and zeta reduction once on a term.
+    ///
+    /// Its return value indicates whether conversion could be done.
+    /// Returns `Err` if an error occurred.
+    pub fn convert(
+        &mut self,
+        env: &Environment<T>,
+        ctx: &mut Context<T>,
+    ) -> Result<bool, Error<T>> {
         match &mut self.inner {
             TermInner::Prop => Ok(false),
             TermInner::Type(n) => Ok(false),
@@ -47,9 +53,9 @@ impl<T: Meta> Term<T> {
         }
     }
 
-    // Applies successive reduction steps to fully normalize a term.
-    //
-    // Returns `Err(...)` if an error occurred.
+    /// Applies successive reduction steps to fully normalize a term.
+    ///
+    /// Returns `Err` if an error occurred.
     pub fn normalize_in_ctx(
         &self,
         env: &Environment<T>,
@@ -65,7 +71,7 @@ impl<T: Meta> Term<T> {
 
     /// Applies successive reduction steps to fully normalize a term.
     ///
-    /// Returns `Err(...)` if an error occurred.
+    /// Returns `Err` if an error occurred.
     pub fn normalize(&self, env: &Environment<T>) -> Result<Term<T>, Error<T>> {
         self.normalize_in_ctx(env, &mut Context::new())
     }

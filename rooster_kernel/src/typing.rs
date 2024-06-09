@@ -94,7 +94,7 @@ impl<T: Meta> Term<T> {
                         } else {
                             Err(Error::AppMismatchedType {
                                 lhs: Arc::new(*a.clone()),
-                                expected: Arc::new(cc),
+                                expected: Arc::new(*c.clone()),
                                 rhs: Arc::new(*b.clone()),
                                 found: Arc::new(tb),
                                 env: env.clone(),
@@ -103,30 +103,37 @@ impl<T: Meta> Term<T> {
                         }
                     }
                     _ => {
-                        let cta = ta.normalize_in_ctx(env, ctx)?;
-                        match cta.inner {
-                            TermInner::Forall(c, d) => {
-                                let tb = b.compute_type(env, ctx)?;
-                                let ctb = tb.normalize_in_ctx(env, ctx)?;
-                                let cc = c.normalize_in_ctx(env, ctx)?;
-                                if ctb == cc {
-                                    d.replace_variable(0, &b)
-                                } else {
-                                    Err(Error::AppMismatchedType {
-                                        lhs: Arc::new(*a.clone()),
-                                        expected: Arc::new(cc),
-                                        rhs: Arc::new(*b.clone()),
-                                        found: Arc::new(tb),
-                                        env: env.clone(),
-                                        ctx: ctx.clone(),
-                                    })
+                        let mut cta = ta.clone();
+                        loop {
+                            let can_normalize_more = cta.convert(env, ctx)?;
+                            match cta.inner {
+                                TermInner::Forall(c, d) => {
+                                    let tb = b.compute_type(env, ctx)?;
+                                    let ctb = tb.normalize_in_ctx(env, ctx)?;
+                                    let cc = c.normalize_in_ctx(env, ctx)?;
+                                    if ctb == cc {
+                                        break d.replace_variable(0, &b);
+                                    } else {
+                                        break Err(Error::AppMismatchedType {
+                                            lhs: Arc::new(*a.clone()),
+                                            expected: Arc::new(*c.clone()),
+                                            rhs: Arc::new(*b.clone()),
+                                            found: Arc::new(tb),
+                                            env: env.clone(),
+                                            ctx: ctx.clone(),
+                                        });
+                                    }
+                                }
+                                _ => {
+                                    if !can_normalize_more {
+                                        break Err(Error::AppInvalid {
+                                            lhs: Arc::new(*a.clone()),
+                                            ltype: Arc::new(ta),
+                                            rhs: Arc::new(*b.clone()),
+                                        });
+                                    }
                                 }
                             }
-                            _ => Err(Error::AppInvalid {
-                                lhs: Arc::new(*a.clone()),
-                                ltype: Arc::new(ta),
-                                rhs: Arc::new(*b.clone()),
-                            }),
                         }
                     }
                 }
