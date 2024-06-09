@@ -57,7 +57,7 @@ fn kernel_loader(
             join_set.spawn(async move { verify(&dep_string).await });
         }
         while let Some(result) = join_set.join_next().await {
-            let _ = result.or(Err(()))?;
+            result.or(Err(()))??;
         }
         // Then we verify the current definition
         println!("Verifying {}", logical_path);
