@@ -3,62 +3,47 @@ use crate::*;
 impl<T: Meta> Term<T> {
     // Applies beta and delta reduction to fully convert a term.
     // Returns Err(()) if an error occurred.
-    fn convert(
-        &self,
-        env: &Environment<T>,
-        ctx: &mut Context<T>,
-    ) -> Result<(Term<T>, bool), Error<T>> {
-        match &self.inner {
-            TermInner::Prop => Ok(((TermInner::Prop, &self.meta).into(), false)),
-            TermInner::Type(n) => Ok(((TermInner::Type(*n), &self.meta).into(), false)),
+    fn convert(&mut self, env: &Environment<T>, ctx: &mut Context<T>) -> Result<bool, Error<T>> {
+        match &mut self.inner {
+            TermInner::Prop => Ok(false),
+            TermInner::Type(n) => Ok(false),
             TermInner::Global(g) => match env.global_value(*g) {
-                Some(t) => Ok((t.clone(), true)), // Delta-Global
+                Some(t) => {
+                    // Delta-Global
+                    *self = t.clone();
+                    Ok(true)
+                }
                 None => Err(Error::Other),
             },
             TermInner::Variable(v) => match ctx.variable_value(*v) {
-                Some(t) => Ok((t.make_inner_by_n(v + 1)?, true)), // Delta-Local
-                None => Ok(((TermInner::Variable(*v), &self.meta).into(), false)),
+                Some(t) => {
+                    // Delta-Local
+                    *self = t.make_inner_by_n(*v + 1)?;
+                    Ok(true)
+                }
+                None => Ok(false),
             },
             TermInner::Apply(a, b) => {
-                let (ca, did_ca) = a.convert(env, ctx)?; // Reduce callee first
-                let (cb, did_cb) = b.convert(env, ctx)?; // Innermost order
-                                                         // TODO: explore outermost order
-                match ca.inner {
-                    TermInner::Lambda(_, d) => Ok((d.replace_variable(0, &cb)?, true)), // Beta
-                    _ => Ok((
-                        (TermInner::Apply(Box::new(ca), Box::new(cb)), &self.meta).into(),
-                        did_ca || did_cb,
-                    )),
+                match &a.inner {
+                    TermInner::Lambda(_, d) => {
+                        // Beta
+                        *self = d.replace_variable(0, &b)?;
+                        Ok(true)
+                    }
+                    _ => Ok(a.convert(env, ctx)? || b.convert(env, ctx)?),
                 }
             }
             TermInner::Let(a, b) => {
-                let (ca, did_ca) = a.convert(env, ctx)?; // Reduce callee first
-                ctx.add_inner(Some(ca.clone()), (TermInner::Prop, &self.meta).into());
-                let (cb, did_cb) = b.convert(env, ctx)?; // Innermost order
-                                                         // TODO: explore outermost order
-                ctx.remove_inner();
-                Ok((cb.replace_variable(0, &ca)?, true)) // Zeta
+                // Zeta
+                *self = b.replace_variable(0, &a)?;
+                Ok(true)
             }
-            TermInner::Forall(a, b) => {
-                let (ca, did_ca) = a.convert(env, ctx)?; // Reduce left first
+            TermInner::Forall(a, b) | TermInner::Lambda(a, b) => Ok(a.convert(env, ctx)? || {
                 ctx.add_inner(None, (TermInner::Prop, &self.meta).into());
-                let (cb, did_cb) = b.convert(env, ctx)?; // Then reduce right
+                let tmp = b.convert(env, ctx)?;
                 ctx.remove_inner();
-                Ok((
-                    (TermInner::Forall(Box::new(ca), Box::new(cb)), &self.meta).into(),
-                    did_ca || did_cb,
-                ))
-            }
-            TermInner::Lambda(a, b) => {
-                let (ca, did_ca) = a.convert(env, ctx)?; // Reduce left first
-                ctx.add_inner(None, (TermInner::Prop, &self.meta).into());
-                let (cb, did_cb) = b.convert(env, ctx)?; // Then reduce right
-                ctx.remove_inner();
-                Ok((
-                    (TermInner::Lambda(Box::new(ca), Box::new(cb)), &self.meta).into(),
-                    did_ca || did_cb,
-                ))
-            }
+                tmp
+            }),
         }
     }
 
@@ -73,7 +58,7 @@ impl<T: Meta> Term<T> {
         let mut r = self.clone();
         let mut pending = true;
         while pending {
-            (r, pending) = r.convert(env, ctx)?;
+            pending = r.convert(env, ctx)?;
         }
         Ok(r)
     }
