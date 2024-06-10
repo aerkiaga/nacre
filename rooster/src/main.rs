@@ -222,5 +222,12 @@ async fn main() {
             },
         };
     }
+    loop {
+        let report = match report_receiver.try_recv() {
+            Ok(report) => report,
+            Err(_) => break,
+        };
+        print_report(report).await;
+    }
     task_handle.await.unwrap();
 }
