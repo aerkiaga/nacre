@@ -2,8 +2,6 @@
 A programming language for verified software.
 
 ## TODO
-* Checkpoint before further feature work.
-  - Fix most important clippy errors.
 * Accept a simpler call syntax.
   - Allow omitting any preceding type parameters.
   - Allow omitting non-type preceding parameters.

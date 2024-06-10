@@ -119,6 +119,33 @@ async fn get_snippet(range: Range<usize>, filename: &str) -> (String, usize, usi
 }
 
 #[cfg(feature = "annotate-snippets")]
+fn get_annotated_comparison(text: String) -> (String, Vec<Range<usize>>) {
+    let mut r = vec![];
+    let mut last_start = None;
+    let mut r2 = vec![];
+    for ch in text.chars() {
+        if ch == '`' {
+            let start = r.len();
+            match last_start {
+                Some(ls) => {
+                    r2.push(ls..start);
+                    last_start = None;
+                }
+                None => {
+                    last_start = Some(start);
+                }
+            }
+        } else {
+            r.push(ch);
+        }
+    }
+    if r2.len() > 2 {
+        r2.clear();
+    }
+    (r.into_iter().collect(), r2)
+}
+
+#[cfg(feature = "annotate-snippets")]
 async fn print_report(report: rooster_parser::Report) {
     let mut start = report.offset;
     let mut end = report.offset;
@@ -149,16 +176,24 @@ async fn print_report(report: rooster_parser::Report) {
     );
     eprintln!("{}", renderer.render(message));
     if let Some(note) = report.note {
-        let mut lines = note.split("\n").collect::<Vec<_>>();
+        let mut lines = note
+            .split("\n")
+            .filter(|s| !s.is_empty())
+            .collect::<Vec<_>>();
         let title = lines.remove(0);
-        let content = lines.join("\n").split('`').collect::<Vec<_>>().join("");
-        let message = Level::Note.title(&title).snippet(Snippet::source(&content));
+        let (content, ranges) = get_annotated_comparison(lines.join("\n"));
+        let annotations: Vec<_> = ranges.into_iter().map(|rg| Level::Note.span(rg)).collect();
+        let message = Level::Note.title(&title).snippet(
+            Snippet::source(&content)
+                .fold(false)
+                .annotations(annotations),
+        );
         eprintln!("{}", renderer.render(message));
     }
     if let Some(help) = report.help {
         let mut lines = help.split("\n").collect::<Vec<_>>();
         let title = lines.remove(0);
-        let content = lines.join("\n").split('`').collect::<Vec<_>>().join("");
+        let content = lines.join("\n");
         let message = Level::Help.title(&title).snippet(Snippet::source(&content));
         eprintln!("{}", renderer.render(message));
     }

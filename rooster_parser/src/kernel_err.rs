@@ -650,7 +650,7 @@ pub(crate) fn report(error: Error<TermMeta>, filename: &str) {
                 note: {
                     let (exp, fnd) = produce_comparison(&expected, &found, &env, &mut ctx);
                     Some(format!(
-                        "mismatched types\nexpected `{}`\n\nfound    `{}`",
+                        "mismatched types\nexpected {}\n\nfound    {}",
                         exp, fnd
                     ))
                 },
@@ -680,7 +680,7 @@ pub(crate) fn report(error: Error<TermMeta>, filename: &str) {
                 note: {
                     let (exp, fnd) = produce_comparison(&expected, &found, &env, &mut ctx);
                     Some(format!(
-                        "mismatched types\nexpected `{}`\n\nfound    `{}`",
+                        "mismatched types\nexpected {}\n\nfound    {}",
                         exp, fnd
                     ))
                 },
