@@ -44,7 +44,18 @@ fn file_loader(filename: &str) -> Pin<Box<dyn Future<Output = Result<String, ()>
         let mut r = String::new();
         match file.read_to_string(&mut r).await {
             Ok(_) => (),
-            Err(_) => error_cannot_read(),
+            Err(_) => {
+                report::send(Report {
+                    is_error: true,
+                    filename: filename.to_string(),
+                    offset: 0,
+                    message: format!("file {} cannot be read", filename),
+                    note: None,
+                    help: None,
+                    labels: vec![],
+                });
+                return Err(());
+            }
         }
         Ok(r)
     })

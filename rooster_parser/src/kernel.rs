@@ -41,7 +41,7 @@ pub type Definition = (Arc<Term<TermMeta>>, Arc<Term<TermMeta>>, usize);
 
 fn kernel_loader(logical_path: &str) -> cache::LoaderFuture<'_, Definition> {
     Box::pin(async move {
-        println!("Computing dependencies for {}", logical_path);
+        eprintln!("Computing dependencies for {}", logical_path);
         // First we compute all dependencies, so the operation can be parallelized
         // TODO: move into new function that can be used by API users
         let deps = semantics::get_direct_dependencies(logical_path).await?;
@@ -51,10 +51,10 @@ fn kernel_loader(logical_path: &str) -> cache::LoaderFuture<'_, Definition> {
             join_set.spawn(async move { verify(&dep_string).await });
         }
         while let Some(result) = join_set.join_next().await {
-            result.or(Err(()))??;
+            let _ = result.or(Err(()))?;
         }
         // Then we verify the current definition
-        println!("Verifying {}", logical_path);
+        eprintln!("Verifying {}", logical_path);
         // Start by loading the definition term
         let (ast, filename) = get_ast(logical_path).await.unwrap();
         let definition =
@@ -78,7 +78,7 @@ fn kernel_loader(logical_path: &str) -> cache::LoaderFuture<'_, Definition> {
         });
         env.add_definition(Some(definition.clone()), type_term.clone())
             .map_err(|e| kernel_err::report(e, &filename))?;
-        println!("Verified {}", logical_path);
+        eprintln!("Verified {}", logical_path);
         let index = INDEX_COUNTER.fetch_add(1, Ordering::Relaxed);
         Ok((definition, type_term, index))
     })
