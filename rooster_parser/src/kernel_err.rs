@@ -38,13 +38,7 @@ fn get_type(t: &Term<TermMeta>) -> &Term<TermMeta> {
 
 fn eq_weak(a: &Term<TermMeta>, b: &Term<TermMeta>, level: usize) -> bool {
     match &a.inner {
-        TermInner::Prop => {
-            if let TermInner::Prop = b.inner {
-                true
-            } else {
-                false
-            }
-        }
+        TermInner::Prop => matches!(b.inner, TermInner::Prop),
         TermInner::Type(n1) => {
             if let TermInner::Type(n2) = b.inner {
                 *n1 == n2
@@ -104,21 +98,13 @@ fn eq_weak(a: &Term<TermMeta>, b: &Term<TermMeta>, level: usize) -> bool {
 fn list_params(t: &Term<TermMeta>, is_lambda: bool) -> Vec<&Term<TermMeta>> {
     let mut rv = vec![t];
     if is_lambda {
-        match &t.inner {
-            TermInner::Lambda(_l, r) => {
-                let mut r2 = list_params(&r, is_lambda);
-                rv.append(&mut r2);
-            }
-            _ => {}
+        if let TermInner::Lambda(_l, r) = &t.inner {
+            let mut r2 = list_params(r, is_lambda);
+            rv.append(&mut r2);
         }
-    } else {
-        match &t.inner {
-            TermInner::Forall(_l, r) => {
-                let mut r2 = list_params(&r, is_lambda);
-                rv.append(&mut r2);
-            }
-            _ => {}
-        }
+    } else if let TermInner::Forall(_l, r) = &t.inner {
+        let mut r2 = list_params(r, is_lambda);
+        rv.append(&mut r2);
     }
     rv
 }
@@ -157,31 +143,16 @@ fn produce_term(t: &Term<TermMeta>) -> String {
         TermInner::Type(n) => format!("Type{}", n + 1),
         TermInner::Global(_) | TermInner::Variable(_) => name,
         TermInner::Forall(l, r) => {
-            format!(
-                "type({}: {}) -> {}",
-                name,
-                produce_term(&*l),
-                produce_term(&*r)
-            )
+            format!("type({}: {}) -> {}", name, produce_term(l), produce_term(r))
         }
         TermInner::Lambda(l, r) => {
-            format!(
-                "fn({}: {}) {{{}}}",
-                name,
-                produce_term(&*l),
-                produce_term(&*r)
-            )
+            format!("fn({}: {}) {{{}}}", name, produce_term(l), produce_term(r))
         }
         TermInner::Apply(l, r) => {
-            format!("({} {})", produce_term(&*l), produce_term(&*r))
+            format!("({} {})", produce_term(l), produce_term(r))
         }
         TermInner::Let(l, r) => {
-            format!(
-                "let {} = {}; {}",
-                name,
-                produce_term(&*l),
-                produce_term(&*r)
-            )
+            format!("let {} = {}; {}", name, produce_term(l), produce_term(r))
         }
     }
 }
@@ -195,10 +166,7 @@ enum ComparisonResult {
 
 impl ComparisonResult {
     fn is_equal(&self) -> bool {
-        match self {
-            ComparisonResult::Equal => true,
-            _ => false,
-        }
+        matches!(self, ComparisonResult::Equal)
     }
 }
 
@@ -223,8 +191,8 @@ impl PartialOrd for ComparisonResult {
 }
 
 fn levenshtein_matrix(
-    v1: &Vec<&Term<TermMeta>>,
-    v2: &Vec<&Term<TermMeta>>,
+    v1: &[&Term<TermMeta>],
+    v2: &[&Term<TermMeta>],
     env: &Environment<TermMeta>,
     ctx1: &mut Context<TermMeta>,
     ctx2: &mut Context<TermMeta>,
@@ -232,13 +200,11 @@ fn levenshtein_matrix(
     // Create empty matrix
     let mut r = vec![];
     for _ in 0..v1.len() + 1 {
-        let mut rr = vec![];
-        for _ in 0..v2.len() + 1 {
-            rr.push(0);
-        }
+        let rr = vec![0; v2.len() + 1];
         r.push(rr);
     }
     // Initialize trivial prefixes
+    #[allow(clippy::needless_range_loop)]
     for i in 0..v1.len() + 1 {
         r[i][0] = i;
     }
@@ -249,8 +215,8 @@ fn levenshtein_matrix(
     for j in 1..v2.len() + 1 {
         for i in 1..v1.len() + 1 {
             // TODO: update context appropriately if possible
-            let t1 = get_type(&v1[i - 1]);
-            let t2 = get_type(&v2[j - 1]);
+            let t1 = get_type(v1[i - 1]);
+            let t2 = get_type(v2[j - 1]);
             for _ in 0..i - 1 {
                 ctx1.add_inner(
                     None,
@@ -282,16 +248,15 @@ fn levenshtein_matrix(
     r
 }
 
+type ParamsWithGaps<'a> = Vec<Option<&'a Term<TermMeta>>>;
+
 fn levenshtein_compare<'a>(
     v1: Vec<&'a Term<TermMeta>>,
     v2: Vec<&'a Term<TermMeta>>,
     env: &Environment<TermMeta>,
     ctx1: &mut Context<TermMeta>,
     ctx2: &mut Context<TermMeta>,
-) -> (
-    Vec<Option<&'a Term<TermMeta>>>,
-    Vec<Option<&'a Term<TermMeta>>>,
-) {
+) -> (ParamsWithGaps<'a>, ParamsWithGaps<'a>) {
     // Get levenshtein distances between all prefixes
     let matrix = levenshtein_matrix(&v1, &v2, env, ctx1, ctx2);
     // Append elements one by one
@@ -391,7 +356,7 @@ fn handle_prototype(
     let mut best_n = op_trailing.len();
     if trailing {
         for n in (0..op_trailing.len()).rev() {
-            if let None = op_other[n] {
+            if op_other[n].is_none() {
                 match &op_trailing[n] {
                     Some(t1) => {
                         let t2 = other_ret;
@@ -485,7 +450,7 @@ fn handle_prototype(
     // Handle commas
     let mut add_comma = false;
     for n in (0..r1.len()).rev() {
-        if r1[n].len() > 0 {
+        if !r1[n].is_empty() {
             if add_comma {
                 r1[n].push_str(", ");
             }
@@ -494,7 +459,7 @@ fn handle_prototype(
     }
     add_comma = false;
     for n in (0..r2.len()).rev() {
-        if r2[n].len() > 0 {
+        if !r2[n].is_empty() {
             if add_comma {
                 r2[n].push_str(", ");
             }
@@ -507,14 +472,14 @@ fn handle_prototype(
     let ((rets1, rets2), _) = produce_comparison_rec(ret1, ret2, env, ctx1, ctx2, false);
     let rs1 = format!("type({}) -> {}", r1.join(""), rets1);
     let rs2 = format!("type({}) -> {}", r2.join(""), rets2);
-    return (
+    (
         (rs1, rs2),
         if at_least_one_equal {
             ComparisonResult::Similar
         } else {
             ComparisonResult::Different
         },
-    );
+    )
 }
 
 fn produce_comparison_rec(
@@ -555,108 +520,96 @@ fn produce_comparison_rec(
     }
     // try to expand
     match &t1.inner {
-        TermInner::Global(g) => match env.delta_replacement(*g) {
-            Ok(ct1) => {
+        TermInner::Global(g) => {
+            if let Ok(ct1) = env.delta_replacement(*g) {
                 let (s12, res) = produce_comparison_rec(&ct1, t2, env, ctx1, ctx2, false);
                 if res > ComparisonResult::Different {
                     return (s12, res);
                 }
             }
-            Err(_) => {}
-        },
-        TermInner::Variable(v) => match ctx1.delta_replacement(*v) {
-            Ok(ct1) => {
+        }
+        TermInner::Variable(v) => {
+            if let Ok(ct1) = ctx1.delta_replacement(*v) {
                 let (s12, res) = produce_comparison_rec(&ct1, t2, env, ctx1, ctx2, false);
                 if res > ComparisonResult::Different {
                     return (s12, res);
                 }
             }
-            Err(_) => {}
-        },
+        }
         TermInner::Apply(l, r) => match &l.inner {
-            TermInner::Lambda(_ll, lr) => match lr.replace_inner(&r) {
-                Ok(ct1) => {
+            TermInner::Lambda(_ll, lr) => {
+                if let Ok(ct1) = lr.replace_inner(r) {
                     let (s12, res) = produce_comparison_rec(&ct1, t2, env, ctx1, ctx2, false);
                     if res > ComparisonResult::Different {
                         return (s12, res);
                     }
                 }
-                Err(_) => {}
-            },
-            _ => match l.normalize_in_ctx(env, ctx1) {
-                Ok(cl) => match &cl.inner {
-                    TermInner::Lambda(_ll, lr) => match lr.replace_inner(&r) {
-                        Ok(ct1) => {
+            }
+            _ => {
+                if let Ok(cl) = l.normalize_in_ctx(env, ctx1) {
+                    if let TermInner::Lambda(_ll, lr) = &cl.inner {
+                        if let Ok(ct1) = lr.replace_inner(r) {
                             let (s12, res) =
                                 produce_comparison_rec(&ct1, t2, env, ctx1, ctx2, false);
                             if res > ComparisonResult::Different {
                                 return (s12, res);
                             }
                         }
-                        Err(_) => {}
-                    },
-                    _ => {}
-                },
-                Err(_) => {}
-            },
+                    }
+                }
+            }
         },
         _ => {}
     }
     match &t2.inner {
-        TermInner::Global(g) => match env.delta_replacement(*g) {
-            Ok(ct2) => {
+        TermInner::Global(g) => {
+            if let Ok(ct2) = env.delta_replacement(*g) {
                 let (s12, res) = produce_comparison_rec(t1, &ct2, env, ctx1, ctx2, false);
                 if res > ComparisonResult::Different {
                     return (s12, res);
                 }
             }
-            Err(_) => {}
-        },
-        TermInner::Variable(v) => match ctx2.delta_replacement(*v) {
-            Ok(ct2) => {
+        }
+        TermInner::Variable(v) => {
+            if let Ok(ct2) = ctx2.delta_replacement(*v) {
                 let (s12, res) = produce_comparison_rec(t1, &ct2, env, ctx1, ctx2, false);
                 if res > ComparisonResult::Different {
                     return (s12, res);
                 }
             }
-            Err(_) => {}
-        },
+        }
         TermInner::Apply(l, r) => match &l.inner {
-            TermInner::Lambda(_ll, lr) => match lr.replace_inner(&r) {
-                Ok(ct2) => {
+            TermInner::Lambda(_ll, lr) => {
+                if let Ok(ct2) = lr.replace_inner(r) {
                     let (s12, res) = produce_comparison_rec(t1, &ct2, env, ctx1, ctx2, false);
                     if res > ComparisonResult::Different {
                         return (s12, res);
                     }
                 }
-                Err(_) => {}
-            },
-            _ => match l.normalize_in_ctx(env, ctx2) {
-                Ok(cl) => match &cl.inner {
-                    TermInner::Lambda(_ll, lr) => match lr.replace_inner(&r) {
-                        Ok(ct2) => {
+            }
+            _ => {
+                if let Ok(cl) = l.normalize_in_ctx(env, ctx2) {
+                    if let TermInner::Lambda(_ll, lr) = &cl.inner {
+                        if let Ok(ct2) = lr.replace_inner(r) {
                             let (s12, res) =
                                 produce_comparison_rec(t1, &ct2, env, ctx1, ctx2, false);
                             if res > ComparisonResult::Different {
                                 return (s12, res);
                             }
                         }
-                        Err(_) => {}
-                    },
-                    _ => {}
-                },
-                Err(_) => {}
-            },
+                    }
+                }
+            }
         },
         _ => {}
     }
-    return (
+    (
         adjust_strings(
             format!("`{}`", produce_term(t1)),
             format!("`{}`", produce_term(t2)),
         ),
         ComparisonResult::Different,
-    );
+    )
 }
 
 fn produce_comparison(

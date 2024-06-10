@@ -18,7 +18,7 @@ pub(crate) fn arrow_handler(
                     let right_range = right.get_range();
                     report::send(Report {
                         is_error: true,
-                        filename: filename,
+                        filename,
                         offset: right_range.start,
                         message: "function return type must be specified after function body"
                             .to_string(),
@@ -33,7 +33,7 @@ pub(crate) fn arrow_handler(
                 }
                 _ => unreachable!(),
             }
-            prototype::parse_prototype(&left, right, filename, &keyword)
+            prototype::parse_prototype(&left, right, filename, keyword)
         }
         AbstractSyntaxTree::Assignment(
             left_left,

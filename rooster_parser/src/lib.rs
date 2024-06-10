@@ -81,22 +81,15 @@ pub async fn get_file_ast(filename: &str) -> Result<Arc<AbstractSyntaxTree>, ()>
 
 fn definition_loader(
     logical_path: &str,
-) -> Pin<
-    Box<
-        dyn Future<
-                Output = Result<
-                    (
-                        (
-                            &'static AbstractSyntaxTree,
-                            Option<&'static AbstractSyntaxTree>,
-                        ),
-                        String,
-                    ),
-                    (),
-                >,
-            > + Send
-            + '_,
-    >,
+) -> cache::LoaderFuture<
+    '_,
+    (
+        (
+            &'static AbstractSyntaxTree,
+            Option<&'static AbstractSyntaxTree>,
+        ),
+        String,
+    ),
 > {
     let logical_path_string = logical_path.to_string();
     Box::pin(async move {
@@ -131,7 +124,7 @@ pub(crate) async fn get_ast(
 ) -> Result<(&'static AbstractSyntaxTree, String), ()> {
     // TODO: normalize filename
     DEFINITION_CACHE
-        .get(&logical_path)
+        .get(logical_path)
         .await
         .map(|x| (x.0 .0, x.1.clone()))
 }
@@ -142,7 +135,7 @@ pub(crate) async fn get_type_ast(
 ) -> Result<(Option<&'static AbstractSyntaxTree>, String), ()> {
     // TODO: normalize filename
     DEFINITION_CACHE
-        .get(&logical_path)
+        .get(logical_path)
         .await
         .map(|x| (x.0 .1, x.1.clone()))
 }

@@ -11,9 +11,9 @@ use tokio::sync::mpsc;
 #[derive(Clone)]
 pub enum AbstractSyntaxTree {
     /// A sequence of definitions or statements sperated by semicolons.
-    Block(Vec<Box<AbstractSyntaxTree>>, Range<usize>),
+    Block(Vec<AbstractSyntaxTree>, Range<usize>),
     /// A sequence of expressions separated by commas.
-    List(Vec<Box<AbstractSyntaxTree>>, Range<usize>),
+    List(Vec<AbstractSyntaxTree>, Range<usize>),
     /// Some code enclosed in a particular (opening) character.
     /// This may be `'('`, `'['` or `'{'`.
     Enclosed(Box<AbstractSyntaxTree>, char, Range<usize>),
@@ -101,8 +101,8 @@ impl AbstractSyntaxTree {
         last: bool,
     ) -> std::fmt::Result {
         let l = levels.len();
-        for n in 0..l.max(1) - 1 {
-            if levels[n] {
+        for item in levels.iter().take(l.max(1) - 1) {
+            if *item {
                 write!(f, "│ ")?;
             } else {
                 write!(f, "  ")?;
@@ -118,7 +118,7 @@ impl AbstractSyntaxTree {
         }
         match self {
             AbstractSyntaxTree::Block(statements, _) => {
-                write!(f, "Block\n")?;
+                writeln!(f, "Block")?;
                 levels.push(true);
                 for n in 0..statements.len() {
                     statements[n].fmt_rec(f, levels, n == statements.len() - 1)?
@@ -126,7 +126,7 @@ impl AbstractSyntaxTree {
                 levels.pop();
             }
             AbstractSyntaxTree::List(statements, _) => {
-                write!(f, "Block\n")?;
+                writeln!(f, "Block")?;
                 levels.push(true);
                 for n in 0..statements.len() {
                     statements[n].fmt_rec(f, levels, n == statements.len() - 1)?
@@ -134,23 +134,24 @@ impl AbstractSyntaxTree {
                 levels.pop();
             }
             AbstractSyntaxTree::Enclosed(ast, ch, _) => {
-                write!(f, "Enclosed {}\n", ch)?;
+                writeln!(f, "Enclosed {}", ch)?;
                 levels.push(true);
                 ast.fmt_rec(f, levels, true)?;
                 levels.pop();
             }
             AbstractSyntaxTree::Identifier(components, _) => {
                 write!(f, "Identifier ")?;
+                #[allow(clippy::needless_range_loop)]
                 for n in 0..components.len() {
                     if n != 0 {
                         write!(f, "::")?;
                     }
                     write!(f, "{}", components[n])?;
                 }
-                write!(f, "\n")?;
+                writeln!(f)?;
             }
             AbstractSyntaxTree::Assignment(identifier, value, is_let, def_type, _) => {
-                write!(f, "Assignment {} {}\n", is_let, def_type.is_some())?;
+                writeln!(f, "Assignment {} {}", is_let, def_type.is_some())?;
                 levels.push(true);
                 if let Some(dt) = def_type {
                     dt.fmt_rec(f, levels, false)?;
@@ -160,7 +161,7 @@ impl AbstractSyntaxTree {
                 levels.pop();
             }
             AbstractSyntaxTree::Application(left, right, _) => {
-                write!(f, "Application\n")?;
+                writeln!(f, "Application")?;
                 levels.push(true);
                 left.fmt_rec(f, levels, false)?;
                 right.fmt_rec(f, levels, true)?;
@@ -168,8 +169,8 @@ impl AbstractSyntaxTree {
             }
             AbstractSyntaxTree::Forall(identifier, var_type, term, _) => {
                 match identifier {
-                    Some(name) => write!(f, "Forall {}\n", name)?,
-                    None => write!(f, "Forall\n")?,
+                    Some(name) => writeln!(f, "Forall {}", name)?,
+                    None => writeln!(f, "Forall")?,
                 };
                 levels.push(true);
                 var_type.fmt_rec(f, levels, false)?;
@@ -177,24 +178,24 @@ impl AbstractSyntaxTree {
                 levels.pop();
             }
             AbstractSyntaxTree::Lambda(identifier, var_type, term, _) => {
-                write!(f, "Lambda {}\n", identifier)?;
+                writeln!(f, "Lambda {}", identifier)?;
                 levels.push(true);
                 var_type.fmt_rec(f, levels, false)?;
                 term.fmt_rec(f, levels, true)?;
                 levels.pop();
             }
             AbstractSyntaxTree::Empty => {
-                write!(f, "Empty\n")?;
+                writeln!(f, "Empty")?;
             }
             AbstractSyntaxTree::Typed(left, right, _) => {
-                write!(f, "Typed\n")?;
+                writeln!(f, "Typed")?;
                 levels.push(true);
                 left.fmt_rec(f, levels, false)?;
                 right.fmt_rec(f, levels, true)?;
                 levels.pop();
             }
             AbstractSyntaxTree::SpecialApp(left, right, keyword, _) => {
-                write!(f, "SpecialApp {}\n", keyword)?;
+                writeln!(f, "SpecialApp {}", keyword)?;
                 levels.push(true);
                 left.fmt_rec(f, levels, false)?;
                 right.fmt_rec(f, levels, true)?;
@@ -233,10 +234,10 @@ impl AbstractSyntaxTree {
         }
     }
 
-    pub(crate) fn into_list(self) -> Vec<Box<AbstractSyntaxTree>> {
+    pub(crate) fn into_list(self) -> Vec<AbstractSyntaxTree> {
         match self {
             AbstractSyntaxTree::List(elements, _) => elements,
-            _ => vec![Box::new(self)],
+            _ => vec![self],
         }
     }
 
@@ -247,9 +248,8 @@ impl AbstractSyntaxTree {
         match self {
             AbstractSyntaxTree::Block(statements, _) => {
                 for statement in statements {
-                    match statement.get_definition(name) {
-                        Ok(definition) => return Ok(definition),
-                        Err(_) => {}
+                    if let Ok(definition) = statement.get_definition(name) {
+                        return Ok(definition);
                     }
                 }
                 Err(())
@@ -282,7 +282,7 @@ impl AbstractSyntaxTree {
             AbstractSyntaxTree::Block(statements, range) => AbstractSyntaxTree::Block(
                 statements
                     .into_iter()
-                    .map(|statement| Box::new(statement.do_namespace(components, filename)))
+                    .map(|statement| statement.do_namespace(components, filename))
                     .collect(),
                 range,
             ),
@@ -526,27 +526,22 @@ pub(crate) async fn build_tree(
                         Ok(x) => x,
                         Err(_) => AbstractSyntaxTree::Empty,
                     });
-                } else {
-                    if s != ";" && s != "," {
-                        report::send(Report {
-                            is_error: true,
-                            filename: filename,
-                            offset: range.start,
-                            message: "binary operator is missing right operand".to_string(),
-                            note: None,
-                            help: None,
-                            labels: vec![(
-                                range,
-                                format!("operator `{}` requires two operands", s),
-                            )],
-                        });
-                        return Err(());
-                    }
+                } else if s != ";" && s != "," {
+                    report::send(Report {
+                        is_error: true,
+                        filename,
+                        offset: range.start,
+                        message: "binary operator is missing right operand".to_string(),
+                        note: None,
+                        help: None,
+                        labels: vec![(range, format!("operator `{}` requires two operands", s))],
+                    });
+                    return Err(());
                 }
             }
         }
     }
-    if ast_stack.len() < 1 {
+    if ast_stack.is_empty() {
         return Err(());
     }
     Ok(ast_stack.pop().unwrap())

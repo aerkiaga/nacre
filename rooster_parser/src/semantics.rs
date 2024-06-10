@@ -19,27 +19,24 @@ fn compute_dependencies(
             let mut r = HashSet::new();
             let mut new_locals = locals.clone();
             for statement in statements {
-                match &**statement {
-                    AbstractSyntaxTree::Assignment(name, _, is_definition, _, _) => {
-                        if *is_definition {
-                            if let AbstractSyntaxTree::Identifier(components, _) = &**name {
-                                if components.len() > 1 {
-                                    panic!();
-                                }
-                                new_locals.insert(components[0].clone());
-                            } else {
+                if let AbstractSyntaxTree::Assignment(name, _, is_definition, _, _) = statement {
+                    if *is_definition {
+                        if let AbstractSyntaxTree::Identifier(components, _) = &**name {
+                            if components.len() > 1 {
                                 panic!();
                             }
+                            new_locals.insert(components[0].clone());
+                        } else {
+                            panic!();
                         }
                     }
-                    _ => {}
                 }
                 r = &r | &compute_dependencies(statement, &new_locals, filename);
             }
             r
         }
         AbstractSyntaxTree::List(expressions, _) => expressions
-            .into_iter()
+            .iter()
             .map(|x| compute_dependencies(x, locals, filename))
             .reduce(|a, x| &a | &x)
             .unwrap_or_default(),
@@ -130,7 +127,7 @@ pub(crate) async fn convert_to_term(
             let mut new_level = level;
             let mut n = 0;
             for statement in statements {
-                match &**statement {
+                match statement {
                     AbstractSyntaxTree::Assignment(
                         name,
                         value,
@@ -310,10 +307,10 @@ fn dependency_loader(
     let logical_path_string = logical_path.to_string();
     Box::pin(async move {
         let (ast, filename) = get_ast(&logical_path_string).await?;
-        let deps = compute_dependencies(&ast, &HashSet::new(), &filename);
+        let deps = compute_dependencies(ast, &HashSet::new(), &filename);
         let (type_ast, _) = get_type_ast(&logical_path_string).await?;
         let type_deps = match type_ast {
-            Some(ast) => compute_dependencies(&ast, &HashSet::new(), &filename),
+            Some(ast) => compute_dependencies(ast, &HashSet::new(), &filename),
             None => HashSet::new(),
         };
         // TODO: transform relative (to filename) paths to be absolute

@@ -83,7 +83,7 @@ pub(crate) async fn parse_stream(
                 ParserToken::Operator(s, _) => {
                     let definition = operators::OPERATOR_TABLE.get(s).unwrap();
                     loop {
-                        if operator_stack.len() == 0 {
+                        if operator_stack.is_empty() {
                             break;
                         }
                         let stack_operator = &operator_stack[operator_stack.len() - 1];

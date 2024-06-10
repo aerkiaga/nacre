@@ -23,18 +23,18 @@ impl<T> Clone for CacheEntry<T> {
     }
 }
 
+pub(crate) type LoaderFuture<'a, T> = Pin<Box<dyn Future<Output = Result<T, ()>> + Send + 'a>>;
+
 pub(crate) struct Cache<T> {
     storage: Lazy<RwLock<HashMap<String, CacheEntry<T>>>>,
-    loader: fn(&str) -> Pin<Box<dyn Future<Output = Result<T, ()>> + Send + '_>>,
+    loader: fn(&str) -> LoaderFuture<'_, T>,
 }
 
 impl<T: Send + Sync> Cache<T> {
-    pub(crate) const fn new(
-        loader: fn(&str) -> Pin<Box<dyn Future<Output = Result<T, ()>> + Send + '_>>,
-    ) -> Cache<T> {
+    pub(crate) const fn new(loader: fn(&str) -> LoaderFuture<'_, T>) -> Cache<T> {
         Cache {
             storage: Lazy::new(|| HashMap::new().into()),
-            loader: loader,
+            loader,
         }
     }
 
@@ -81,11 +81,11 @@ impl<T: Send + Sync> Cache<T> {
             })
             .await
             .unwrap();
-            if let Err(_) = result {
+            if result.is_err() {
                 self.storage.write().await.remove(key);
                 return Err(());
             }
-            if let Err(_) = self.try_get(key).await.ok_or(()) {
+            if self.try_get(key).await.is_none() {
                 self.storage.write().await.remove(key);
                 return Err(());
             }

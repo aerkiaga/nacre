@@ -37,15 +37,9 @@ async fn create_environment(
     Ok(Environment::from_vec(env_vec))
 }
 
-fn kernel_loader(
-    logical_path: &str,
-) -> Pin<
-    Box<
-        dyn Future<Output = Result<(Arc<Term<TermMeta>>, Arc<Term<TermMeta>>, usize), ()>>
-            + Send
-            + '_,
-    >,
-> {
+pub type Definition = (Arc<Term<TermMeta>>, Arc<Term<TermMeta>>, usize);
+
+fn kernel_loader(logical_path: &str) -> cache::LoaderFuture<'_, Definition> {
     Box::pin(async move {
         println!("Computing dependencies for {}", logical_path);
         // First we compute all dependencies, so the operation can be parallelized
@@ -91,8 +85,7 @@ fn kernel_loader(
 }
 
 // The global cache storing definition, type and index for each verified definition
-static KERNEL__CACHE: cache::Cache<(Arc<Term<TermMeta>>, Arc<Term<TermMeta>>, usize)> =
-    cache::Cache::new(kernel_loader as _);
+static KERNEL__CACHE: cache::Cache<Definition> = cache::Cache::new(kernel_loader as _);
 
 /// Parse and verify the CoC expression corresponding to a particular logical path.
 pub async fn verify(logical_path: &str) -> Result<(), ()> {

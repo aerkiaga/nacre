@@ -13,17 +13,16 @@ pub(crate) fn parse_prototype(
     }
     let mut r = right;
     params.remove(0);
-    let mut n = 0;
     let max_n = params.len() - 1;
     let mut at_least_one = false;
     let left_start = left.get_range().start;
-    for param_group in params.into_iter().rev() {
+    for (n, param_group) in params.into_iter().rev().enumerate() {
         if let AbstractSyntaxTree::Enclosed(inner, ch, param_group_range) = param_group {
-            if &*keyword == "impl" {
+            if keyword == "impl" {
                 let left_range = left.get_range();
                 report::send(Report {
                     is_error: true,
-                    filename: filename,
+                    filename,
                     offset: param_group_range.start,
                     message: "`impl` block is missing a namespace".to_string(),
                     note: Some("correct syntax is `impl <namespace> {...}`".to_string()),
@@ -37,14 +36,14 @@ pub(crate) fn parse_prototype(
             }
             if ch == '(' {
                 for element in inner.into_list().into_iter().rev() {
-                    if let AbstractSyntaxTree::Typed(var_name, var_type, _) = *element {
+                    if let AbstractSyntaxTree::Typed(var_name, var_type, _) = element {
                         if let AbstractSyntaxTree::Identifier(components, identifier_range) =
                             *var_name
                         {
                             if components.len() != 1 {
                                 report::send(Report {
                                     is_error: true,
-                                    filename: filename,
+                                    filename,
                                     offset: identifier_range.start,
                                     message: "parameter names cannot be namespaced".to_string(),
                                     note: None,
@@ -85,7 +84,7 @@ pub(crate) fn parse_prototype(
                             }
                             report::send(Report {
                                 is_error: true,
-                                filename: filename,
+                                filename,
                                 offset: identifier_range.start,
                                 message: "parameter name expected".to_string(),
                                 note: None,
@@ -101,7 +100,7 @@ pub(crate) fn parse_prototype(
                         let element_range = element.get_range();
                         report::send(Report {
                             is_error: true,
-                            filename: filename,
+                            filename,
                             offset: element_range.start,
                             message: "parameter definition expected".to_string(),
                             note: Some(
@@ -120,7 +119,7 @@ pub(crate) fn parse_prototype(
             } else {
                 report::send(Report {
                     is_error: true,
-                    filename: filename,
+                    filename,
                     offset: param_group_range.start,
                     message: "parameter definitions must be enclosed in parentheses".to_string(),
                     note: Some(match keyword {
@@ -148,49 +147,46 @@ pub(crate) fn parse_prototype(
                 });
                 return Err(());
             }
-        } else {
-            if n == max_n {
-                if let AbstractSyntaxTree::Identifier(ref components, _) = param_group {
-                    let param_group_range = param_group.get_range();
-                    let range_end = r.get_range().end;
-                    if &*keyword == "impl" {
-                        if let AbstractSyntaxTree::Enclosed(inner, _, _) = r {
-                            return Ok(inner.do_namespace(components, &filename));
-                        } else {
-                            unreachable!();
-                        }
+        } else if n == max_n {
+            if let AbstractSyntaxTree::Identifier(ref components, _) = param_group {
+                let param_group_range = param_group.get_range();
+                let range_end = r.get_range().end;
+                if keyword == "impl" {
+                    if let AbstractSyntaxTree::Enclosed(inner, _, _) = r {
+                        return Ok(inner.do_namespace(components, &filename));
                     } else {
-                        if !at_least_one {
-                            report::send(Report {
-                                is_error: true,
-                                filename: filename,
-                                offset: param_group_range.start,
-                                message: "paremeter definition expected".to_string(),
-                                note: None,
-                                help: None,
-                                labels: vec![(
-                                    param_group_range.start..param_group_range.end,
-                                    "has no parameters".to_string(),
-                                )],
-                            });
-                            return Err(());
-                        }
-                        return Ok(AbstractSyntaxTree::Assignment(
-                            Box::new(param_group),
-                            Box::new(r),
-                            true,
-                            None,
-                            left_start..range_end,
-                        ));
+                        unreachable!();
                     }
                 } else {
-                    unreachable!();
+                    if !at_least_one {
+                        report::send(Report {
+                            is_error: true,
+                            filename,
+                            offset: param_group_range.start,
+                            message: "paremeter definition expected".to_string(),
+                            note: None,
+                            help: None,
+                            labels: vec![(
+                                param_group_range.start..param_group_range.end,
+                                "has no parameters".to_string(),
+                            )],
+                        });
+                        return Err(());
+                    }
+                    return Ok(AbstractSyntaxTree::Assignment(
+                        Box::new(param_group),
+                        Box::new(r),
+                        true,
+                        None,
+                        left_start..range_end,
+                    ));
                 }
             } else {
                 unreachable!();
             }
+        } else {
+            unreachable!();
         }
-        n += 1;
     }
     Ok(r)
 }

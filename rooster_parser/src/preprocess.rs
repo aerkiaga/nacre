@@ -29,12 +29,12 @@ pub(crate) async fn preprocess_chunk(
     tokenizer_handle.await.unwrap();
     parser_handle.await.unwrap();
     parser2_handle.await.unwrap();
-    Ok(parser2_receiver.await.unwrap()?)
+    parser2_receiver.await.unwrap()
 }
 
 pub(crate) async fn preprocess_file(
-    src: &String,
+    src: &str,
     filename: String,
 ) -> Result<parser2::AbstractSyntaxTree, ()> {
-    preprocess_chunk(src.clone(), filename, 0).await
+    preprocess_chunk(src.to_string(), filename, 0).await
 }

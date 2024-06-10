@@ -3,9 +3,7 @@ use crate::*;
 use std::collections::HashMap;
 use tokio::fs::read_dir;
 
-fn directory_loader(
-    path: &str,
-) -> Pin<Box<dyn Future<Output = Result<HashMap<String, bool>, ()>> + Send + '_>> {
+fn directory_loader(path: &str) -> cache::LoaderFuture<'_, HashMap<String, bool>> {
     Box::pin(async move {
         let mut rd = read_dir(path).await.unwrap();
         let mut r = HashMap::new();
@@ -33,21 +31,15 @@ pub async fn is_directory(directory: &str, name: &str) -> Result<bool, ()> {
     let mut name_roo = name.to_string();
     name_roo.push_str(".roo");
     let table = DIRECTORY__CACHE.get(directory).await.unwrap();
-    match table.get(&name_roo) {
-        Some(is_dir) => {
-            if !is_dir {
-                return Ok(false);
-            }
+    if let Some(is_dir) = table.get(&name_roo) {
+        if !is_dir {
+            return Ok(false);
         }
-        None => {}
     }
-    match table.get(name) {
-        Some(is_dir) => {
-            if *is_dir {
-                return Ok(true);
-            }
+    if let Some(is_dir) = table.get(name) {
+        if *is_dir {
+            return Ok(true);
         }
-        None => {}
     }
     Err(())
 }
@@ -60,30 +52,28 @@ pub(crate) async fn get_physical_path(logical_path: &str) -> (String, String) {
     let mut found_file = false;
     for component in logical_path.split(':') {
         if n % 2 == 1 {
-            if component != "" {
+            if !component.is_empty() {
                 panic!();
             }
-            if found_file && identifier.len() > 0 {
+            if found_file && !identifier.is_empty() {
                 identifier.push_str("::");
             }
-        } else {
-            if !found_file {
-                match is_directory(&file_path, component).await {
-                    Ok(is_dir) => {
-                        file_path.push('/');
-                        file_path.push_str(component);
-                        if !is_dir {
-                            file_path.push_str(".roo");
-                            found_file = true;
-                        }
-                    }
-                    Err(_) => {
-                        panic!();
+        } else if !found_file {
+            match is_directory(&file_path, component).await {
+                Ok(is_dir) => {
+                    file_path.push('/');
+                    file_path.push_str(component);
+                    if !is_dir {
+                        file_path.push_str(".roo");
+                        found_file = true;
                     }
                 }
-            } else {
-                identifier.push_str(component);
+                Err(_) => {
+                    panic!();
+                }
             }
+        } else {
+            identifier.push_str(component);
         }
         n += 1;
     }
@@ -97,21 +87,18 @@ pub(crate) async fn get_physical_path(logical_path: &str) -> (String, String) {
 pub(crate) fn make_absolute(relative_path: &str, filename: &str) -> String {
     let mut r = filename[..filename.len() - 4]
         .split('/')
-        .into_iter()
-        .filter(|x| x.len() > 0 && x != &".")
+        .filter(|x| !x.is_empty() && x != &".")
         .collect::<Vec<_>>();
     let mut n = 0;
     for component in relative_path.split(':') {
         if n % 2 == 1 {
-            if component != "" {
+            if !component.is_empty() {
                 panic!();
             }
+        } else if component == "super" {
+            r.pop();
         } else {
-            if component == "super" {
-                r.pop();
-            } else {
-                r.push(component);
-            }
+            r.push(component);
         }
         n += 1;
     }

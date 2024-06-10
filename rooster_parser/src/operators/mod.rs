@@ -29,7 +29,7 @@ fn colon_handler(
     let right_range = right.get_range();
     match left {
         AbstractSyntaxTree::Assignment(identifier, value, is_let, def_type, _) => {
-            if let Some(_) = def_type {
+            if def_type.is_some() {
                 report::send(Report {
                     is_error: true,
                     filename: filename.to_string(),
@@ -68,7 +68,7 @@ fn comma_handler(
         if let AbstractSyntaxTree::List(mut right_statements, _) = right {
             left_statements.append(&mut right_statements);
         } else {
-            left_statements.push(Box::new(right));
+            left_statements.push(right);
         }
         Ok(AbstractSyntaxTree::List(
             left_statements,
@@ -76,7 +76,7 @@ fn comma_handler(
         ))
     } else if let parser2::AbstractSyntaxTree::List(mut right_statements, right_range) = right {
         let left_range = left.get_range();
-        right_statements.insert(0, Box::new(left));
+        right_statements.insert(0, left);
         Ok(AbstractSyntaxTree::List(
             right_statements,
             left_range.start..right_range.end,
@@ -85,7 +85,7 @@ fn comma_handler(
         let left_start = left.get_range().start;
         let right_end = right.get_range().end;
         Ok(AbstractSyntaxTree::List(
-            vec![Box::new(left), Box::new(right)],
+            vec![left, right],
             left_start..right_end,
         ))
     }
@@ -187,7 +187,7 @@ fn semicolon_handler(
         if let AbstractSyntaxTree::Block(mut right_statements, _) = right {
             left_statements.append(&mut right_statements);
         } else {
-            left_statements.push(Box::new(right));
+            left_statements.push(right);
         }
         Ok(AbstractSyntaxTree::Block(
             left_statements,
@@ -195,7 +195,7 @@ fn semicolon_handler(
         ))
     } else if let parser2::AbstractSyntaxTree::Block(mut right_statements, right_range) = right {
         let left_range = left.get_range();
-        right_statements.insert(0, Box::new(left));
+        right_statements.insert(0, left);
         Ok(AbstractSyntaxTree::Block(
             right_statements,
             left_range.start..right_range.end,
@@ -204,30 +204,27 @@ fn semicolon_handler(
         let left_start = left.get_range().start;
         let right_end = right.get_range().end;
         Ok(AbstractSyntaxTree::Block(
-            vec![Box::new(left), Box::new(right)],
+            vec![left, right],
             left_start..right_end,
         ))
     }
 }
 
+type OperatorDefinition = (
+    f32,
+    bool,
+    fn(
+        AbstractSyntaxTree,
+        AbstractSyntaxTree,
+        String,
+        Range<usize>,
+    ) -> Result<AbstractSyntaxTree, ()>,
+);
+
 // TODO: make some operators left-associative
 // TODO: implement macro operator
 // TODO: use string interning for this
-pub(crate) static OPERATOR_TABLE: Lazy<
-    HashMap<
-        String,
-        (
-            f32,
-            bool,
-            fn(
-                AbstractSyntaxTree,
-                AbstractSyntaxTree,
-                String,
-                Range<usize>,
-            ) -> Result<AbstractSyntaxTree, ()>,
-        ),
-    >,
-> = Lazy::new(|| {
+pub(crate) static OPERATOR_TABLE: Lazy<HashMap<String, OperatorDefinition>> = Lazy::new(|| {
     let mut r = HashMap::new();
     //name, (precedence, right associative)
     r.insert("::".to_string(), (6., true, namespace_handler as _)); // Namespace

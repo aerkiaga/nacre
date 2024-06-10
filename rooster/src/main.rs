@@ -25,12 +25,9 @@ fn error_incorrect_args() {
 #[cfg(feature = "ariadne")]
 fn format_text(text: String) -> String {
     let mut tokens = text.split('`').map(|x| x.to_string()).collect::<Vec<_>>();
-    for n in 0..tokens.len() {
+    for (n, item) in tokens.iter_mut().enumerate() {
         if n % 2 == 1 {
-            tokens[n] = format!(
-                "{}",
-                tokens[n].clone().fg(ariadne::Color::Rgb(64, 196, 196))
-            );
+            *item = format!("{}", item.clone().fg(ariadne::Color::Rgb(64, 196, 196)));
         }
     }
     tokens.join("")
@@ -39,13 +36,14 @@ fn format_text(text: String) -> String {
 #[cfg(feature = "ariadne")]
 async fn print_report(report: rooster_parser::Report) {
     let mut color_generator = ariadne::ColorGenerator::new();
-    let colors = vec![
+    let colors = [
         color_generator.next(),
         color_generator.next(),
         color_generator.next(),
         color_generator.next(),
     ];
     let mut labels = vec![];
+    #[allow(clippy::needless_range_loop)]
     for n in 0..report.labels.len() {
         let label = &report.labels[n];
         labels.push(
@@ -74,10 +72,10 @@ async fn print_report(report: rooster_parser::Report) {
         .eprint((
             &*report.filename,
             ariadne::Source::<String>::from(
-                (&*rooster_parser::get_contents(&report.filename)
+                (*rooster_parser::get_contents(&report.filename)
                     .await
                     .unwrap())
-                    .to_string(),
+                .to_string(),
             ),
         ))
         .unwrap();

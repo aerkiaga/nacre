@@ -23,7 +23,7 @@ pub(crate) fn namespace_handler(
             }
             report::send(Report {
                 is_error: true,
-                filename: filename,
+                filename,
                 offset: right_range.start,
                 message: "qualified name must be composed of identifiers".to_string(),
                 note: None,
@@ -40,7 +40,7 @@ pub(crate) fn namespace_handler(
         }
         report::send(Report {
             is_error: true,
-            filename: filename,
+            filename,
             offset: left_range.start,
             message: "qualified name must be composed of identifiers".to_string(),
             note: None,
