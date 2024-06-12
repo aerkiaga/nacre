@@ -427,32 +427,41 @@ pub(crate) async fn convert_to_term_rec(
                             // Next is also type parameter, ignore
                             // until multiple omissions in a row are allowed
                         } else {
-                            let tleft = left_term.compute_type(env, ctx).map_err(|x| {
+                            let tll = ll.compute_type(env, ctx).map_err(|x| {
                                 kernel_err::report(x, filename);
                                 ()
                             })?;
-                            let ctleft = tleft.normalize_in_ctx(env, ctx).map_err(|x| {
+                            let ctll = tll.normalize_in_ctx(env, ctx).map_err(|x| {
                                 kernel_err::report(x, filename);
                                 ()
                             })?;
-                            if let TermInner::Forall(_, nlr) = ctleft.inner {
-                                if contains_var(&nlr, 0) {
-                                    report::send(Report {
-                                        is_error: false,
-                                        filename: filename.to_string(),
-                                        offset: ll.meta.range.start,
-                                        message: "Explicit type parameter is unnecessary here"
-                                            .to_string(),
-                                        note: None,
-                                        help: Some("omit parameter".to_string()),
-                                        labels: vec![
-                                            (ll.meta.range.clone(), "Function here".to_string()),
-                                            (
-                                                lr.meta.range.clone(),
-                                                "Unnecessary parameter".to_string(),
-                                            ),
-                                        ],
-                                    });
+                            if let TermInner::Forall(lll, llr) = ctll.inner {
+                                if let TermInner::Forall(llll, lllr) = llr.inner {
+                                    let cllll = llll.normalize_in_ctx(env, ctx).map_err(|x| {
+                                        kernel_err::report(x, filename);
+                                        ()
+                                    })?;
+                                    if contains_var(&llll, 0) {
+                                        report::send(Report {
+                                            is_error: false,
+                                            filename: filename.to_string(),
+                                            offset: ll.meta.range.start,
+                                            message: "Explicit type parameter is unnecessary here"
+                                                .to_string(),
+                                            note: None,
+                                            help: Some("omit parameter".to_string()),
+                                            labels: vec![
+                                                (
+                                                    ll.meta.range.clone(),
+                                                    "Function here".to_string(),
+                                                ),
+                                                (
+                                                    lr.meta.range.clone(),
+                                                    "Unnecessary parameter".to_string(),
+                                                ),
+                                            ],
+                                        });
+                                    }
                                 }
                             }
                         }
