@@ -114,7 +114,11 @@ fn compute_dependencies(
     }
 }
 
-fn find_x0(left: Term<TermMeta>, right: Term<TermMeta>) -> (Option<Term<TermMeta>>, bool) {
+fn find_var(
+    left: Term<TermMeta>,
+    right: Term<TermMeta>,
+    n: usize,
+) -> (Option<Term<TermMeta>>, bool) {
     match left.inner {
         TermInner::Prop => (None, matches!(right.inner, TermInner::Prop)),
         TermInner::Type(n1) => {
@@ -132,8 +136,9 @@ fn find_x0(left: Term<TermMeta>, right: Term<TermMeta>) -> (Option<Term<TermMeta
             }
         }
         TermInner::Variable(v1) => {
-            if v1 == 0 {
-                (Some(right), true)
+            if v1 == n {
+                let term = right.make_outer_by_n(n + 1).ok();
+                (term, true)
             } else if let TermInner::Variable(v2) = right.inner {
                 (None, v1 == v2)
             } else {
@@ -142,8 +147,8 @@ fn find_x0(left: Term<TermMeta>, right: Term<TermMeta>) -> (Option<Term<TermMeta
         }
         TermInner::Forall(l1, r1) => {
             if let TermInner::Forall(l2, r2) = right.inner {
-                let (tl, bl) = find_x0(*l1, *l2);
-                let (tr, br) = find_x0(*r1, *r2);
+                let (tl, bl) = find_var(*l1, *l2, n);
+                let (tr, br) = find_var(*r1, *r2, n + 1);
                 (tl.or(tr), bl && br)
             } else {
                 (None, false)
@@ -151,8 +156,8 @@ fn find_x0(left: Term<TermMeta>, right: Term<TermMeta>) -> (Option<Term<TermMeta
         }
         TermInner::Lambda(l1, r1) => {
             if let TermInner::Lambda(l2, r2) = right.inner {
-                let (tl, bl) = find_x0(*l1, *l2);
-                let (tr, br) = find_x0(*r1, *r2);
+                let (tl, bl) = find_var(*l1, *l2, n);
+                let (tr, br) = find_var(*r1, *r2, n + 1);
                 (tl.or(tr), bl && br)
             } else {
                 (None, false)
@@ -160,8 +165,8 @@ fn find_x0(left: Term<TermMeta>, right: Term<TermMeta>) -> (Option<Term<TermMeta
         }
         TermInner::Apply(l1, r1) => {
             if let TermInner::Apply(l2, r2) = right.inner {
-                let (tl, bl) = find_x0(*l1, *l2);
-                let (tr, br) = find_x0(*r1, *r2);
+                let (tl, bl) = find_var(*l1, *l2, n);
+                let (tr, br) = find_var(*r1, *r2, n);
                 (tl.or(tr), bl && br)
             } else {
                 (None, false)
@@ -169,8 +174,8 @@ fn find_x0(left: Term<TermMeta>, right: Term<TermMeta>) -> (Option<Term<TermMeta
         }
         TermInner::Let(l1, r1) => {
             if let TermInner::Let(l2, r2) = right.inner {
-                let (tl, bl) = find_x0(*l1, *l2);
-                let (tr, br) = find_x0(*r1, *r2);
+                let (tl, bl) = find_var(*l1, *l2, n);
+                let (tr, br) = find_var(*r1, *r2, n + 1);
                 (tl.or(tr), bl && br)
             } else {
                 (None, false)
@@ -385,16 +390,23 @@ pub(crate) async fn convert_to_term_rec(
                                 ()
                             })?;
                             ctx.remove_inner();
-                            let (value, equal) = find_x0(clrl, ctright);
+                            let ictright = ctright.make_inner_by_n(1).map_err(|x| {
+                                kernel_err::report(x, filename);
+                                ()
+                            })?;
+                            let (value, equal) = find_var(clrl, ictright, 0);
                             if !equal {
                                 panic!();
                             }
                             match value {
                                 Some(v) => {
                                     let meta = left_term.meta.clone();
-                                    left_term =
-                                        (TermInner::Apply(Box::new(left_term), Box::new(v)), &meta)
-                                            .into();
+                                    let iv = v;
+                                    left_term = (
+                                        TermInner::Apply(Box::new(left_term), Box::new(iv)),
+                                        &meta,
+                                    )
+                                        .into();
                                 }
                                 None => panic!(),
                             }
@@ -436,31 +448,41 @@ pub(crate) async fn convert_to_term_rec(
                                 ()
                             })?;
                             if let TermInner::Forall(lll, llr) = ctll.inner {
-                                if let TermInner::Forall(llll, lllr) = llr.inner {
-                                    let cllll = llll.normalize_in_ctx(env, ctx).map_err(|x| {
+                                if let TermInner::Forall(llrl, llrr) = llr.inner {
+                                    ctx.add_inner(None, *lll.clone());
+                                    let cllrl = llrl.normalize_in_ctx(env, ctx).map_err(|x| {
                                         kernel_err::report(x, filename);
                                         ()
                                     })?;
-                                    if contains_var(&llll, 0) {
-                                        report::send(Report {
-                                            is_error: false,
-                                            filename: filename.to_string(),
-                                            offset: ll.meta.range.start,
-                                            message: "Explicit type parameter is unnecessary here"
-                                                .to_string(),
-                                            note: None,
-                                            help: Some("omit parameter".to_string()),
-                                            labels: vec![
-                                                (
-                                                    ll.meta.range.clone(),
-                                                    "Function here".to_string(),
-                                                ),
-                                                (
-                                                    lr.meta.range.clone(),
-                                                    "Unnecessary parameter".to_string(),
-                                                ),
-                                            ],
-                                        });
+                                    ctx.remove_inner();
+                                    let ictright = ctright.make_inner_by_n(1).map_err(|x| {
+                                        kernel_err::report(x, filename);
+                                        ()
+                                    })?;
+                                    let (t, b) = find_var(cllrl, ictright, 0);
+                                    if b {
+                                        if let Some(_) = t {
+                                            report::send(Report {
+                                                is_error: false,
+                                                filename: filename.to_string(),
+                                                offset: ll.meta.range.start,
+                                                message:
+                                                    "Explicit type parameter is unnecessary here"
+                                                        .to_string(),
+                                                note: None,
+                                                help: Some("omit parameter".to_string()),
+                                                labels: vec![
+                                                    (
+                                                        ll.meta.range.clone(),
+                                                        "Function here".to_string(),
+                                                    ),
+                                                    (
+                                                        lr.meta.range.clone(),
+                                                        "Unnecessary parameter".to_string(),
+                                                    ),
+                                                ],
+                                            });
+                                        }
                                     }
                                 }
                             }

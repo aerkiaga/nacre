@@ -20,24 +20,24 @@ in a case by case basis, so it cannot apply
 to types that carry information.
 */
 
-type StreicherK(A: Type, x: A)(P: Eq A x x -> Type) ->
-    P (Eq::reflexive A x) -> type(p: Eq A x x) -> P p: Type;
+type StreicherK(A: Type, x: A)(P: Eq x x -> Type) ->
+    P (Eq::reflexive x) -> type(p: Eq x x) -> P p: Type;
 
 type UniquenessOfIdentityProofs(A: Type, x: A, y: A)
-    (p1: Eq A x y, p2: Eq A x y) -> Eq (Eq A x y) p1 p2: Type;
+    (p1: Eq x y, p2: Eq x y) -> Eq p1 p2: Type;
 
 type UniquenessOfReflexivityProofs(A: Type, x: A)
-    (p: Eq A x x) -> Eq (Eq A x x) p (Eq::reflexive A x): Type;
+    (p: Eq x x) -> Eq p (Eq::reflexive x): Type;
 
 impl UniquenessOfReflexivityProofs {
     fn from_streicher_k(sk: StreicherK) {
         fn(A: Type, x: A) {
-            let x_refl = Eq::reflexive A x;
-            fn equals_refl(h: Eq A x x) {
-                Eq (Eq A x x) h x_refl
+            let x_refl = Eq::reflexive x;
+            fn equals_refl(h: Eq x x) {
+                Eq h x_refl
             };
-            let trivial_case = Eq::reflexive (Eq A x x) x_refl;
-            sk A x equals_refl trivial_case
+            let trivial_case = Eq::reflexive x_refl;
+            sk x equals_refl trivial_case
         }
     } -> UniquenessOfReflexivityProofs;
 };

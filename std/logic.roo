@@ -24,13 +24,13 @@ impl And {
     // Get left side.
     fn left(P: Type, Q: Type)(self: And P Q) {
         fn getter(p: P, q: Q) {p};
-        self P getter
+        self getter
     } -> P;
     
     // Get right side.
     fn right(P: Type, Q: Type)(self: And P Q) {
         fn getter(p: P, q: Q) {q};
-        self Q getter
+        self getter
     } -> Q;
     
     // Exchange both sides.
@@ -198,7 +198,7 @@ impl Eq {
         fn(T: P -> Type) {
             Iff::reflexive (T p)
         }
-    } -> Eq P p p;
+    } -> Eq p p;
     
     // Exchange both sides.
     fn symmetric(P: Type, a: P, b: P)(self: Eq P a b) {
@@ -208,11 +208,11 @@ impl Eq {
     } -> Eq P b a;
     
     // Construct `Eq P a c` from `Eq P a b` and ` Eq P b c`.
-    fn transitive(P: Type, a: P, b: P, c: P)(self: Eq P a b, other: Eq P b c) {
+    fn transitive(P: Type, a: P, b: P, c: P)(self: Eq a b, other: Eq b c) {
         fn(T: P -> Type) {
             Iff::transitive (T a) (T b) (T c) (self T) (other T)
         }
-    } -> Eq P a c;
+    } -> Eq a c;
     
     // Replaces the left side of the equality with its right side
     // in a term given by `Term` and constructed by `proof`.
@@ -227,7 +227,7 @@ impl Eq {
     //     // we get a proof that a = c
     // } -> Eq P a c;
     // ```
-    fn apply_forwards(P: Type, a: P, b: P)(self: Eq P a b, Term: P -> Type, proof: Term a) {
+    fn apply_forwards(P: Type, a: P, b: P)(self: Eq a b, Term: P -> Type, proof: Term a) {
         Iff::forwards (Term a) (Term b) (self Term) proof
     } -> Term b;
     
@@ -235,7 +235,7 @@ impl Eq {
     // in a term given by `Term` and constructed by `proof`.
     //
     // See [Eq::apply_forwards] for an example.
-    fn apply_backwards(P: Type, a: P, b: P)(self: Eq P a b, Term: P -> Type, proof: Term b) {
+    fn apply_backwards(P: Type, a: P, b: P)(self: Eq a b, Term: P -> Type, proof: Term b) {
         Iff::backwards (Term a) (Term b) (self Term) proof
     } -> Term a;
 };
