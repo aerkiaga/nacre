@@ -42,10 +42,10 @@ fn combine_forall_types<T: Meta>(
 }
 
 impl<T: Meta> Term<T> {
-    // Returns the type of a term in an environment and context, if it exists.
-    // Assumes that both the environment and context are well-formed.
-    // Returns Err(()) if the term does not have a type or an error occurred.
-    pub(crate) fn compute_type(
+    /// Returns the type of a term in an environment and context, if it exists.
+    /// Assumes that both the environment and context are well-formed.
+    /// Returns Err(()) if the term does not have a type or an error occurred.
+    pub fn compute_type(
         &self,
         env: &Environment<T>,
         ctx: &mut Context<T>,

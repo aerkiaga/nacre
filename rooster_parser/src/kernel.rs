@@ -55,20 +55,16 @@ fn kernel_loader(logical_path: &str) -> cache::LoaderFuture<'_, Definition> {
         }
         // Then we verify the current definition
         eprintln!("Verifying {}", logical_path);
-        // Start by loading the definition term
-        let (ast, filename) = get_ast(logical_path).await.unwrap();
-        let definition =
-            Arc::new(semantics::convert_to_term(ast, &HashMap::new(), 0, &filename).await?);
-        let tt_opt = match get_type_ast(logical_path).await.unwrap().0 {
-            Some(ast) => {
-                Some(semantics::convert_to_term(ast, &HashMap::new(), 0, &filename).await?)
-            }
-            None => None,
-        };
-        // Then create an environment for the kernel
-        // TODO: add indirect dependencies
+        // Start by creating an environment for the kernel
         let all_deps = semantics::get_all_dependencies(logical_path).await?;
         let mut env = create_environment(all_deps).await?;
+        // Then load the definition term and compute its type
+        let (ast, filename) = get_ast(logical_path).await.unwrap();
+        let definition = Arc::new(semantics::convert_to_term(ast, &filename, &env).await?);
+        let tt_opt = match get_type_ast(logical_path).await.unwrap().0 {
+            Some(ast) => Some(semantics::convert_to_term(ast, &filename, &env).await?),
+            None => None,
+        };
         // And finally call into the kernel
         let type_term = Arc::new(match tt_opt {
             Some(t) => t,

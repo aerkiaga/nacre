@@ -3,6 +3,8 @@ use crate::parser2::AbstractSyntaxTree;
 use crate::*;
 
 use async_recursion::async_recursion;
+use rooster_kernel::Context;
+use rooster_kernel::Environment;
 use rooster_kernel::Term;
 use rooster_kernel::TermInner;
 use std::collections::HashMap;
@@ -113,11 +115,13 @@ fn compute_dependencies(
 }
 
 #[async_recursion]
-pub(crate) async fn convert_to_term(
+pub(crate) async fn convert_to_term_rec(
     ast: &AbstractSyntaxTree,
     locals: &HashMap<String, usize>,
     level: usize,
     filename: &str,
+    env: &Environment<TermMeta>,
+    ctx: &mut Context<TermMeta>,
 ) -> Result<Term<TermMeta>, ()> {
     match ast {
         AbstractSyntaxTree::Block(statements, _) => {
@@ -143,15 +147,27 @@ pub(crate) async fn convert_to_term(
                                 if components.len() > 1 {
                                     panic!();
                                 }
-                                rv.push(
-                                    convert_to_term(value, &new_locals, new_level, filename)
-                                        .await?,
-                                );
+                                let value = convert_to_term_rec(
+                                    value,
+                                    &new_locals,
+                                    new_level,
+                                    filename,
+                                    env,
+                                    ctx,
+                                )
+                                .await?;
+                                let tvalue = value.compute_type(env, ctx).map_err(|x| {
+                                    kernel_err::report(x, filename);
+                                    ()
+                                })?;
+                                ctx.add_inner(Some(value.clone()), tvalue);
+                                rv.push(value);
                                 metas.push(Arc::new(TermMeta {
                                     range: assignment_range.clone(),
                                     name: Some(components.join("::")),
                                     filename: filename.to_string(),
                                 }));
+                                println!("("); //D
                                 new_locals.insert(components[0].clone(), new_level);
                                 new_level += 1;
                             } else {
@@ -181,8 +197,15 @@ pub(crate) async fn convert_to_term(
                             // TODO: change this when global instrumenting is in place
                         } else {
                             rv.push(
-                                convert_to_term(statement, &new_locals, new_level, filename)
-                                    .await?,
+                                convert_to_term_rec(
+                                    statement,
+                                    &new_locals,
+                                    new_level,
+                                    filename,
+                                    env,
+                                    ctx,
+                                )
+                                .await?,
                             );
                         }
                     }
@@ -191,6 +214,7 @@ pub(crate) async fn convert_to_term(
             }
             let mut r = rv.pop().unwrap();
             for value in rv.into_iter().rev() {
+                ctx.remove_inner();
                 let meta = metas.pop().unwrap();
                 r = (TermInner::Let(Box::new(value), Box::new(r)), &meta).into();
                 n += 1;
@@ -199,7 +223,7 @@ pub(crate) async fn convert_to_term(
         }
         AbstractSyntaxTree::List(_expressions, _) => panic!(),
         AbstractSyntaxTree::Enclosed(inner, _, _) => {
-            convert_to_term(inner, locals, level, filename).await
+            convert_to_term_rec(inner, locals, level, filename, env, ctx).await
         }
         AbstractSyntaxTree::Identifier(components, identifier_range) => {
             let name = components.join("::");
@@ -246,8 +270,8 @@ pub(crate) async fn convert_to_term(
         }
         AbstractSyntaxTree::Assignment(_, _, _, _, _) => panic!(),
         AbstractSyntaxTree::Application(left, right, application_range) => {
-            let left_term = convert_to_term(left, locals, level, filename).await?;
-            let right_term = convert_to_term(right, locals, level, filename).await?;
+            let left_term = convert_to_term_rec(left, locals, level, filename, env, ctx).await?;
+            let right_term = convert_to_term_rec(right, locals, level, filename, env, ctx).await?;
             let meta = Arc::new(TermMeta {
                 range: application_range.clone(),
                 name: None,
@@ -260,14 +284,18 @@ pub(crate) async fn convert_to_term(
                 .into())
         }
         AbstractSyntaxTree::Forall(name, var_type, value, forall_range) => {
-            let type_term = convert_to_term(var_type, locals, level, filename).await?;
+            let type_term =
+                convert_to_term_rec(var_type, locals, level, filename, env, ctx).await?;
+            ctx.add_inner(None, type_term.clone());
             let mut new_locals = locals.clone();
             if let Some(s) = name {
                 new_locals.insert(s.to_string(), level);
             }
             let mut new_level = level;
             new_level += 1;
-            let value_term = convert_to_term(value, &new_locals, new_level, filename).await?;
+            let value_term =
+                convert_to_term_rec(value, &new_locals, new_level, filename, env, ctx).await?;
+            ctx.remove_inner();
             let meta = Arc::new(TermMeta {
                 range: forall_range.clone(),
                 name: name.clone(),
@@ -280,12 +308,16 @@ pub(crate) async fn convert_to_term(
                 .into())
         }
         AbstractSyntaxTree::Lambda(name, var_type, value, lambda_range) => {
-            let type_term = convert_to_term(var_type, locals, level, filename).await?;
+            let type_term =
+                convert_to_term_rec(var_type, locals, level, filename, env, ctx).await?;
+            ctx.add_inner(None, type_term.clone());
             let mut new_locals = locals.clone();
             new_locals.insert(name.to_string(), level);
             let mut new_level = level;
             new_level += 1;
-            let value_term = convert_to_term(value, &new_locals, new_level, filename).await?;
+            let value_term =
+                convert_to_term_rec(value, &new_locals, new_level, filename, env, ctx).await?;
+            ctx.remove_inner();
             let meta = Arc::new(TermMeta {
                 range: lambda_range.clone(),
                 name: Some(name.clone()),
@@ -299,6 +331,15 @@ pub(crate) async fn convert_to_term(
         }
         _ => Err(()),
     }
+}
+
+pub(crate) async fn convert_to_term(
+    ast: &AbstractSyntaxTree,
+    filename: &str,
+    env: &Environment<TermMeta>,
+) -> Result<Term<TermMeta>, ()> {
+    let mut ctx = Context::new();
+    convert_to_term_rec(ast, &HashMap::new(), 0, filename, env, &mut ctx).await
 }
 
 fn dependency_loader(
