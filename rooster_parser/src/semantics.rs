@@ -403,56 +403,57 @@ pub(crate) async fn convert_to_term_rec(
                 }
             }
             if let TermInner::Apply(ref ll, ref lr) = left_term.inner {
-                let tlr = lr.compute_type(env, ctx).map_err(|x| {
-                    kernel_err::report(x, filename);
-                    ()
-                })?;
-                let ctlr = tlr.normalize_in_ctx(env, ctx).map_err(|x| {
-                    kernel_err::report(x, filename);
-                    ()
-                })?;
-                if let TermInner::Prop = ctlr.inner {
-                    println!("Non-omitted"); //D
-                                             // Non-omitted type parameter
-                    let tright = right_term.compute_type(env, ctx).map_err(|x| {
+                if left_term.meta.range != ll.meta.range {
+                    // Term wasn't produced by parameter omission
+                    let tlr = lr.compute_type(env, ctx).map_err(|x| {
                         kernel_err::report(x, filename);
                         ()
                     })?;
-                    let ctright = tright.normalize_in_ctx(env, ctx).map_err(|x| {
+                    let ctlr = tlr.normalize_in_ctx(env, ctx).map_err(|x| {
                         kernel_err::report(x, filename);
                         ()
                     })?;
-                    if let TermInner::Prop = ctright.inner {
-                        // Next is also type parameter, ignore
-                        // until multiple omissions in a row are allowed
-                    } else {
-                        println!("Next is not"); //D
-                        let tleft = left_term.compute_type(env, ctx).map_err(|x| {
+                    if let TermInner::Prop = ctlr.inner {
+                        // Non-omitted type parameter
+                        let tright = right_term.compute_type(env, ctx).map_err(|x| {
                             kernel_err::report(x, filename);
                             ()
                         })?;
-                        let ctleft = tleft.normalize_in_ctx(env, ctx).map_err(|x| {
+                        let ctright = tright.normalize_in_ctx(env, ctx).map_err(|x| {
                             kernel_err::report(x, filename);
                             ()
                         })?;
-                        if let TermInner::Forall(_, nlr) = ctleft.inner {
-                            if contains_var(&nlr, 0) {
-                                report::send(Report {
-                                    is_error: false,
-                                    filename: filename.to_string(),
-                                    offset: ll.meta.range.start,
-                                    message: "Explicit type parameter is unnecessary here"
-                                        .to_string(),
-                                    note: None,
-                                    help: Some("omit parameter".to_string()),
-                                    labels: vec![
-                                        (ll.meta.range.clone(), "Function here".to_string()),
-                                        (
-                                            lr.meta.range.clone(),
-                                            "Unnecessary parameter".to_string(),
-                                        ),
-                                    ],
-                                });
+                        if let TermInner::Prop = ctright.inner {
+                            // Next is also type parameter, ignore
+                            // until multiple omissions in a row are allowed
+                        } else {
+                            let tleft = left_term.compute_type(env, ctx).map_err(|x| {
+                                kernel_err::report(x, filename);
+                                ()
+                            })?;
+                            let ctleft = tleft.normalize_in_ctx(env, ctx).map_err(|x| {
+                                kernel_err::report(x, filename);
+                                ()
+                            })?;
+                            if let TermInner::Forall(_, nlr) = ctleft.inner {
+                                if contains_var(&nlr, 0) {
+                                    report::send(Report {
+                                        is_error: false,
+                                        filename: filename.to_string(),
+                                        offset: ll.meta.range.start,
+                                        message: "Explicit type parameter is unnecessary here"
+                                            .to_string(),
+                                        note: None,
+                                        help: Some("omit parameter".to_string()),
+                                        labels: vec![
+                                            (ll.meta.range.clone(), "Function here".to_string()),
+                                            (
+                                                lr.meta.range.clone(),
+                                                "Unnecessary parameter".to_string(),
+                                            ),
+                                        ],
+                                    });
+                                }
                             }
                         }
                     }
