@@ -142,6 +142,43 @@ impl<T: Meta> Term<T> {
         matches!(self.inner, TermInner::Prop | TermInner::Type(_))
     }
 
+    /// Removes 1 level of abstraction around the term.
+    /// Returns Err(()) if an integer overflow occurred
+    /// or if variable 0 occurs in the term.
+    pub fn make_outer(&self) -> Result<Term<T>, Error<T>> {
+        match &self.inner {
+            TermInner::Prop => Ok((TermInner::Prop, &self.meta).into()),
+            TermInner::Type(n) => Ok((TermInner::Type(*n), &self.meta).into()),
+            TermInner::Global(g) => Ok((TermInner::Global(*g), &self.meta).into()),
+            TermInner::Variable(v) => {
+                match v.checked_sub(1) {
+                    Some(r) => Ok((TermInner::Variable(r), &self.meta).into()),
+                    None => Err(Error::Other), // TODO: proper error
+                }
+            }
+            TermInner::Forall(a, b) => Ok((
+                TermInner::Forall(Box::new(a.make_outer()?), Box::new(b.make_outer()?)),
+                &self.meta,
+            )
+                .into()),
+            TermInner::Lambda(a, b) => Ok((
+                TermInner::Lambda(Box::new(a.make_outer()?), Box::new(b.make_outer()?)),
+                &self.meta,
+            )
+                .into()),
+            TermInner::Apply(a, b) => Ok((
+                TermInner::Apply(Box::new(a.make_outer()?), Box::new(b.make_outer()?)),
+                &self.meta,
+            )
+                .into()),
+            TermInner::Let(a, b) => Ok((
+                TermInner::Let(Box::new(a.make_outer()?), Box::new(b.make_outer()?)),
+                &self.meta,
+            )
+                .into()),
+        }
+    }
+
     // Adds n levels of abstraction around the term.
     // Returns Err(()) if an integer overflow occurred.
     pub(crate) fn make_inner_by_n_rec(
