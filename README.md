@@ -23,7 +23,11 @@ flags to `cargo`.
 
 ## TODO
 * Accept a simpler call syntax.
+  - Accept no-type omitted parameters.
+  - Warn if function prototype parameters can be
+    reordered to allow omitting some.
   - Allow dot syntax for "self" function call.
+  - Warn if dot syntax is not being used.
 * More small changes around names.
   - Variable naming-related warnings.
   - Namespace-related warnings.
@@ -45,3 +49,7 @@ flags to `cargo`.
   - Split large functions.
   - Split long source files.
   - Improve project structure (use cargo-modules).
+* Improve performance.
+  - Use string interning.
+  - Avoid fully normalizing in parser unless necessary.
+  - Implement comparison without full normalization.

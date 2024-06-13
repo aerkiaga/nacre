@@ -273,10 +273,6 @@ fn check_unnecessary_param(
                             break;
                         }
                     }
-                    let ictright = match ctright.make_inner_by_n(ntype_params) {
-                        Ok(x) => x,
-                        Err(_) => return,
-                    };
                     if ntype_params > 0 && ntype_params < params.len() {
                         for i in 0..ntype_params {
                             ctx.add_inner(None, params[i].clone());
@@ -288,8 +284,7 @@ fn check_unnecessary_param(
                         for i in 0..ntype_params {
                             ctx.remove_inner();
                         }
-                        let (t, b) = find_var(&cparam, &ictright, ntype_params - n - 1);
-                        if let Some(_) = t {
+                        if contains_var(&cparam, ntype_params - n - 1) {
                             report::send(Report {
                                 is_error: false,
                                 filename: filename.to_string(),
