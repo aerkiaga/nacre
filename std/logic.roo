@@ -15,7 +15,7 @@ fn And(P: Type, Q: Type) {
 
 impl And {
     // Construct from both sides.
-    fn from_both(P: Type, Q: Type)(left: P, right: Q) {
+    fn from_both(P: Type, left: P)(Q: Type, right: Q) {
         fn(T: Type, f: P -> Q -> T) {
             f left right
         }
@@ -35,16 +35,16 @@ impl And {
     
     // Exchange both sides.
     fn symmetric(P: Type, Q: Type)(self: And P Q) {
-        let left = And::left P Q self;
-        let right = And::right P Q self;
-        And::from_both Q P right left
+        let left = And::left self;
+        let right = And::right self;
+        And::from_both right left
     } -> And Q P;
     
     // Construct `And P R` from `And P Q` and ` And Q R`.
     fn transitive(P: Type, Q: Type, R: Type)(self: And P Q, other: And Q R) {
-        let left = And::left P Q self;
-        let right = And::right Q R other;
-        And::from_both P R left right
+        let left = And::left self;
+        let right = And::right other;
+        And::from_both left right
     } -> And P R;
 };
 
@@ -102,7 +102,7 @@ impl Exists {
         fn(T: Type)(f: type(x: P) -> Q x -> T) {
             f example proof
         }
-    } -> Exists P Q;
+    } -> Exists Q;
 };
 
 // Conditional operator, or map.
@@ -124,7 +124,7 @@ impl If {
     } -> If P P;
     
     // Construct `If P R` from `If P Q` and ` If Q R`.
-    fn transitive(P: Type, Q: Type, R: Type)(self: If P Q, other: If Q R) {
+    fn transitive(P: Type, Q: Type)(self: If P Q)(R: Type)(other: If Q R) {
         fn(p: P) {
             other (self p)
         }
@@ -147,40 +147,40 @@ fn Iff(P: Type, Q: Type) {
 impl Iff {
     // Construct from implications from either side to the other.
     fn from_if(P: Type, Q: Type)(forward: P -> Q, backward: Q -> P) {
-        And::from_both (P -> Q) (Q -> P) forward backward
+        And::from_both forward backward
     } -> Iff P Q;
     
     // Get forwards implication.
     fn forwards(P: Type, Q: Type)(self: Iff P Q) {
-        And::left (P -> Q) (Q -> P) self
+        And::left self
     } -> P -> Q;
     
     // Get backwards implication.
     fn backwards(P: Type, Q: Type)(self: Iff P Q) {
         fn getter(p: P, q: Q) {q};
-        And::right (P -> Q) (Q -> P) self
+        And::right self
     } -> Q -> P;
     
     // Construct an implication of a type onto itself.
     fn reflexive(P: Type) {
         let proof = If::reflexive P;
-        And::from_both (P -> P) (P -> P) proof proof
+        And::from_both proof proof
     } -> Iff P P;
     
     // Exchange both sides.
     fn symmetric(P: Type, Q: Type)(self: Iff P Q) {
-        And::symmetric (P -> Q) (Q -> P) self
+        And::symmetric self
     } -> Iff Q P;
     
     // Construct `Iff P R` from `Iff P Q` and ` Iff Q R`.
-    fn transitive(P: Type, Q: Type, R: Type)(self: Iff P Q, other: Iff Q R) {
-        let self_forwards = Iff::forwards P Q self;
-        let other_forwards = Iff::forwards Q R other;
-        let forwards = If::transitive P Q R self_forwards other_forwards;
-        let self_backwards = Iff::backwards P Q self;
-        let other_backwards = Iff::backwards Q R other;
-        let backwards = If::transitive R Q P other_backwards self_backwards;
-        Iff::from_if P R forwards backwards
+    fn transitive(P: Type, Q: Type)(self: Iff P Q)(R: Type)(other: Iff Q R) {
+        let self_forwards = Iff::forwards self;
+        let other_forwards = Iff::forwards other;
+        let forwards = If::transitive self_forwards other_forwards;
+        let self_backwards = Iff::backwards self;
+        let other_backwards = Iff::backwards other;
+        let backwards = If::transitive other_backwards self_backwards;
+        Iff::from_if forwards backwards
     } -> Iff P R;
 };
 
@@ -201,16 +201,16 @@ impl Eq {
     } -> Eq p p;
     
     // Exchange both sides.
-    fn symmetric(P: Type, a: P, b: P)(self: Eq P a b) {
+    fn symmetric(P: Type, a: P, b: P)(self: Eq a b) {
         fn(T: P -> Type) {
-            Iff::symmetric (T a) (T b) (self T)
+            Iff::symmetric (self T)
         }
-    } -> Eq P b a;
+    } -> Eq b a;
     
     // Construct `Eq P a c` from `Eq P a b` and ` Eq P b c`.
-    fn transitive(P: Type, a: P, b: P, c: P)(self: Eq a b, other: Eq b c) {
+    fn transitive(P: Type, a: P, b: P)(self: Eq a b)(c: P)(other: Eq b c) {
         fn(T: P -> Type) {
-            Iff::transitive (T a) (T b) (T c) (self T) (other T)
+            Iff::transitive (self T) (other T)
         }
     } -> Eq a c;
     
@@ -228,7 +228,7 @@ impl Eq {
     // } -> Eq P a c;
     // ```
     fn apply_forwards(P: Type, a: P, b: P)(self: Eq a b, Term: P -> Type, proof: Term a) {
-        Iff::forwards (Term a) (Term b) (self Term) proof
+        Iff::forwards (self Term) proof
     } -> Term b;
     
     // Replaces the right side of the equality with its left side
@@ -236,6 +236,6 @@ impl Eq {
     //
     // See [Eq::apply_forwards] for an example.
     fn apply_backwards(P: Type, a: P, b: P)(self: Eq a b, Term: P -> Type, proof: Term b) {
-        Iff::backwards (Term a) (Term b) (self Term) proof
+        Iff::backwards (self Term) proof
     } -> Term a;
 };
