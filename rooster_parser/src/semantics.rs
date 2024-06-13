@@ -115,67 +115,67 @@ fn compute_dependencies(
 }
 
 fn find_var(
-    left: Term<TermMeta>,
-    right: Term<TermMeta>,
+    left: &Term<TermMeta>,
+    right: &Term<TermMeta>,
     n: usize,
 ) -> (Option<Term<TermMeta>>, bool) {
-    match left.inner {
+    match &left.inner {
         TermInner::Prop => (None, matches!(right.inner, TermInner::Prop)),
         TermInner::Type(n1) => {
-            if let TermInner::Type(n2) = right.inner {
-                (None, n1 == n2)
+            if let TermInner::Type(n2) = &right.inner {
+                (None, *n1 == *n2)
             } else {
                 (None, false)
             }
         }
         TermInner::Global(g1) => {
-            if let TermInner::Global(g2) = right.inner {
-                (None, g1 == g2)
+            if let TermInner::Global(g2) = &right.inner {
+                (None, *g1 == *g2)
             } else {
                 (None, false)
             }
         }
         TermInner::Variable(v1) => {
-            if v1 == n {
+            if *v1 == n {
                 let term = right.make_outer_by_n(n + 1).ok();
                 (term, true)
-            } else if let TermInner::Variable(v2) = right.inner {
-                (None, v1 == v2)
+            } else if let TermInner::Variable(v2) = &right.inner {
+                (None, *v1 == *v2)
             } else {
                 (None, false)
             }
         }
         TermInner::Forall(l1, r1) => {
-            if let TermInner::Forall(l2, r2) = right.inner {
-                let (tl, bl) = find_var(*l1, *l2, n);
-                let (tr, br) = find_var(*r1, *r2, n + 1);
+            if let TermInner::Forall(l2, r2) = &right.inner {
+                let (tl, bl) = find_var(&l1, &l2, n);
+                let (tr, br) = find_var(&r1, &r2, n + 1);
                 (tl.or(tr), bl && br)
             } else {
                 (None, false)
             }
         }
         TermInner::Lambda(l1, r1) => {
-            if let TermInner::Lambda(l2, r2) = right.inner {
-                let (tl, bl) = find_var(*l1, *l2, n);
-                let (tr, br) = find_var(*r1, *r2, n + 1);
+            if let TermInner::Lambda(l2, r2) = &right.inner {
+                let (tl, bl) = find_var(&l1, &l2, n);
+                let (tr, br) = find_var(&r1, &r2, n + 1);
                 (tl.or(tr), bl && br)
             } else {
                 (None, false)
             }
         }
         TermInner::Apply(l1, r1) => {
-            if let TermInner::Apply(l2, r2) = right.inner {
-                let (tl, bl) = find_var(*l1, *l2, n);
-                let (tr, br) = find_var(*r1, *r2, n);
+            if let TermInner::Apply(l2, r2) = &right.inner {
+                let (tl, bl) = find_var(&l1, &l2, n);
+                let (tr, br) = find_var(&r1, &r2, n);
                 (tl.or(tr), bl && br)
             } else {
                 (None, false)
             }
         }
         TermInner::Let(l1, r1) => {
-            if let TermInner::Let(l2, r2) = right.inner {
-                let (tl, bl) = find_var(*l1, *l2, n);
-                let (tr, br) = find_var(*r1, *r2, n + 1);
+            if let TermInner::Let(l2, r2) = &right.inner {
+                let (tl, bl) = find_var(&l1, &l2, n);
+                let (tr, br) = find_var(&r1, &r2, n + 1);
                 (tl.or(tr), bl && br)
             } else {
                 (None, false)
@@ -200,6 +200,113 @@ fn contains_var(t: &Term<TermMeta>, n: usize) -> bool {
         TermInner::Lambda(l, r) => contains_var(&l, n) || contains_var(&r, n + 1),
         TermInner::Apply(l, r) => contains_var(&l, n) || contains_var(&r, n),
         TermInner::Let(l, r) => contains_var(&l, n) || contains_var(&r, n + 1),
+    }
+}
+
+fn get_forall_params<'a>(term: &'a Term<TermMeta>) -> Vec<&'a Term<TermMeta>> {
+    match &term.inner {
+        TermInner::Forall(l, r) => {
+            let mut rest = get_forall_params(&r);
+            rest.insert(0, l);
+            rest
+        }
+        _ => vec![term],
+    }
+}
+
+fn check_unnecessary_param(
+    left_term: &Term<TermMeta>,
+    right_term: &Term<TermMeta>,
+    env: &Environment<TermMeta>,
+    ctx: &mut Context<TermMeta>,
+    filename: &str,
+) {
+    if let TermInner::Apply(ref all, ref alr) = left_term.inner {
+        let mut ll = all;
+        let mut lr = alr;
+        let mut n = 0;
+        while left_term.meta.range == ll.meta.range {
+            if let TermInner::Apply(ref nll, ref nlr) = ll.inner {
+                ll = nll;
+                lr = nlr;
+                n += 1;
+            } else {
+                return;
+            }
+        }
+        let tlr = match lr.compute_type(env, ctx) {
+            Ok(x) => x,
+            Err(_) => return,
+        };
+        let ctlr = match tlr.normalize_in_ctx(env, ctx) {
+            Ok(x) => x,
+            Err(_) => return,
+        };
+        if let TermInner::Prop = ctlr.inner {
+            // Non-omitted type parameter
+            let tright = match right_term.compute_type(env, ctx) {
+                Ok(x) => x,
+                Err(_) => return,
+            };
+            let ctright = match tright.normalize_in_ctx(env, ctx) {
+                Ok(x) => x,
+                Err(_) => return,
+            };
+            if let TermInner::Prop = ctright.inner {
+            } else {
+                let tll = match ll.compute_type(env, ctx) {
+                    Ok(x) => x,
+                    Err(_) => return,
+                };
+                let ctll = match tll.normalize_in_ctx(env, ctx) {
+                    Ok(x) => x,
+                    Err(_) => return,
+                };
+                let mut params = get_forall_params(&ctll);
+                params.pop();
+                if params.len() >= 2 {
+                    let mut ntype_params = 0;
+                    for param in &params {
+                        if let TermInner::Prop = param.inner {
+                            ntype_params += 1;
+                        } else {
+                            break;
+                        }
+                    }
+                    let ictright = match ctright.make_inner_by_n(ntype_params) {
+                        Ok(x) => x,
+                        Err(_) => return,
+                    };
+                    if ntype_params > 0 && ntype_params < params.len() {
+                        for i in 0..ntype_params {
+                            ctx.add_inner(None, params[i].clone());
+                        }
+                        let cparam = match params[ntype_params].normalize_in_ctx(env, ctx) {
+                            Ok(x) => x,
+                            Err(_) => return,
+                        };
+                        for i in 0..ntype_params {
+                            ctx.remove_inner();
+                        }
+                        let (t, b) = find_var(&cparam, &ictright, ntype_params - n - 1);
+                        if let Some(_) = t {
+                            report::send(Report {
+                                is_error: false,
+                                filename: filename.to_string(),
+                                offset: ll.meta.range.start,
+                                message: "Explicit type parameter is unnecessary here".to_string(),
+                                note: None,
+                                help: Some("omit parameter".to_string()),
+                                labels: vec![
+                                    (ll.meta.range.clone(), "Function here".to_string()),
+                                    (lr.meta.range.clone(), "Unnecessary parameter".to_string()),
+                                ],
+                            });
+                        }
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -369,39 +476,55 @@ pub(crate) async fn convert_to_term_rec(
                 kernel_err::report(x, filename);
                 ()
             })?;
-            // TODO: allow omitting more than one in a row
-            if let TermInner::Forall(ref ll, lr) = ctleft.inner {
-                if let TermInner::Prop = ll.inner {
-                    if let TermInner::Forall(ref lrl, _) = lr.inner {
-                        let tright = right_term.compute_type(env, ctx).map_err(|x| {
-                            kernel_err::report(x, filename);
-                            ()
-                        })?;
-                        let ctright = tright.normalize_in_ctx(env, ctx).map_err(|x| {
-                            kernel_err::report(x, filename);
-                            ()
-                        })?;
-                        if let TermInner::Prop = ctright.inner {
-                        } else {
-                            // Omitted type parameter
-                            ctx.add_inner(None, *ll.clone());
-                            let clrl = lrl.normalize_in_ctx(env, ctx).map_err(|x| {
-                                kernel_err::report(x, filename);
-                                ()
-                            })?;
+            let mut params = get_forall_params(&ctleft);
+            params.pop();
+            if params.len() >= 2 {
+                let mut ntype_params = 0;
+                for param in &params {
+                    if let TermInner::Prop = param.inner {
+                        ntype_params += 1;
+                    } else {
+                        break;
+                    }
+                }
+                if ntype_params > 0 && ntype_params < params.len() {
+                    let tright = right_term.compute_type(env, ctx).map_err(|x| {
+                        kernel_err::report(x, filename);
+                        ()
+                    })?;
+                    let ctright = tright.normalize_in_ctx(env, ctx).map_err(|x| {
+                        kernel_err::report(x, filename);
+                        ()
+                    })?;
+                    if let TermInner::Prop = ctright.inner {
+                    } else {
+                        // Omitted type parameter(s)
+                        for n in 0..ntype_params {
+                            ctx.add_inner(None, params[n].clone());
+                        }
+                        let cparam =
+                            params[ntype_params]
+                                .normalize_in_ctx(env, ctx)
+                                .map_err(|x| {
+                                    kernel_err::report(x, filename);
+                                    ()
+                                })?;
+                        for n in 0..ntype_params {
                             ctx.remove_inner();
-                            let ictright = ctright.make_inner_by_n(1).map_err(|x| {
-                                kernel_err::report(x, filename);
-                                ()
-                            })?;
-                            let (value, equal) = find_var(clrl, ictright, 0);
-                            if !equal {
-                                panic!();
-                            }
+                        }
+                        let ictright = ctright.make_inner_by_n(ntype_params).map_err(|x| {
+                            kernel_err::report(x, filename);
+                            ()
+                        })?;
+                        for n in 0..ntype_params {
+                            let (value, equal) = find_var(&cparam, &ictright, ntype_params - n - 1);
                             match value {
                                 Some(v) => {
                                     let meta = left_term.meta.clone();
-                                    let iv = v;
+                                    let iv = v.make_outer_by_n(n).map_err(|x| {
+                                        kernel_err::report(x, filename);
+                                        ()
+                                    })?;
                                     left_term = (
                                         TermInner::Apply(Box::new(left_term), Box::new(iv)),
                                         &meta,
@@ -414,82 +537,7 @@ pub(crate) async fn convert_to_term_rec(
                     }
                 }
             }
-            if let TermInner::Apply(ref ll, ref lr) = left_term.inner {
-                if left_term.meta.range != ll.meta.range {
-                    // Term wasn't produced by parameter omission
-                    let tlr = lr.compute_type(env, ctx).map_err(|x| {
-                        kernel_err::report(x, filename);
-                        ()
-                    })?;
-                    let ctlr = tlr.normalize_in_ctx(env, ctx).map_err(|x| {
-                        kernel_err::report(x, filename);
-                        ()
-                    })?;
-                    if let TermInner::Prop = ctlr.inner {
-                        // Non-omitted type parameter
-                        let tright = right_term.compute_type(env, ctx).map_err(|x| {
-                            kernel_err::report(x, filename);
-                            ()
-                        })?;
-                        let ctright = tright.normalize_in_ctx(env, ctx).map_err(|x| {
-                            kernel_err::report(x, filename);
-                            ()
-                        })?;
-                        if let TermInner::Prop = ctright.inner {
-                            // Next is also type parameter, ignore
-                            // until multiple omissions in a row are allowed
-                        } else {
-                            let tll = ll.compute_type(env, ctx).map_err(|x| {
-                                kernel_err::report(x, filename);
-                                ()
-                            })?;
-                            let ctll = tll.normalize_in_ctx(env, ctx).map_err(|x| {
-                                kernel_err::report(x, filename);
-                                ()
-                            })?;
-                            if let TermInner::Forall(lll, llr) = ctll.inner {
-                                if let TermInner::Forall(llrl, llrr) = llr.inner {
-                                    ctx.add_inner(None, *lll.clone());
-                                    let cllrl = llrl.normalize_in_ctx(env, ctx).map_err(|x| {
-                                        kernel_err::report(x, filename);
-                                        ()
-                                    })?;
-                                    ctx.remove_inner();
-                                    let ictright = ctright.make_inner_by_n(1).map_err(|x| {
-                                        kernel_err::report(x, filename);
-                                        ()
-                                    })?;
-                                    let (t, b) = find_var(cllrl, ictright, 0);
-                                    if b {
-                                        if let Some(_) = t {
-                                            report::send(Report {
-                                                is_error: false,
-                                                filename: filename.to_string(),
-                                                offset: ll.meta.range.start,
-                                                message:
-                                                    "Explicit type parameter is unnecessary here"
-                                                        .to_string(),
-                                                note: None,
-                                                help: Some("omit parameter".to_string()),
-                                                labels: vec![
-                                                    (
-                                                        ll.meta.range.clone(),
-                                                        "Function here".to_string(),
-                                                    ),
-                                                    (
-                                                        lr.meta.range.clone(),
-                                                        "Unnecessary parameter".to_string(),
-                                                    ),
-                                                ],
-                                            });
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
+            check_unnecessary_param(&left_term, &right_term, env, ctx, filename);
             let meta = Arc::new(TermMeta {
                 range: application_range.clone(),
                 name: None,

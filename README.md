@@ -23,8 +23,6 @@ flags to `cargo`.
 
 ## TODO
 * Accept a simpler call syntax.
-  - Allow omitting any preceding type parameters.
-  - Allow omitting non-type preceding parameters.
   - Allow dot syntax for "self" function call.
 * More small changes around names.
   - Variable naming-related warnings.
