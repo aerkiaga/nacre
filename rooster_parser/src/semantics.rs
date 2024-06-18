@@ -221,9 +221,11 @@ fn check_unnecessary_param(
     ctx: &mut Context<TermMeta>,
     filename: &str,
 ) {
+    // (left_term) (right_term)
     if let TermInner::Apply(ref all, ref alr) = left_term.inner {
         let mut ll = all;
         let mut lr = alr;
+        // (ll) (lr) (right_term)
         let mut n = 0;
         while left_term.meta.range == ll.meta.range {
             if let TermInner::Apply(ref nll, ref nlr) = ll.inner {
@@ -234,73 +236,69 @@ fn check_unnecessary_param(
                 return;
             }
         }
-        let tlr = match lr.compute_type(env, ctx) {
+        // (ll) (lr) ... (right_term)
+        let tll = match ll.compute_type(env, ctx) {
             Ok(x) => x,
             Err(_) => return,
         };
-        let ctlr = match tlr.normalize_in_ctx(env, ctx) {
+        let ctll = match tll.normalize_in_ctx(env, ctx) {
             Ok(x) => x,
             Err(_) => return,
         };
-        if let TermInner::Prop = ctlr.inner {
-            // Non-omitted type parameter
-            let tright = match right_term.compute_type(env, ctx) {
+        let mut params = get_forall_params(&ctll);
+        params.pop();
+        // (λ:params[0]. λ:params[1]. ...) (lr) ... (right_term)
+        let tright = match right_term.compute_type(env, ctx) {
+            Ok(x) => x,
+            Err(_) => return,
+        };
+        let ctright = match tright.normalize_in_ctx(env, ctx) {
+            Ok(x) => x,
+            Err(_) => return,
+        };
+        let mut ntype_params = 0;
+        for param in &params {
+            // find param matching right term
+            let ictright = match ctright.make_inner_by_n(ntype_params) {
                 Ok(x) => x,
                 Err(_) => return,
             };
-            let ctright = match tright.normalize_in_ctx(env, ctx) {
-                Ok(x) => x,
-                Err(_) => return,
-            };
-            if let TermInner::Prop = ctright.inner {
-            } else {
-                let tll = match ll.compute_type(env, ctx) {
-                    Ok(x) => x,
-                    Err(_) => return,
-                };
-                let ctll = match tll.normalize_in_ctx(env, ctx) {
-                    Ok(x) => x,
-                    Err(_) => return,
-                };
-                let mut params = get_forall_params(&ctll);
-                params.pop();
-                if params.len() >= 2 {
-                    let mut ntype_params = 0;
-                    for param in &params {
-                        if let TermInner::Prop = param.inner {
-                            ntype_params += 1;
-                        } else {
-                            break;
-                        }
-                    }
-                    if ntype_params > 0 && ntype_params < params.len() {
-                        for i in 0..ntype_params {
-                            ctx.add_inner(None, params[i].clone());
-                        }
-                        let cparam = match params[ntype_params].normalize_in_ctx(env, ctx) {
-                            Ok(x) => x,
-                            Err(_) => return,
-                        };
-                        for i in 0..ntype_params {
-                            ctx.remove_inner();
-                        }
-                        if contains_var(&cparam, ntype_params - n - 1) {
-                            report::send(Report {
-                                is_error: false,
-                                filename: filename.to_string(),
-                                offset: ll.meta.range.start,
-                                message: "Explicit type parameter is unnecessary here".to_string(),
-                                note: None,
-                                help: Some("omit parameter".to_string()),
-                                labels: vec![
-                                    (ll.meta.range.clone(), "Function here".to_string()),
-                                    (lr.meta.range.clone(), "Unnecessary parameter".to_string()),
-                                ],
-                            });
-                        }
-                    }
-                }
+            let mut values = vec![];
+            for n in 0..ntype_params {
+                // deduce omitted params
+                let (value, equal) = find_var(param, &ictright, ntype_params - n - 1);
+                ctx.add_inner(value.clone(), (*param).clone());
+                values.push(value);
             }
+            let cparam = match param.normalize_in_ctx(env, ctx) {
+                Ok(x) => x,
+                Err(_) => return,
+            };
+            for n in 0..ntype_params {
+                ctx.remove_inner();
+            }
+            if cparam == ictright {
+                if ntype_params > 0 && values.iter().all(|x| x.is_some()) {
+                    report::send(Report {
+                        is_error: false,
+                        filename: filename.to_string(),
+                        offset: ll.meta.range.start,
+                        message: "Explicit parameter is unnecessary here".to_string(),
+                        note: None,
+                        help: Some("omit parameter".to_string()),
+                        labels: vec![
+                            (ll.meta.range.clone(), "Function here".to_string()),
+                            (lr.meta.range.clone(), "Unnecessary parameter".to_string()),
+                        ],
+                    });
+                }
+                break;
+            } else {
+                ntype_params += 1;
+            }
+        }
+        if ntype_params == params.len() {
+            return;
         }
     }
 }
@@ -463,6 +461,7 @@ pub(crate) async fn convert_to_term_rec(
             let mut left_term =
                 convert_to_term_rec(left, locals, level, filename, env, ctx).await?;
             let right_term = convert_to_term_rec(right, locals, level, filename, env, ctx).await?;
+            // (left_term) (right_term)
             let tleft = left_term.compute_type(env, ctx).map_err(|x| {
                 kernel_err::report(x, filename);
                 ()
@@ -473,47 +472,41 @@ pub(crate) async fn convert_to_term_rec(
             })?;
             let mut params = get_forall_params(&ctleft);
             params.pop();
+            // (λ:params[0]. λ:params[1]. ...) (right_term)
             if params.len() >= 2 {
+                // at least one for the omitted param, one for the explicit one
+                let tright = right_term.compute_type(env, ctx).map_err(|x| {
+                    kernel_err::report(x, filename);
+                    ()
+                })?;
+                let ctright = tright.normalize_in_ctx(env, ctx).map_err(|x| {
+                    kernel_err::report(x, filename);
+                    ()
+                })?;
                 let mut ntype_params = 0;
                 for param in &params {
-                    if let TermInner::Prop = param.inner {
-                        ntype_params += 1;
-                    } else {
-                        break;
+                    // find param matching right term
+                    let ictright = ctright.make_inner_by_n(ntype_params).map_err(|x| {
+                        kernel_err::report(x, filename);
+                        ()
+                    })?;
+                    let mut values = vec![];
+                    for n in 0..ntype_params {
+                        // deduce omitted params
+                        let (value, equal) = find_var(param, &ictright, ntype_params - n - 1);
+                        ctx.add_inner(value.clone(), (*param).clone());
+                        values.push(value);
                     }
-                }
-                if ntype_params > 0 && ntype_params < params.len() {
-                    let tright = right_term.compute_type(env, ctx).map_err(|x| {
+                    let cparam = param.normalize_in_ctx(env, ctx).map_err(|x| {
                         kernel_err::report(x, filename);
                         ()
                     })?;
-                    let ctright = tright.normalize_in_ctx(env, ctx).map_err(|x| {
-                        kernel_err::report(x, filename);
-                        ()
-                    })?;
-                    if let TermInner::Prop = ctright.inner {
-                    } else {
-                        // Omitted type parameter(s)
+                    for n in 0..ntype_params {
+                        ctx.remove_inner();
+                    }
+                    if cparam == ictright {
                         for n in 0..ntype_params {
-                            ctx.add_inner(None, params[n].clone());
-                        }
-                        let cparam =
-                            params[ntype_params]
-                                .normalize_in_ctx(env, ctx)
-                                .map_err(|x| {
-                                    kernel_err::report(x, filename);
-                                    ()
-                                })?;
-                        for n in 0..ntype_params {
-                            ctx.remove_inner();
-                        }
-                        let ictright = ctright.make_inner_by_n(ntype_params).map_err(|x| {
-                            kernel_err::report(x, filename);
-                            ()
-                        })?;
-                        for n in 0..ntype_params {
-                            let (value, equal) = find_var(&cparam, &ictright, ntype_params - n - 1);
-                            match value {
+                            match &values[n] {
                                 Some(v) => {
                                     let meta = left_term.meta.clone();
                                     let iv = v.make_outer_by_n(n).map_err(|x| {
@@ -529,7 +522,13 @@ pub(crate) async fn convert_to_term_rec(
                                 None => panic!(),
                             }
                         }
+                        break;
+                    } else {
+                        ntype_params += 1;
                     }
+                }
+                if ntype_params == params.len() {
+                    panic!();
                 }
             }
             check_unnecessary_param(&left_term, &right_term, env, ctx, filename);

@@ -23,7 +23,6 @@ flags to `cargo`.
 
 ## TODO
 * Accept a simpler call syntax.
-  - Accept no-type omitted parameters.
   - Warn if function prototype parameters can be
     reordered to allow omitting some.
   - Allow dot syntax for "self" function call.
