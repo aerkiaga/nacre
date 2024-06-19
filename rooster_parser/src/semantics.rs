@@ -310,7 +310,10 @@ fn check_unnecessary_param(
                 ctx.remove_inner();
             }
             if cparam == ictright {
-                if ntype_params > 0 && values.iter().all(|x| x.is_some()) {
+                if ntype_params > 0
+                    && values.iter().all(|x| x.is_some())
+                    && (0..params.len() + 1).all(|x| !contains_var(params[0], x))
+                {
                     report::send(Report {
                         is_error: false,
                         filename: filename.to_string(),
@@ -550,7 +553,7 @@ pub(crate) async fn convert_to_term_rec(
             let right_term = convert_to_term_rec(right, locals, level, filename, env, ctx).await?;
             // (left_term) (right_term)
             if let AbstractSyntaxTree::Identifier(components, identifier_range) = &**left {
-                if components.len() > 1 {
+                if components.len() > 1 && identifier_range.end < right_term.meta.range.start {
                     let tright = right_term.compute_type(env, ctx).map_err(|x| {
                         kernel_err::report(x, filename);
                         ()
