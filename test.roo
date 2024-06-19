@@ -10,19 +10,19 @@ impl Bool {
     fn false(T: Type, a: T, b: T) {b}: Bool;
     
     fn not(self: Bool) {
-        self Bool Bool::false Bool::true
+        self Bool::false Bool::true
     } -> Bool;
     
     fn and(self: Bool, other: Bool) {
-        self Bool other Bool::false
+        self other Bool::false
     } -> Bool;
     
     fn or(self: Bool, other: Bool) {
-        self Bool Bool::true other
+        self Bool::true other
     } -> Bool;
     
     fn xor(self: Bool, other: Bool) {
-        self Bool (Bool::not other) other
+        self other.not other
     } -> Bool;
 };
 
@@ -44,12 +44,12 @@ impl Option {
         }
     } -> Option A;
     
-    fn map(A: Type, B: Type)(self: Option A, mapper: A -> B) {
+    fn map(A: Type)(self: Option A)(B: Type)(mapper: A -> B) {
         fn a(inner: A) {
-            Option::some B (mapper inner)
+            Option::some (mapper inner)
         };
         let b = Option::none B;
-        self (Option B) a b
+        self a b
     } -> Option B;
 };
 
@@ -67,16 +67,16 @@ impl Church {
     
     fn s(self: Church) {
         fn(T: Type, f: T -> T, x: T) {
-            f (self T f x)
+            f (self f x)
         }
     } -> Church;
     
     fn add(self: Church, other: Church) {
-        self Church Church::s other
+        self Church::s other
     } -> Church;
     
     fn mul(self: Church, other: Church) {
-        self Church (other Church Church::s) Church::0
+        self (other Church::s) Church::0
     } -> Church;
     /* Cannot define induction principle in CoC */
 };
@@ -93,31 +93,31 @@ impl List {
     
     fn push_back(A: Type)(self: List A, element: A) {
         fn(T: Type, f: T -> A -> T, x: T) {
-            f (self T f x) element
+            f (self f x) element
         }
     } -> List A;
     
     fn push_front(A: Type)(self: List A, element: A) {
         fn(T: Type, f: T -> A -> T, x: T) {
-            self T f (f x element)
+            self f (f x element)
         }
     } -> List A;
     
-    fn map(A: Type, B: Type)(self: List A, f: A -> B) {
+    fn map(A: Type)(self: List A)(B: Type)(f: A -> B) {
         fn mapper(r: List B, a: A) {
             let new_element = f a;
-            List::push_back B r new_element
+            r.push_back new_element
         };
-        self (List B) mapper (List::new B)
+        self mapper (List::new B)
     } -> List B;
     
     fn filter(A: Type)(self: List A, f: A -> Bool) {
         fn filterer(r: List A, a: A) {
             let do_append = f a;
-            let if_true = List::push_back A r a;
+            let if_true = r.push_back a;
             let if_false = r;
-            do_append (List A) if_true if_false
+            do_append if_true if_false
         };
-        self (List A) filterer (List::new A)
+        self filterer (List::new A)
     } -> List A;
 };

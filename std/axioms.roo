@@ -36,7 +36,7 @@ impl UniquenessOfReflexivityProofs {
             fn equals_refl(h: Eq x x) {
                 Eq h x_refl
             };
-            let trivial_case = Eq::reflexive x_refl;
+            let trivial_case = x_refl.reflexive;
             sk x equals_refl trivial_case
         }
     } -> UniquenessOfReflexivityProofs;
