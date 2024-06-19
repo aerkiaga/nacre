@@ -59,6 +59,16 @@ pub enum AbstractSyntaxTree {
         Box<AbstractSyntaxTree>,
         Range<usize>,
     ),
+    /// A generic binary operator
+    Operator(
+        /// Operator.
+        String,
+        /// Left operand.
+        Box<AbstractSyntaxTree>,
+        /// Right operand.
+        Box<AbstractSyntaxTree>,
+        Range<usize>,
+    ),
     /// Empty AST, indicates a parser error.
     Empty,
     /// Typed parameter, should only occur internally.
@@ -87,6 +97,7 @@ impl AbstractSyntaxTree {
             AbstractSyntaxTree::Application(_, _, range) => range,
             AbstractSyntaxTree::Forall(_, _, _, range) => range,
             AbstractSyntaxTree::Lambda(_, _, _, range) => range,
+            AbstractSyntaxTree::Operator(_, _, _, range) => range,
             AbstractSyntaxTree::Empty => &(0..0),
             AbstractSyntaxTree::Typed(_, _, range) => range,
             AbstractSyntaxTree::SpecialApp(_, _, _, range) => range,
@@ -182,6 +193,13 @@ impl AbstractSyntaxTree {
                 levels.push(true);
                 var_type.fmt_rec(f, levels, false)?;
                 term.fmt_rec(f, levels, true)?;
+                levels.pop();
+            }
+            AbstractSyntaxTree::Operator(op, left, right, _) => {
+                writeln!(f, "Operator {}", op)?;
+                levels.push(true);
+                left.fmt_rec(f, levels, false)?;
+                right.fmt_rec(f, levels, true)?;
                 levels.pop();
             }
             AbstractSyntaxTree::Empty => {
@@ -423,6 +441,10 @@ impl AbstractSyntaxTree {
             AbstractSyntaxTree::Application(_, _, _) => Ok(()),
             AbstractSyntaxTree::Forall(_, _, _, _) => Ok(()),
             AbstractSyntaxTree::Lambda(_, _, _, _) => Ok(()),
+            AbstractSyntaxTree::Operator(op, left, right, _) => match &**op {
+                "." => Ok(()),
+                _ => panic!(),
+            },
             AbstractSyntaxTree::Empty => Err(()),
             AbstractSyntaxTree::Typed(_, _, range) => {
                 report::send(Report {

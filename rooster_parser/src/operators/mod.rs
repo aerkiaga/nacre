@@ -18,6 +18,22 @@ use application::*;
 mod arrow;
 use arrow::*;
 
+fn stop_handler(
+    left: AbstractSyntaxTree,
+    right: AbstractSyntaxTree,
+    _filename: String,
+    _range: Range<usize>,
+) -> Result<AbstractSyntaxTree, ()> {
+    let left_range = left.get_range();
+    let right_range = right.get_range();
+    Ok(AbstractSyntaxTree::Operator(
+        ".".to_string(),
+        Box::new(left),
+        Box::new(right),
+        left_range.start..right_range.end,
+    ))
+}
+
 fn colon_handler(
     left: AbstractSyntaxTree,
     right: AbstractSyntaxTree,
@@ -227,7 +243,8 @@ type OperatorDefinition = (
 pub(crate) static OPERATOR_TABLE: Lazy<HashMap<String, OperatorDefinition>> = Lazy::new(|| {
     let mut r = HashMap::new();
     //name, (precedence, right associative)
-    r.insert("::".to_string(), (6., true, namespace_handler as _)); // Namespace
+    r.insert("::".to_string(), (7., true, namespace_handler as _)); // Namespace
+    r.insert(".".to_string(), (6., true, stop_handler as _)); // Method
     r.insert("".to_string(), (5., false, application_handler as _)); // Application
     r.insert("->".to_string(), (4., true, arrow_handler as _)); // If/function type
     r.insert("=".to_string(), (3., false, equals_handler as _)); // Assignment

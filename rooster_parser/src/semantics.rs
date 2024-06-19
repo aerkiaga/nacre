@@ -86,6 +86,16 @@ fn compute_dependencies(
                     compute_dependencies(value, &new_locals, filename)
                 }
         }
+        AbstractSyntaxTree::Operator(op, left, right, _) => {
+            match &**op {
+                "." => {
+                    compute_dependencies(left, locals, filename)
+                    // Can't compute dependency on method here,
+                    // so it's added only when translating to term
+                }
+                _ => panic!(),
+            }
+        }
         AbstractSyntaxTree::Empty => HashSet::new(),
         AbstractSyntaxTree::Typed(_, _, range) => {
             report::send(Report {
@@ -383,7 +393,7 @@ pub(crate) async fn convert_to_term_rec(
     locals: &HashMap<String, usize>,
     level: usize,
     filename: &str,
-    env: &Environment<TermMeta>,
+    env: &mut Environment<TermMeta>,
     ctx: &mut Context<TermMeta>,
 ) -> Result<Term<TermMeta>, ()> {
     match ast {
@@ -510,7 +520,10 @@ pub(crate) async fn convert_to_term_rec(
                 Some(n) => Ok((TermInner::Variable(level - n - 1), &meta).into()),
                 None => {
                     match kernel::get_global_index(&path::make_absolute(&name, filename)).await {
-                        Ok(n) => Ok((TermInner::Global(n), &meta).into()),
+                        Ok(n) => {
+                            debug_assert!(env.contains_global(n));
+                            Ok((TermInner::Global(n), &meta).into())
+                        }
                         Err(_) => {
                             report::send(Report {
                                 is_error: true,
@@ -706,6 +719,47 @@ pub(crate) async fn convert_to_term_rec(
             check_reorder_prototype(&r, env, ctx, filename);
             Ok(r)
         }
+        AbstractSyntaxTree::Operator(op, left, right, operator_range) => match &**op {
+            "." => {
+                if let AbstractSyntaxTree::Identifier(components, identifier_range) = &**right {
+                    let left_term =
+                        convert_to_term_rec(left, locals, level, filename, env, ctx).await?;
+                    let tleft = left_term.compute_type(env, ctx).map_err(|x| {
+                        kernel_err::report(x, filename);
+                        ()
+                    })?;
+                    let params = get_apply_params(&tleft);
+                    if let Some(type_name) = &params[0].meta.name {
+                        let mut method_components = vec![type_name.clone()];
+                        method_components.append(
+                            &mut components
+                                .into_iter()
+                                .map(|x| x.clone())
+                                .collect::<Vec<String>>(),
+                        );
+                        let name = method_components.join("::");
+                        let ident = AbstractSyntaxTree::Identifier(
+                            method_components,
+                            identifier_range.clone(),
+                        );
+                        let r = AbstractSyntaxTree::Application(
+                            Box::new(ident),
+                            Box::new(*left.clone()),
+                            identifier_range.clone(),
+                        );
+                        let path = path::make_absolute(&name, &filename);
+                        let new_env = kernel::update_environment(env.clone(), &path).await?;
+                        *env = new_env;
+                        convert_to_term_rec(&r, locals, level, filename, env, ctx).await
+                    } else {
+                        panic!();
+                    }
+                } else {
+                    panic!();
+                }
+            }
+            _ => panic!(),
+        },
         _ => Err(()),
     }
 }
@@ -713,7 +767,7 @@ pub(crate) async fn convert_to_term_rec(
 pub(crate) async fn convert_to_term(
     ast: &AbstractSyntaxTree,
     filename: &str,
-    env: &Environment<TermMeta>,
+    env: &mut Environment<TermMeta>,
 ) -> Result<Term<TermMeta>, ()> {
     let mut ctx = Context::new();
     convert_to_term_rec(ast, &HashMap::new(), 0, filename, env, &mut ctx).await
@@ -731,7 +785,6 @@ fn dependency_loader(
             Some(ast) => compute_dependencies(ast, &HashSet::new(), &filename),
             None => HashSet::new(),
         };
-        // TODO: transform relative (to filename) paths to be absolute
         Ok((&deps | &type_deps)
             .iter()
             .map(|dep| path::make_absolute(dep, &filename))

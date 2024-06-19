@@ -37,6 +37,22 @@ async fn create_environment(
     Ok(Environment::from_vec(env_vec))
 }
 
+pub(crate) async fn update_environment(
+    env: Environment<TermMeta>,
+    dependency: &String,
+) -> Result<Environment<TermMeta>, ()> {
+    let mut env_vec = env.into_vec();
+    let mut max_index = env_vec.len() - 1;
+    let meta = Arc::new(TermMeta::default());
+    let null = (None, Arc::new((TermInner::Prop, &meta).into()));
+    let (def, def_type, index) = &*KERNEL__CACHE.get(dependency).await?;
+    for n in max_index + 1..*index {
+        env_vec.push(null.clone());
+    }
+    env_vec.push((Some(def.clone()), def_type.clone()));
+    Ok(Environment::from_vec(env_vec))
+}
+
 pub type Definition = (Arc<Term<TermMeta>>, Arc<Term<TermMeta>>, usize);
 
 fn kernel_loader(logical_path: &str) -> cache::LoaderFuture<'_, Definition> {
@@ -60,9 +76,9 @@ fn kernel_loader(logical_path: &str) -> cache::LoaderFuture<'_, Definition> {
         let mut env = create_environment(all_deps).await?;
         // Then load the definition term and compute its type
         let (ast, filename) = get_ast(logical_path).await.unwrap();
-        let definition = Arc::new(semantics::convert_to_term(ast, &filename, &env).await?);
+        let definition = Arc::new(semantics::convert_to_term(ast, &filename, &mut env).await?);
         let tt_opt = match get_type_ast(logical_path).await.unwrap().0 {
-            Some(ast) => Some(semantics::convert_to_term(ast, &filename, &env).await?),
+            Some(ast) => Some(semantics::convert_to_term(ast, &filename, &mut env).await?),
             None => None,
         };
         // And finally call into the kernel
