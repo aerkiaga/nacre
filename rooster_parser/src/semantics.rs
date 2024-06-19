@@ -225,6 +225,17 @@ fn get_lambda_params<'a>(term: &'a Term<TermMeta>) -> Vec<&'a Term<TermMeta>> {
     }
 }
 
+fn get_apply_params<'a>(term: &'a Term<TermMeta>) -> Vec<&'a Term<TermMeta>> {
+    match &term.inner {
+        TermInner::Apply(l, r) => {
+            let mut rest = get_apply_params(&l);
+            rest.push(r);
+            rest
+        }
+        _ => vec![term],
+    }
+}
+
 fn check_unnecessary_param(
     left_term: &Term<TermMeta>,
     right_term: &Term<TermMeta>,
@@ -525,6 +536,45 @@ pub(crate) async fn convert_to_term_rec(
                 convert_to_term_rec(left, locals, level, filename, env, ctx).await?;
             let right_term = convert_to_term_rec(right, locals, level, filename, env, ctx).await?;
             // (left_term) (right_term)
+            if let AbstractSyntaxTree::Identifier(components, identifier_range) = &**left {
+                if components.len() > 1 {
+                    let tright = right_term.compute_type(env, ctx).map_err(|x| {
+                        kernel_err::report(x, filename);
+                        ()
+                    })?;
+                    let params = get_apply_params(&tright);
+                    if let Some(type_name) = &params[0].meta.name {
+                        if components
+                            .iter()
+                            .take(components.len() - 1)
+                            .map(|x| x.clone())
+                            .collect::<Vec<_>>()
+                            .join("::")
+                            == *type_name
+                        {
+                            report::send(Report {
+                                is_error: false,
+                                filename: filename.to_string(),
+                                offset: application_range.start,
+                                message: "Method call syntax can make expression more readable"
+                                    .to_string(),
+                                note: None,
+                                help: Some(format!(
+                                    "Use `<self>.{}` instead",
+                                    components.last().unwrap()
+                                )),
+                                labels: vec![
+                                    (identifier_range.clone(), "Explicit method name".to_string()),
+                                    (
+                                        right_term.meta.range.clone(),
+                                        "`self` parameter here".to_string(),
+                                    ),
+                                ],
+                            });
+                        }
+                    }
+                }
+            }
             let tleft = left_term.compute_type(env, ctx).map_err(|x| {
                 kernel_err::report(x, filename);
                 ()

@@ -24,7 +24,6 @@ flags to `cargo`.
 ## TODO
 * Accept a simpler call syntax.
   - Allow dot syntax for "self" function call.
-  - Warn if dot syntax is not being used.
 * More small changes around names.
   - Variable naming-related warnings.
   - Namespace-related warnings.
