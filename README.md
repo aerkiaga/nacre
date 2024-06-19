@@ -22,8 +22,6 @@ instead of `ariadne` (the default), pass the
 flags to `cargo`.
 
 ## TODO
-* Accept a simpler call syntax.
-  - Allow dot syntax for "self" function call.
 * More small changes around names.
   - Variable naming-related warnings.
   - Namespace-related warnings.
