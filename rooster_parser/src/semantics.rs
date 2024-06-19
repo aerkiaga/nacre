@@ -214,6 +214,17 @@ fn get_forall_params<'a>(term: &'a Term<TermMeta>) -> Vec<&'a Term<TermMeta>> {
     }
 }
 
+fn get_lambda_params<'a>(term: &'a Term<TermMeta>) -> Vec<&'a Term<TermMeta>> {
+    match &term.inner {
+        TermInner::Lambda(l, r) => {
+            let mut rest = get_lambda_params(&r);
+            rest.insert(0, l);
+            rest
+        }
+        _ => vec![term],
+    }
+}
+
 fn check_unnecessary_param(
     left_term: &Term<TermMeta>,
     right_term: &Term<TermMeta>,
@@ -299,6 +310,58 @@ fn check_unnecessary_param(
         }
         if ntype_params == params.len() {
             return;
+        }
+    }
+}
+
+fn check_reorder_prototype(
+    term: &Term<TermMeta>,
+    env: &Environment<TermMeta>,
+    ctx: &mut Context<TermMeta>,
+    filename: &str,
+) {
+    let cterm = match term.normalize_in_ctx(env, ctx) {
+        Ok(x) => x,
+        Err(_) => return,
+    };
+    let mut params = get_forall_params(&term);
+    if params.len() == 1 {
+        params = get_lambda_params(&term);
+    }
+    params.pop();
+    if params.len() < 3 {
+        return;
+    }
+    for n in 2..params.len() {
+        if contains_var(params[n], n - 1)
+            && (1..n).all(|x| {
+                !contains_var(params[n], n - x - 1)
+                    && !contains_var(params[x], x - 1)
+                    && !contains_var(params[x], x)
+            })
+            && term.meta.range.start <= params[0].meta.range.start
+            && term.meta.range.end >= params[n].meta.range.end
+        {
+            report::send(Report {
+                is_error: false,
+                filename: filename.to_string(),
+                offset: term.meta.range.start,
+                message: "Parameters in definition could be reordered to allow omission"
+                    .to_string(),
+                note: None,
+                help: Some("reorder parameters".to_string()),
+                labels: vec![
+                    (
+                        params[0].meta.range.clone(),
+                        "To allow omitting this".to_string(),
+                    ),
+                    (
+                        params[1].meta.range.start..params[n - 1].meta.range.end,
+                        "Place this".to_string(),
+                    ),
+                    (params[n].meta.range.clone(), "After this".to_string()),
+                ],
+            });
         }
     }
 }
@@ -561,11 +624,13 @@ pub(crate) async fn convert_to_term_rec(
                 name: name.clone(),
                 filename: filename.to_string(),
             });
-            Ok((
+            let r = (
                 TermInner::Forall(Box::new(type_term), Box::new(value_term)),
                 &meta,
             )
-                .into())
+                .into();
+            check_reorder_prototype(&r, env, ctx, filename);
+            Ok(r)
         }
         AbstractSyntaxTree::Lambda(name, var_type, value, lambda_range) => {
             let type_term =
@@ -583,11 +648,13 @@ pub(crate) async fn convert_to_term_rec(
                 name: Some(name.clone()),
                 filename: filename.to_string(),
             });
-            Ok((
+            let r = (
                 TermInner::Lambda(Box::new(type_term), Box::new(value_term)),
                 &meta,
             )
-                .into())
+                .into();
+            check_reorder_prototype(&r, env, ctx, filename);
+            Ok(r)
         }
         _ => Err(()),
     }
