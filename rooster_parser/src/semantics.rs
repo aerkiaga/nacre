@@ -522,6 +522,21 @@ pub(crate) async fn convert_to_term_rec(
             match locals.get(&name) {
                 Some(n) => Ok((TermInner::Variable(level - n - 1), &meta).into()),
                 None => {
+                    if !path::check_path_access(&name, filename) {
+                        report::send(Report {
+                            is_error: true,
+                            filename: filename.to_string(),
+                            offset: identifier_range.start,
+                            message: format!("Identifier `{}` is private", &name),
+                            note: Some("Paths containing a leading underscore are only visible from within their enclosing scope".to_string()),
+                            help: None,
+                            labels: vec![(
+                                identifier_range.clone(),
+                                "Private identifier".to_string(),
+                            )],
+                        });
+                        return Err(());
+                    }
                     match kernel::get_global_index(&path::make_absolute(&name, filename)).await {
                         Ok(n) => {
                             debug_assert!(env.contains_global(n));
@@ -750,6 +765,21 @@ pub(crate) async fn convert_to_term_rec(
                             Box::new(*left.clone()),
                             identifier_range.clone(),
                         );
+                        if !path::check_path_access(&name, filename) {
+                            report::send(Report {
+                                is_error: true,
+                                filename: filename.to_string(),
+                                offset: identifier_range.start,
+                                message: format!("Method `{}` is private", &name),
+                                note: Some("Paths containing a leading underscore are only visible from within their enclosing scope".to_string()),
+                                help: None,
+                                labels: vec![(
+                                    identifier_range.clone(),
+                                    "Private method".to_string(),
+                                )],
+                            });
+                            return Err(());
+                        }
                         let path = path::make_absolute(&name, &filename);
                         let new_env = kernel::update_environment(env.clone(), &path).await?;
                         *env = new_env;

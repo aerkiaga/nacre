@@ -83,6 +83,34 @@ pub(crate) async fn get_physical_path(logical_path: &str) -> (String, String) {
     (file_path, identifier)
 }
 
+// Checks whether a certain relative path can be accessed from a file
+pub(crate) fn check_path_access(relative_path: &str, filename: &str) -> bool {
+    let mut has_super = false;
+    let mut cannot_access = false;
+    let mut n = 0;
+    for component in relative_path.split(':') {
+        if n % 2 == 1 {
+            if !component.is_empty() {
+                panic!();
+            }
+        } else if component == "super" {
+            has_super = true;
+        } else if !component.is_empty() && component.chars().collect::<Vec<_>>()[0] == '_' {
+            if cannot_access {
+                return false;
+            }
+            has_super = false;
+        } else {
+            if has_super {
+                has_super = false;
+                cannot_access = true;
+            }
+        }
+        n += 1;
+    }
+    return true;
+}
+
 // Gets absolute path from relative path and file name
 pub(crate) fn make_absolute(relative_path: &str, filename: &str) -> String {
     let mut r = filename[..filename.len() - 4]

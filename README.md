@@ -25,7 +25,6 @@ flags to `cargo`.
 * More small changes around names.
   - Variable naming-related warnings.
   - Namespace-related warnings.
-  - Private path implementation.
   - Batch import using asterisk.
 * Improve logical foundation.
   - Allow axioms from allowlisted paths.
