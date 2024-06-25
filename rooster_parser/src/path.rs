@@ -99,7 +99,10 @@ pub(crate) fn check_path_access(relative_path: &str, filename: &str) -> bool {
             if cannot_access {
                 return false;
             }
-            has_super = false;
+            if has_super {
+                has_super = false;
+                cannot_access = true;
+            }
         } else {
             if has_super {
                 has_super = false;

@@ -3,12 +3,14 @@ use crate::parser2::AbstractSyntaxTree;
 use crate::*;
 
 use async_recursion::async_recursion;
+use once_cell::sync::Lazy;
 use rooster_kernel::Context;
 use rooster_kernel::Environment;
 use rooster_kernel::Term;
 use rooster_kernel::TermInner;
 use std::collections::HashMap;
 use std::collections::HashSet;
+use std::ops::Range;
 
 // TODO: use CoW
 fn compute_dependencies(
@@ -390,6 +392,121 @@ fn check_reorder_prototype(
     }
 }
 
+fn check_variable_name(
+    name: &str,
+    type_term: &Term<TermMeta>,
+    env: &mut Environment<TermMeta>,
+    ctx: &mut Context<TermMeta>,
+    range: &Range<usize>,
+    filename: &str,
+) -> Result<(), ()> {
+    let ttype = match type_term.compute_type(env, ctx) {
+        Ok(x) => x,
+        Err(_) => return Ok(()),
+    };
+    let cttype = match ttype.normalize_in_ctx(env, ctx) {
+        Ok(x) => x,
+        Err(_) => return Ok(()),
+    };
+    let should_be_title_case = if let TermInner::Prop = cttype.inner {
+        false
+    } else {
+        true
+    };
+    let mut is_symbolic = false;
+    let mut is_snake_case = false;
+    let mut is_mixed_case = false;
+    let mut is_not_title_case = false;
+    let mut start = true;
+    for ch in name.chars() {
+        if !ch.is_alphanumeric() && ch != '_' {
+            is_symbolic = true;
+        } else if ch == '_' {
+            is_snake_case = true;
+        } else if ch.is_uppercase() {
+            is_mixed_case = true;
+        } else if ch.is_alphabetic() {
+            if start {
+                is_not_title_case = true;
+            }
+        }
+        start = false;
+    }
+    if is_symbolic {
+        report::send(Report {
+            is_error: false,
+            filename: filename.to_string(),
+            offset: range.start,
+            message: "Identifier contains symbol".to_string(),
+            note: Some(
+                "Identifiers should comprise only alphanumeric characters and underscore"
+                    .to_string(),
+            ),
+            help: None,
+            labels: vec![(range.clone(), "Contains symbol".to_string())],
+        });
+    }
+    let is_title_case = is_mixed_case & !is_not_title_case & !is_snake_case;
+    if is_title_case != should_be_title_case {
+        report::send(Report {
+            is_error: false,
+            filename: filename.to_string(),
+            offset: range.start,
+            message: "Identifier uses incorrect capitalization".to_string(),
+            note: Some(
+                (if should_be_title_case {
+                    "Type identifiers should use `TitleCase`"
+                } else {
+                    "Object identifiers should use `snake_case`"
+                })
+                .to_string(),
+            ),
+            help: None,
+            labels: vec![(
+                range.clone(),
+                format!(
+                    "Uses `{}`",
+                    if is_mixed_case && is_snake_case {
+                        "Mixed_Case"
+                    } else if is_snake_case || !is_mixed_case {
+                        "snake_case"
+                    } else if is_not_title_case {
+                        "camelCase"
+                    } else {
+                        "TitleCase"
+                    }
+                )
+                .to_string(),
+            )],
+        });
+    }
+    if name.len() >= 4 && name[0..4] == *"Type" && name[4..].chars().all(|ch| ch.is_digit(10)) {
+        report::send(Report {
+            is_error: true,
+            filename: filename.to_string(),
+            offset: range.start,
+            message: "Identifier is a reserved type name".to_string(),
+            note: None,
+            help: None,
+            labels: vec![(range.clone(), "Defined in the `Type` hierarchy".to_string())],
+        });
+        return Err(());
+    }
+    if const { Lazy::new(|| HashSet::from(["fn", "impl", "let", "type"])) }.contains(name) {
+        report::send(Report {
+            is_error: true,
+            filename: filename.to_string(),
+            offset: range.start,
+            message: "Identifier is a reserved keyword".to_string(),
+            note: None,
+            help: None,
+            labels: vec![(range.clone(), "Reserved".to_string())],
+        });
+        return Err(());
+    }
+    return Ok(());
+}
+
 #[async_recursion]
 pub(crate) async fn convert_to_term_rec(
     ast: &AbstractSyntaxTree,
@@ -419,7 +536,9 @@ pub(crate) async fn convert_to_term_rec(
                             panic!();
                         }
                         if *is_definition {
-                            if let AbstractSyntaxTree::Identifier(components, _) = &**name {
+                            if let AbstractSyntaxTree::Identifier(components, identifier_range) =
+                                &**name
+                            {
                                 if components.len() > 1 {
                                     panic!();
                                 }
@@ -436,11 +555,20 @@ pub(crate) async fn convert_to_term_rec(
                                     kernel_err::report(x, filename);
                                     ()
                                 })?;
+                                let name = components.join("::");
+                                check_variable_name(
+                                    &name,
+                                    &tvalue,
+                                    env,
+                                    ctx,
+                                    &identifier_range,
+                                    filename,
+                                )?;
                                 ctx.add_inner(Some(value.clone()), tvalue);
                                 rv.push(value);
                                 metas.push(Arc::new(TermMeta {
                                     range: assignment_range.clone(),
-                                    name: Some(components.join("::")),
+                                    name: Some(name),
                                     filename: filename.to_string(),
                                 }));
                                 new_locals.insert(components[0].clone(), new_level);
@@ -690,6 +818,18 @@ pub(crate) async fn convert_to_term_rec(
         AbstractSyntaxTree::Forall(name, var_type, value, forall_range) => {
             let type_term =
                 convert_to_term_rec(var_type, locals, level, filename, env, ctx).await?;
+            if let Some(s) = name {
+                if value.get_range().start > forall_range.start {
+                    check_variable_name(
+                        &s,
+                        &type_term,
+                        env,
+                        ctx,
+                        &(forall_range.start..forall_range.start + s.len()),
+                        filename,
+                    )?;
+                }
+            }
             ctx.add_inner(None, type_term.clone());
             let mut new_locals = locals.clone();
             if let Some(s) = name {
@@ -716,6 +856,14 @@ pub(crate) async fn convert_to_term_rec(
         AbstractSyntaxTree::Lambda(name, var_type, value, lambda_range) => {
             let type_term =
                 convert_to_term_rec(var_type, locals, level, filename, env, ctx).await?;
+            check_variable_name(
+                &name,
+                &type_term,
+                env,
+                ctx,
+                &(lambda_range.start..lambda_range.start + name.len()),
+                filename,
+            )?;
             ctx.add_inner(None, type_term.clone());
             let mut new_locals = locals.clone();
             new_locals.insert(name.to_string(), level);

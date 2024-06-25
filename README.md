@@ -23,7 +23,6 @@ flags to `cargo`.
 
 ## TODO
 * More small changes around names.
-  - Variable naming-related warnings.
   - Namespace-related warnings.
   - Batch import using asterisk.
 * Improve logical foundation.
