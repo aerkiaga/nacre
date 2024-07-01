@@ -1,3 +1,5 @@
+//! Implements an in-memory cache in an asynchronous, thread-safe manner.
+
 #![feature(map_try_insert)]
 
 use once_cell::sync::Lazy;
@@ -25,14 +27,19 @@ impl<T> Clone for CacheEntry<T> {
     }
 }
 
+/// An alias for the boxed future returned by the loader.
 pub type LoaderFuture<'a, T> = Pin<Box<dyn Future<Output = Result<T, ()>> + Send + 'a>>;
 
+/// An asynchronous, thread-safe in-memory cache.
 pub struct Cache<T> {
     storage: Lazy<RwLock<HashMap<String, CacheEntry<T>>>>,
     loader: fn(&str) -> LoaderFuture<'_, T>,
 }
 
 impl<T: Send + Sync> Cache<T> {
+    /// Declare a new cache, that will be lazily initialized when accessed.
+    ///
+    /// `loader` is a function that creates and returns the object associated with a key.
     pub const fn new(loader: fn(&str) -> LoaderFuture<'_, T>) -> Cache<T> {
         Cache {
             storage: Lazy::new(|| HashMap::new().into()),
@@ -57,6 +64,10 @@ impl<T: Send + Sync> Cache<T> {
         }
     }
 
+    /// Get the entry associated with a key.
+    ///
+    /// If the entry has not been created yet, the corresponding loader will be asynchronously run.
+    /// If it is already running, the thread will asynchronously wait for it.
     pub async fn get(&'static self, key: &str) -> Result<Arc<T>, ()> {
         // First, atomically check if entry exists and insert pending if not
         let option = {

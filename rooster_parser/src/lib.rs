@@ -52,12 +52,12 @@ fn file_loader(filename: &str) -> rooster_cache::LoaderFuture<'_, String> {
 }
 
 // The global cache storing all raw files
-static FILE__CACHE: rooster_cache::Cache<String> = rooster_cache::Cache::new(file_loader as _);
+static FILE_CACHE: rooster_cache::Cache<String> = rooster_cache::Cache::new(file_loader as _);
 
 /// Get the raw contents of a particular file.
 pub async fn get_contents(filename: &str) -> Result<Arc<String>, ()> {
     // TODO: normalize filename
-    FILE__CACHE.get(filename).await
+    FILE_CACHE.get(filename).await
 }
 
 fn parser_loader(filename: &str) -> rooster_cache::LoaderFuture<'_, AbstractSyntaxTree> {
