@@ -23,7 +23,6 @@ flags to `cargo`.
 
 ## TODO
 * Checkpoint before further feature work.
-  - Fix clippy warnings.
   - Split off async cache into new crate.
   - Remove early dependency loading.
   - Check all TODOs in code.

@@ -187,8 +187,8 @@ fn find_var(
         }
         TermInner::Forall(l1, r1) => {
             if let TermInner::Forall(l2, r2) = &right.inner {
-                let (tl, bl) = find_var(&l1, &l2, n);
-                let (tr, br) = find_var(&r1, &r2, n + 1);
+                let (tl, bl) = find_var(l1, l2, n);
+                let (tr, br) = find_var(r1, r2, n + 1);
                 (tl.or(tr), bl && br)
             } else {
                 (None, false)
@@ -196,8 +196,8 @@ fn find_var(
         }
         TermInner::Lambda(l1, r1) => {
             if let TermInner::Lambda(l2, r2) = &right.inner {
-                let (tl, bl) = find_var(&l1, &l2, n);
-                let (tr, br) = find_var(&r1, &r2, n + 1);
+                let (tl, bl) = find_var(l1, l2, n);
+                let (tr, br) = find_var(r1, r2, n + 1);
                 (tl.or(tr), bl && br)
             } else {
                 (None, false)
@@ -205,8 +205,8 @@ fn find_var(
         }
         TermInner::Apply(l1, r1) => {
             if let TermInner::Apply(l2, r2) = &right.inner {
-                let (tl, bl) = find_var(&l1, &l2, n);
-                let (tr, br) = find_var(&r1, &r2, n);
+                let (tl, bl) = find_var(l1, l2, n);
+                let (tr, br) = find_var(r1, r2, n);
                 (tl.or(tr), bl && br)
             } else {
                 (None, false)
@@ -214,8 +214,8 @@ fn find_var(
         }
         TermInner::Let(l1, r1) => {
             if let TermInner::Let(l2, r2) = &right.inner {
-                let (tl, bl) = find_var(&l1, &l2, n);
-                let (tr, br) = find_var(&r1, &r2, n + 1);
+                let (tl, bl) = find_var(l1, l2, n);
+                let (tr, br) = find_var(r1, r2, n + 1);
                 (tl.or(tr), bl && br)
             } else {
                 (None, false)
@@ -229,24 +229,18 @@ fn contains_var(t: &Term<TermMeta>, n: usize) -> bool {
         TermInner::Prop => false,
         TermInner::Type(_) => false,
         TermInner::Global(_) => false,
-        TermInner::Variable(v) => {
-            if *v == n {
-                true
-            } else {
-                false
-            }
-        }
-        TermInner::Forall(l, r) => contains_var(&l, n) || contains_var(&r, n + 1),
-        TermInner::Lambda(l, r) => contains_var(&l, n) || contains_var(&r, n + 1),
-        TermInner::Apply(l, r) => contains_var(&l, n) || contains_var(&r, n),
-        TermInner::Let(l, r) => contains_var(&l, n) || contains_var(&r, n + 1),
+        TermInner::Variable(v) => *v == n,
+        TermInner::Forall(l, r) => contains_var(l, n) || contains_var(r, n + 1),
+        TermInner::Lambda(l, r) => contains_var(l, n) || contains_var(r, n + 1),
+        TermInner::Apply(l, r) => contains_var(l, n) || contains_var(r, n),
+        TermInner::Let(l, r) => contains_var(l, n) || contains_var(r, n + 1),
     }
 }
 
-fn get_forall_params<'a>(term: &'a Term<TermMeta>) -> Vec<&'a Term<TermMeta>> {
+fn get_forall_params(term: &Term<TermMeta>) -> Vec<&Term<TermMeta>> {
     match &term.inner {
         TermInner::Forall(l, r) => {
-            let mut rest = get_forall_params(&r);
+            let mut rest = get_forall_params(r);
             rest.insert(0, l);
             rest
         }
@@ -254,10 +248,10 @@ fn get_forall_params<'a>(term: &'a Term<TermMeta>) -> Vec<&'a Term<TermMeta>> {
     }
 }
 
-fn get_lambda_params<'a>(term: &'a Term<TermMeta>) -> Vec<&'a Term<TermMeta>> {
+fn get_lambda_params(term: &Term<TermMeta>) -> Vec<&Term<TermMeta>> {
     match &term.inner {
         TermInner::Lambda(l, r) => {
-            let mut rest = get_lambda_params(&r);
+            let mut rest = get_lambda_params(r);
             rest.insert(0, l);
             rest
         }
@@ -265,10 +259,10 @@ fn get_lambda_params<'a>(term: &'a Term<TermMeta>) -> Vec<&'a Term<TermMeta>> {
     }
 }
 
-fn get_apply_params<'a>(term: &'a Term<TermMeta>) -> Vec<&'a Term<TermMeta>> {
+fn get_apply_params(term: &Term<TermMeta>) -> Vec<&Term<TermMeta>> {
     match &term.inner {
         TermInner::Apply(l, r) => {
-            let mut rest = get_apply_params(&l);
+            let mut rest = get_apply_params(l);
             rest.push(r);
             rest
         }
@@ -360,9 +354,6 @@ fn check_unnecessary_param(
                 ntype_params += 1;
             }
         }
-        if ntype_params == params.len() {
-            return;
-        }
     }
 }
 
@@ -372,9 +363,9 @@ fn check_reorder_prototype(
     _ctx: &mut Context<TermMeta>,
     filename: &str,
 ) {
-    let mut params = get_forall_params(&term);
+    let mut params = get_forall_params(term);
     if params.len() == 1 {
-        params = get_lambda_params(&term);
+        params = get_lambda_params(term);
     }
     params.pop();
     if params.len() < 3 {
@@ -430,11 +421,7 @@ fn check_variable_name(
         Ok(x) => x,
         Err(_) => return Ok(()),
     };
-    let should_be_title_case = if let TermInner::Prop = cttype.inner {
-        false
-    } else {
-        true
-    };
+    let should_be_title_case = !matches!(cttype.inner, TermInner::Prop);
     let mut is_symbolic = false;
     let mut is_snake_case = false;
     let mut is_mixed_case = false;
@@ -447,10 +434,8 @@ fn check_variable_name(
             is_snake_case = true;
         } else if ch.is_uppercase() {
             is_mixed_case = true;
-        } else if ch.is_alphabetic() {
-            if start {
-                is_not_title_case = true;
-            }
+        } else if ch.is_alphabetic() && start {
+            is_not_title_case = true;
         }
         start = false;
     }
@@ -502,7 +487,7 @@ fn check_variable_name(
             )],
         });
     }
-    if name.len() >= 4 && name[0..4] == *"Type" && name[4..].chars().all(|ch| ch.is_digit(10)) {
+    if name.len() >= 4 && name[0..4] == *"Type" && name[4..].chars().all(|ch| ch.is_ascii_digit()) {
         report::send(Report {
             is_error: true,
             filename: filename.to_string(),
@@ -526,7 +511,7 @@ fn check_variable_name(
         });
         return Err(());
     }
-    return Ok(());
+    Ok(())
 }
 
 #[async_recursion]
@@ -577,7 +562,6 @@ pub(crate) async fn convert_to_term_rec(
                                 .await?;
                                 let tvalue = value.compute_type(env, ctx).map_err(|x| {
                                     kernel_err::report(x, filename);
-                                    ()
                                 })?;
                                 let name = components.join("::");
                                 check_variable_name(
@@ -585,7 +569,7 @@ pub(crate) async fn convert_to_term_rec(
                                     &tvalue,
                                     env,
                                     ctx,
-                                    &identifier_range,
+                                    identifier_range,
                                     filename,
                                 )?;
                                 ctx.add_inner(Some(value.clone()), tvalue);
@@ -728,14 +712,13 @@ pub(crate) async fn convert_to_term_rec(
                 if components.len() > 1 && identifier_range.end < right_term.meta.range.start {
                     let tright = right_term.compute_type(env, ctx).map_err(|x| {
                         kernel_err::report(x, filename);
-                        ()
                     })?;
                     let params = get_apply_params(&tright);
                     if let Some(type_name) = &params[0].meta.name {
                         if components
                             .iter()
                             .take(components.len() - 1)
-                            .map(|x| x.clone())
+                            .cloned()
                             .collect::<Vec<_>>()
                             .join("::")
                             == *type_name
@@ -765,11 +748,9 @@ pub(crate) async fn convert_to_term_rec(
             }
             let tleft = left_term.compute_type(env, ctx).map_err(|x| {
                 kernel_err::report(x, filename);
-                ()
             })?;
             let ctleft = tleft.normalize_in_ctx(env, ctx).map_err(|x| {
                 kernel_err::report(x, filename);
-                ()
             })?;
             let mut params = get_forall_params(&ctleft);
             params.pop();
@@ -778,18 +759,15 @@ pub(crate) async fn convert_to_term_rec(
                 // at least one for the omitted param, one for the explicit one
                 let tright = right_term.compute_type(env, ctx).map_err(|x| {
                     kernel_err::report(x, filename);
-                    ()
                 })?;
                 let ctright = tright.normalize_in_ctx(env, ctx).map_err(|x| {
                     kernel_err::report(x, filename);
-                    ()
                 })?;
                 let mut ntype_params = 0;
                 for param in &params {
                     // find param matching right term
                     let ictright = ctright.make_inner_by_n(ntype_params).map_err(|x| {
                         kernel_err::report(x, filename);
-                        ()
                     })?;
                     let mut values = vec![];
                     for n in 0..ntype_params {
@@ -800,19 +778,17 @@ pub(crate) async fn convert_to_term_rec(
                     }
                     let cparam = param.normalize_in_ctx(env, ctx).map_err(|x| {
                         kernel_err::report(x, filename);
-                        ()
                     })?;
                     for _ in 0..ntype_params {
                         ctx.remove_inner();
                     }
                     if cparam == ictright {
-                        for n in 0..ntype_params {
-                            match &values[n] {
+                        for (n, value) in values.iter().enumerate().take(ntype_params) {
+                            match &value {
                                 Some(v) => {
                                     let meta = left_term.meta.clone();
                                     let iv = v.make_outer_by_n(n).map_err(|x| {
                                         kernel_err::report(x, filename);
-                                        ()
                                     })?;
                                     left_term = (
                                         TermInner::Apply(Box::new(left_term), Box::new(iv)),
@@ -850,7 +826,7 @@ pub(crate) async fn convert_to_term_rec(
             if let Some(s) = name {
                 if value.get_range().start > forall_range.start {
                     check_variable_name(
-                        &s,
+                        s,
                         &type_term,
                         env,
                         ctx,
@@ -887,7 +863,7 @@ pub(crate) async fn convert_to_term_rec(
             let type_term =
                 convert_to_term_rec(var_type, locals, level, filename, env, ctx, imports).await?;
             check_variable_name(
-                &name,
+                name,
                 &type_term,
                 env,
                 ctx,
@@ -924,17 +900,11 @@ pub(crate) async fn convert_to_term_rec(
                             .await?;
                     let tleft = left_term.compute_type(env, ctx).map_err(|x| {
                         kernel_err::report(x, filename);
-                        ()
                     })?;
                     let params = get_apply_params(&tleft);
                     if let Some(type_name) = &params[0].meta.name {
                         let mut method_components = vec![type_name.clone()];
-                        method_components.append(
-                            &mut components
-                                .into_iter()
-                                .map(|x| x.clone())
-                                .collect::<Vec<String>>(),
-                        );
+                        method_components.append(&mut components.clone());
                         let name = method_components.join("::");
                         let ident = AbstractSyntaxTree::Identifier(
                             method_components,
@@ -961,7 +931,7 @@ pub(crate) async fn convert_to_term_rec(
                             });
                             return Err(());
                         }
-                        let path = path::make_absolute(&global_name, &filename);
+                        let path = path::make_absolute(&global_name, filename);
                         let new_env = match kernel::update_environment(env.clone(), &path).await {
                             Ok(env) => env,
                             Err(_) => {
@@ -1014,13 +984,13 @@ fn dependency_loader(
         let (ast, filename) = get_ast(&logical_path_string).await?;
         let file_ast = get_file_ast(&filename).await?;
         let imports = compute_imports(&file_ast);
-        let deps = compute_dependencies(&ast, &HashSet::new(), &filename)
+        let deps = compute_dependencies(ast, &HashSet::new(), &filename)
             .iter()
             .map(|dep| apply_imports(dep.clone(), &imports))
             .collect();
         let (type_ast, _) = get_type_ast(&logical_path_string).await?;
         let type_deps = match type_ast {
-            Some(ast) => compute_dependencies(&ast, &HashSet::new(), &filename)
+            Some(ast) => compute_dependencies(ast, &HashSet::new(), &filename)
                 .iter()
                 .map(|dep| apply_imports(dep.clone(), &imports))
                 .collect(),
@@ -1052,9 +1022,8 @@ pub(crate) async fn get_all_dependencies(logical_path: &str) -> Result<Arc<HashS
     };
     let mut r = HashSet::new();
     for dep in &*deps {
-        match get_all_dependencies(dep).await {
-            Ok(more_deps) => r = &r | &more_deps,
-            Err(_) => {}
+        if let Ok(more_deps) = get_all_dependencies(dep).await {
+            r = &r | &more_deps;
         }
     }
     r = &r | &deps;

@@ -20,13 +20,10 @@ async fn create_environment(
     let mut map_index_to_def = HashMap::new();
     let mut max_index = 0;
     for dep in dependencies.iter() {
-        match KERNEL__CACHE.get(dep).await {
-            Ok(inner) => {
-                let (def, def_type, index) = &*inner;
-                map_index_to_def.insert(*index, (Some(def.clone()), def_type.clone()));
-                max_index = max_index.max(*index);
-            }
-            Err(_) => {}
+        if let Ok(inner) = KERNEL__CACHE.get(dep).await {
+            let (def, def_type, index) = &*inner;
+            map_index_to_def.insert(*index, (Some(def.clone()), def_type.clone()));
+            max_index = max_index.max(*index);
         }
     }
     let mut env_vec = vec![];
@@ -44,7 +41,7 @@ async fn create_environment(
 
 pub(crate) async fn update_environment(
     env: Environment<TermMeta>,
-    dependency: &String,
+    dependency: &str,
 ) -> Result<Environment<TermMeta>, ()> {
     let mut env_vec = env.into_vec();
     let max_index = env_vec.len() - 1;

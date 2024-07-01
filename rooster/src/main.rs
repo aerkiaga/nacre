@@ -222,11 +222,7 @@ async fn main() {
             },
         };
     }
-    loop {
-        let report = match report_receiver.try_recv() {
-            Ok(report) => report,
-            Err(_) => break,
-        };
+    while let Ok(report) = report_receiver.try_recv() {
         print_report(report).await;
     }
     task_handle.await.unwrap();
