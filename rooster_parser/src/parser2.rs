@@ -69,6 +69,12 @@ pub enum AbstractSyntaxTree {
         Box<AbstractSyntaxTree>,
         Range<usize>,
     ),
+    /// An import statement through the `use` keyword.
+    Import(
+        /// Imported path
+        Vec<String>,
+        Range<usize>,
+    ),
     /// Empty AST, indicates a parser error.
     Empty,
     /// Typed parameter, should only occur internally.
@@ -98,6 +104,7 @@ impl AbstractSyntaxTree {
             AbstractSyntaxTree::Forall(_, _, _, range) => range,
             AbstractSyntaxTree::Lambda(_, _, _, range) => range,
             AbstractSyntaxTree::Operator(_, _, _, range) => range,
+            AbstractSyntaxTree::Import(_, range) => range,
             AbstractSyntaxTree::Empty => &(0..0),
             AbstractSyntaxTree::Typed(_, _, range) => range,
             AbstractSyntaxTree::SpecialApp(_, _, _, range) => range,
@@ -201,6 +208,17 @@ impl AbstractSyntaxTree {
                 left.fmt_rec(f, levels, false)?;
                 right.fmt_rec(f, levels, true)?;
                 levels.pop();
+            }
+            AbstractSyntaxTree::Import(components, _) => {
+                write!(f, "Import ")?;
+                #[allow(clippy::needless_range_loop)]
+                for n in 0..components.len() {
+                    if n != 0 {
+                        write!(f, "::")?;
+                    }
+                    write!(f, "{}", components[n])?;
+                }
+                writeln!(f)?;
             }
             AbstractSyntaxTree::Empty => {
                 writeln!(f, "Empty")?;
@@ -445,6 +463,18 @@ impl AbstractSyntaxTree {
                 "." => Ok(()),
                 _ => panic!(),
             },
+            AbstractSyntaxTree::Import(_, range) => {
+                report::send(Report {
+                    is_error: true,
+                    filename: filename.to_string(),
+                    offset: range.start,
+                    message: "Expected valid expression, found use statement".to_string(),
+                    note: None,
+                    help: None,
+                    labels: vec![(range.clone(), "use statement".to_string())],
+                });
+                Err(())
+            }
             AbstractSyntaxTree::Empty => Err(()),
             AbstractSyntaxTree::Typed(_, _, range) => {
                 report::send(Report {

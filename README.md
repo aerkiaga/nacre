@@ -24,7 +24,8 @@ flags to `cargo`.
 ## TODO
 * More small changes around names.
   - Namespace-related warnings.
-  - Batch import using asterisk.
+* Bugfix checkpoint.
+  - Fix undefined identifiers soemtimes not generating an error.
 * Improve logical foundation.
   - Allow axioms from allowlisted paths.
   - Explore if a generalized induction axiom can be

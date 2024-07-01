@@ -12,6 +12,33 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 use std::ops::Range;
 
+pub(crate) fn compute_imports(ast: &AbstractSyntaxTree) -> HashMap<String, Vec<String>> {
+    let mut r = HashMap::new();
+    match ast {
+        AbstractSyntaxTree::Block(statements, _) => {
+            for statement in statements {
+                r.extend(compute_imports(statement));
+            }
+        }
+        AbstractSyntaxTree::Import(components, _) => {
+            let mut components = components.clone();
+            let key = components.pop().unwrap();
+            let value = components;
+            r.insert(key, value);
+        }
+        _ => {}
+    }
+    r
+}
+
+pub(crate) fn apply_imports(name: String, imports: &HashMap<String, Vec<String>>) -> String {
+    let components = name.split("::").collect::<Vec<_>>();
+    match imports.get(components[0]) {
+        Some(prefix) => prefix.join("::") + "::" + &name,
+        None => name,
+    }
+}
+
 // TODO: use CoW
 fn compute_dependencies(
     ast: &AbstractSyntaxTree,
@@ -98,6 +125,7 @@ fn compute_dependencies(
                 _ => panic!(),
             }
         }
+        AbstractSyntaxTree::Import(_, _) => HashSet::new(),
         AbstractSyntaxTree::Empty => HashSet::new(),
         AbstractSyntaxTree::Typed(_, _, range) => {
             report::send(Report {
@@ -515,6 +543,7 @@ pub(crate) async fn convert_to_term_rec(
     filename: &str,
     env: &mut Environment<TermMeta>,
     ctx: &mut Context<TermMeta>,
+    imports: &HashMap<String, Vec<String>>,
 ) -> Result<Term<TermMeta>, ()> {
     match ast {
         AbstractSyntaxTree::Block(statements, _) => {
@@ -549,6 +578,7 @@ pub(crate) async fn convert_to_term_rec(
                                     filename,
                                     env,
                                     ctx,
+                                    imports,
                                 )
                                 .await?;
                                 let tvalue = value.compute_type(env, ctx).map_err(|x| {
@@ -607,6 +637,7 @@ pub(crate) async fn convert_to_term_rec(
                                     filename,
                                     env,
                                     ctx,
+                                    imports,
                                 )
                                 .await?,
                             );
@@ -626,7 +657,7 @@ pub(crate) async fn convert_to_term_rec(
         }
         AbstractSyntaxTree::List(_expressions, _) => panic!(),
         AbstractSyntaxTree::Enclosed(inner, _, _) => {
-            convert_to_term_rec(inner, locals, level, filename, env, ctx).await
+            convert_to_term_rec(inner, locals, level, filename, env, ctx, imports).await
         }
         AbstractSyntaxTree::Identifier(components, identifier_range) => {
             let name = components.join("::");
@@ -650,12 +681,13 @@ pub(crate) async fn convert_to_term_rec(
             match locals.get(&name) {
                 Some(n) => Ok((TermInner::Variable(level - n - 1), &meta).into()),
                 None => {
-                    if !path::check_path_access(&name, filename) {
+                    let global_name = apply_imports(name, imports);
+                    if !path::check_path_access(&global_name, filename) {
                         report::send(Report {
                             is_error: true,
                             filename: filename.to_string(),
                             offset: identifier_range.start,
-                            message: format!("Identifier `{}` is private", &name),
+                            message: format!("Identifier `{}` is private", &global_name),
                             note: Some("Paths containing a leading underscore are only visible from within their enclosing scope".to_string()),
                             help: None,
                             labels: vec![(
@@ -665,7 +697,9 @@ pub(crate) async fn convert_to_term_rec(
                         });
                         return Err(());
                     }
-                    match kernel::get_global_index(&path::make_absolute(&name, filename)).await {
+                    match kernel::get_global_index(&path::make_absolute(&global_name, filename))
+                        .await
+                    {
                         Ok(n) => {
                             debug_assert!(env.contains_global(n));
                             Ok((TermInner::Global(n), &meta).into())
@@ -692,8 +726,9 @@ pub(crate) async fn convert_to_term_rec(
         AbstractSyntaxTree::Assignment(_, _, _, _, _) => panic!(),
         AbstractSyntaxTree::Application(left, right, application_range) => {
             let mut left_term =
-                convert_to_term_rec(left, locals, level, filename, env, ctx).await?;
-            let right_term = convert_to_term_rec(right, locals, level, filename, env, ctx).await?;
+                convert_to_term_rec(left, locals, level, filename, env, ctx, imports).await?;
+            let right_term =
+                convert_to_term_rec(right, locals, level, filename, env, ctx, imports).await?;
             // (left_term) (right_term)
             if let AbstractSyntaxTree::Identifier(components, identifier_range) = &**left {
                 if components.len() > 1 && identifier_range.end < right_term.meta.range.start {
@@ -817,7 +852,7 @@ pub(crate) async fn convert_to_term_rec(
         }
         AbstractSyntaxTree::Forall(name, var_type, value, forall_range) => {
             let type_term =
-                convert_to_term_rec(var_type, locals, level, filename, env, ctx).await?;
+                convert_to_term_rec(var_type, locals, level, filename, env, ctx, imports).await?;
             if let Some(s) = name {
                 if value.get_range().start > forall_range.start {
                     check_variable_name(
@@ -838,7 +873,8 @@ pub(crate) async fn convert_to_term_rec(
             let mut new_level = level;
             new_level += 1;
             let value_term =
-                convert_to_term_rec(value, &new_locals, new_level, filename, env, ctx).await?;
+                convert_to_term_rec(value, &new_locals, new_level, filename, env, ctx, imports)
+                    .await?;
             ctx.remove_inner();
             let meta = Arc::new(TermMeta {
                 range: forall_range.clone(),
@@ -855,7 +891,7 @@ pub(crate) async fn convert_to_term_rec(
         }
         AbstractSyntaxTree::Lambda(name, var_type, value, lambda_range) => {
             let type_term =
-                convert_to_term_rec(var_type, locals, level, filename, env, ctx).await?;
+                convert_to_term_rec(var_type, locals, level, filename, env, ctx, imports).await?;
             check_variable_name(
                 &name,
                 &type_term,
@@ -870,7 +906,8 @@ pub(crate) async fn convert_to_term_rec(
             let mut new_level = level;
             new_level += 1;
             let value_term =
-                convert_to_term_rec(value, &new_locals, new_level, filename, env, ctx).await?;
+                convert_to_term_rec(value, &new_locals, new_level, filename, env, ctx, imports)
+                    .await?;
             ctx.remove_inner();
             let meta = Arc::new(TermMeta {
                 range: lambda_range.clone(),
@@ -889,7 +926,8 @@ pub(crate) async fn convert_to_term_rec(
             "." => {
                 if let AbstractSyntaxTree::Identifier(components, identifier_range) = &**right {
                     let left_term =
-                        convert_to_term_rec(left, locals, level, filename, env, ctx).await?;
+                        convert_to_term_rec(left, locals, level, filename, env, ctx, imports)
+                            .await?;
                     let tleft = left_term.compute_type(env, ctx).map_err(|x| {
                         kernel_err::report(x, filename);
                         ()
@@ -913,12 +951,13 @@ pub(crate) async fn convert_to_term_rec(
                             Box::new(*left.clone()),
                             identifier_range.clone(),
                         );
-                        if !path::check_path_access(&name, filename) {
+                        let global_name = apply_imports(name, imports);
+                        if !path::check_path_access(&global_name, filename) {
                             report::send(Report {
                                 is_error: true,
                                 filename: filename.to_string(),
                                 offset: identifier_range.start,
-                                message: format!("Method `{}` is private", &name),
+                                message: format!("Method `{}` is private", &global_name),
                                 note: Some("Paths containing a leading underscore are only visible from within their enclosing scope".to_string()),
                                 help: None,
                                 labels: vec![(
@@ -928,10 +967,10 @@ pub(crate) async fn convert_to_term_rec(
                             });
                             return Err(());
                         }
-                        let path = path::make_absolute(&name, &filename);
+                        let path = path::make_absolute(&global_name, &filename);
                         let new_env = kernel::update_environment(env.clone(), &path).await?;
                         *env = new_env;
-                        convert_to_term_rec(&r, locals, level, filename, env, ctx).await
+                        convert_to_term_rec(&r, locals, level, filename, env, ctx, imports).await
                     } else {
                         panic!();
                     }
@@ -950,8 +989,10 @@ pub(crate) async fn convert_to_term(
     filename: &str,
     env: &mut Environment<TermMeta>,
 ) -> Result<Term<TermMeta>, ()> {
+    let file_ast = get_file_ast(filename).await?;
+    let imports = compute_imports(&file_ast);
     let mut ctx = Context::new();
-    convert_to_term_rec(ast, &HashMap::new(), 0, filename, env, &mut ctx).await
+    convert_to_term_rec(ast, &HashMap::new(), 0, filename, env, &mut ctx, &imports).await
 }
 
 fn dependency_loader(
@@ -960,10 +1001,18 @@ fn dependency_loader(
     let logical_path_string = logical_path.to_string();
     Box::pin(async move {
         let (ast, filename) = get_ast(&logical_path_string).await?;
-        let deps = compute_dependencies(ast, &HashSet::new(), &filename);
+        let file_ast = get_file_ast(&filename).await?;
+        let imports = compute_imports(&file_ast);
+        let deps = compute_dependencies(&ast, &HashSet::new(), &filename)
+            .iter()
+            .map(|dep| apply_imports(dep.clone(), &imports))
+            .collect();
         let (type_ast, _) = get_type_ast(&logical_path_string).await?;
         let type_deps = match type_ast {
-            Some(ast) => compute_dependencies(ast, &HashSet::new(), &filename),
+            Some(ast) => compute_dependencies(&ast, &HashSet::new(), &filename)
+                .iter()
+                .map(|dep| apply_imports(dep.clone(), &imports))
+                .collect(),
             None => HashSet::new(),
         };
         Ok((&deps | &type_deps)

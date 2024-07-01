@@ -1,8 +1,11 @@
-let Eq = super::logic::Eq;
+/*let Eq = super::logic::Eq;
 let Eq::reflexive = super::logic::Eq::reflexive;
 let Not = super::logic::Not;
 let Or = super::logic::Or;
-let Church = super::super::test::Church;
+let Church = super::super::test::Church;*/
+use super::logic::Eq;
+use super::logic::Not;
+use super::logic::Or;
 
 type ExcludedMiddle(P: Type) -> Or P (Not P): Type;
 
@@ -33,7 +36,7 @@ impl UniquenessOfReflexivityProofs {
     fn from_streicher_k(sk: StreicherK) {
         fn(A: Type, x: A) {
             let x_refl = Eq::reflexive x;
-            fn equals_refl(h: Eq x x) {
+            fn EqualsRefl(h: Eq x x) {
                 Eq h x_refl
             };
             let trivial_case = x_refl.reflexive;

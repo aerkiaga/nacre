@@ -60,7 +60,17 @@ pub(crate) fn application_handler(
                     left_start..right_range.end,
                 ));
             }
-            if &*components[0] != "let" {
+            if components.len() == 1 && &*components[0] == "use" {
+                if let AbstractSyntaxTree::Identifier(right_components, _) = right {
+                    return Ok(AbstractSyntaxTree::Import(
+                        right_components,
+                        left_start..right_range.end,
+                    ));
+                } else {
+                    panic!();
+                }
+            }
+            if components.len() == 1 && &*components[0] != "let" {
                 left.must_be_expression(&filename)
                     .and(right.must_be_expression(&filename))?;
             }
