@@ -1,5 +1,5 @@
 [workspace]
-members = ["rooster", "rooster_kernel", "rooster_parser"]
+members = ["rooster", "rooster_cache", "rooster_kernel", "rooster_parser"]
 resolver = "2"
 
 [profile.release]

@@ -1,11 +1,8 @@
 [package]
-name = "rooster_parser"
+name = "rooster_cache"
 version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-async-recursion = "1"
 once_cell = "1"
-rooster_cache = {path = "../rooster_cache"}
-rooster_kernel = {path = "../rooster_kernel"}
 tokio = {version = "1", features = ["fs", "io-util", "macros", "rt-multi-thread", "sync"]}

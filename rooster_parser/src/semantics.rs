@@ -976,9 +976,7 @@ pub(crate) async fn convert_to_term(
     convert_to_term_rec(ast, &HashMap::new(), 0, filename, env, &mut ctx, &imports).await
 }
 
-fn dependency_loader(
-    logical_path: &str,
-) -> Pin<Box<dyn Future<Output = Result<HashSet<String>, ()>> + Send + '_>> {
+fn dependency_loader(logical_path: &str) -> rooster_cache::LoaderFuture<'_, HashSet<String>> {
     let logical_path_string = logical_path.to_string();
     Box::pin(async move {
         let (ast, filename) = get_ast(&logical_path_string).await?;
@@ -1004,7 +1002,8 @@ fn dependency_loader(
 }
 
 // The global cache storing dependencies for each top-level definition
-static DEPENDENCY__CACHE: cache::Cache<HashSet<String>> = cache::Cache::new(dependency_loader as _);
+static DEPENDENCY__CACHE: rooster_cache::Cache<HashSet<String>> =
+    rooster_cache::Cache::new(dependency_loader as _);
 
 // Get direct dependencies of a top-level definition.
 pub(crate) async fn get_direct_dependencies(

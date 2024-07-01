@@ -1,9 +1,7 @@
-use crate::*;
-
 use std::collections::HashMap;
 use tokio::fs::read_dir;
 
-fn directory_loader(path: &str) -> cache::LoaderFuture<'_, HashMap<String, bool>> {
+fn directory_loader(path: &str) -> rooster_cache::LoaderFuture<'_, HashMap<String, bool>> {
     Box::pin(async move {
         let mut rd = read_dir(path).await.unwrap();
         let mut r = HashMap::new();
@@ -22,8 +20,8 @@ fn directory_loader(path: &str) -> cache::LoaderFuture<'_, HashMap<String, bool>
 
 // Stores files and directories with name under each directory
 // Each entry has a true value if it is a directory
-static DIRECTORY__CACHE: cache::Cache<HashMap<String, bool>> =
-    cache::Cache::new(directory_loader as _);
+static DIRECTORY__CACHE: rooster_cache::Cache<HashMap<String, bool>> =
+    rooster_cache::Cache::new(directory_loader as _);
 
 // Search the contents of a directory for a name and return whether it exists and is a directory
 // If it is a file, the name searched includes extension .roo

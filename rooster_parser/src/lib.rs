@@ -1,12 +1,7 @@
-#![feature(map_try_insert)]
-
-use std::future::Future;
-use std::pin::Pin;
 use std::sync::Arc;
 use tokio::fs::File;
 use tokio::io::AsyncReadExt;
 
-mod cache;
 mod kernel;
 mod kernel_err;
 mod lexer;
@@ -28,7 +23,7 @@ fn error_cannot_find(filename: &str) -> ! {
     panic!();
 }
 
-fn file_loader(filename: &str) -> Pin<Box<dyn Future<Output = Result<String, ()>> + Send + '_>> {
+fn file_loader(filename: &str) -> rooster_cache::LoaderFuture<'_, String> {
     Box::pin(async move {
         // TODO: load file only if necessary
         // TODO: convert logical to physical paths
@@ -57,7 +52,7 @@ fn file_loader(filename: &str) -> Pin<Box<dyn Future<Output = Result<String, ()>
 }
 
 // The global cache storing all raw files
-static FILE__CACHE: cache::Cache<String> = cache::Cache::new(file_loader as _);
+static FILE__CACHE: rooster_cache::Cache<String> = rooster_cache::Cache::new(file_loader as _);
 
 /// Get the raw contents of a particular file.
 pub async fn get_contents(filename: &str) -> Result<Arc<String>, ()> {
@@ -65,9 +60,7 @@ pub async fn get_contents(filename: &str) -> Result<Arc<String>, ()> {
     FILE__CACHE.get(filename).await
 }
 
-fn parser_loader(
-    filename: &str,
-) -> Pin<Box<dyn Future<Output = Result<AbstractSyntaxTree, ()>> + Send + '_>> {
+fn parser_loader(filename: &str) -> rooster_cache::LoaderFuture<'_, AbstractSyntaxTree> {
     let filename_string = filename.to_string();
     Box::pin(async move {
         let file = get_contents(filename).await?;
@@ -77,7 +70,8 @@ fn parser_loader(
 }
 
 // The global cache storing all parsed files
-static PARSER_CACHE: cache::Cache<AbstractSyntaxTree> = cache::Cache::new(parser_loader as _);
+static PARSER_CACHE: rooster_cache::Cache<AbstractSyntaxTree> =
+    rooster_cache::Cache::new(parser_loader as _);
 
 /// Get the [AbstractSyntaxTree] for a particular file.
 pub async fn get_file_ast(filename: &str) -> Result<Arc<AbstractSyntaxTree>, ()> {
@@ -87,7 +81,7 @@ pub async fn get_file_ast(filename: &str) -> Result<Arc<AbstractSyntaxTree>, ()>
 
 fn definition_loader(
     logical_path: &str,
-) -> cache::LoaderFuture<
+) -> rooster_cache::LoaderFuture<
     '_,
     (
         (
@@ -119,10 +113,10 @@ fn definition_loader(
 }
 
 // The global cache storing all parsed top-level definitions
-static DEFINITION_CACHE: cache::Cache<(
+static DEFINITION_CACHE: rooster_cache::Cache<(
     (&AbstractSyntaxTree, Option<&AbstractSyntaxTree>),
     String,
-)> = cache::Cache::new(definition_loader as _);
+)> = rooster_cache::Cache::new(definition_loader as _);
 
 // Get the [AbstractSyntaxTree] for a particular top-level definition.
 pub(crate) async fn get_ast(

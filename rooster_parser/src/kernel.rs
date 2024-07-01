@@ -61,7 +61,7 @@ pub(crate) async fn update_environment(
 
 pub type Definition = (Arc<Term<TermMeta>>, Arc<Term<TermMeta>>, usize);
 
-fn kernel_loader(logical_path: &str) -> cache::LoaderFuture<'_, Definition> {
+fn kernel_loader(logical_path: &str) -> rooster_cache::LoaderFuture<'_, Definition> {
     Box::pin(async move {
         eprintln!("Computing dependencies for {}", logical_path);
         // First we compute all dependencies, so the operation can be parallelized
@@ -103,7 +103,8 @@ fn kernel_loader(logical_path: &str) -> cache::LoaderFuture<'_, Definition> {
 }
 
 // The global cache storing definition, type and index for each verified definition
-static KERNEL__CACHE: cache::Cache<Definition> = cache::Cache::new(kernel_loader as _);
+static KERNEL__CACHE: rooster_cache::Cache<Definition> =
+    rooster_cache::Cache::new(kernel_loader as _);
 
 /// Parse and verify the CoC expression corresponding to a particular logical path.
 pub async fn verify(logical_path: &str) -> Result<(), ()> {

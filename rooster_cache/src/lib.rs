@@ -1,3 +1,5 @@
+#![feature(map_try_insert)]
+
 use once_cell::sync::Lazy;
 use std::collections::HashMap;
 use std::future::Future;
@@ -23,15 +25,15 @@ impl<T> Clone for CacheEntry<T> {
     }
 }
 
-pub(crate) type LoaderFuture<'a, T> = Pin<Box<dyn Future<Output = Result<T, ()>> + Send + 'a>>;
+pub type LoaderFuture<'a, T> = Pin<Box<dyn Future<Output = Result<T, ()>> + Send + 'a>>;
 
-pub(crate) struct Cache<T> {
+pub struct Cache<T> {
     storage: Lazy<RwLock<HashMap<String, CacheEntry<T>>>>,
     loader: fn(&str) -> LoaderFuture<'_, T>,
 }
 
 impl<T: Send + Sync> Cache<T> {
-    pub(crate) const fn new(loader: fn(&str) -> LoaderFuture<'_, T>) -> Cache<T> {
+    pub const fn new(loader: fn(&str) -> LoaderFuture<'_, T>) -> Cache<T> {
         Cache {
             storage: Lazy::new(|| HashMap::new().into()),
             loader,
@@ -55,7 +57,7 @@ impl<T: Send + Sync> Cache<T> {
         }
     }
 
-    pub(crate) async fn get(&'static self, key: &str) -> Result<Arc<T>, ()> {
+    pub async fn get(&'static self, key: &str) -> Result<Arc<T>, ()> {
         // First, atomically check if entry exists and insert pending if not
         let option = {
             let notify = Arc::new(Notify::new());
