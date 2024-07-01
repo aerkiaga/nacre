@@ -28,11 +28,6 @@ fn error_cannot_find(filename: &str) -> ! {
     panic!();
 }
 
-fn error_cannot_read() -> ! {
-    println!("Error: file has invalid encoding.");
-    panic!();
-}
-
 fn file_loader(filename: &str) -> Pin<Box<dyn Future<Output = Result<String, ()>> + Send + '_>> {
     Box::pin(async move {
         // TODO: load file only if necessary

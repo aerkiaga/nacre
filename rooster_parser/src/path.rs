@@ -84,7 +84,7 @@ pub(crate) async fn get_physical_path(logical_path: &str) -> (String, String) {
 }
 
 // Checks whether a certain relative path can be accessed from a file
-pub(crate) fn check_path_access(relative_path: &str, filename: &str) -> bool {
+pub(crate) fn check_path_access(relative_path: &str, _filename: &str) -> bool {
     let mut has_super = false;
     let mut cannot_access = false;
     let mut n = 0;

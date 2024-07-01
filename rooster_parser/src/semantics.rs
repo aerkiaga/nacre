@@ -115,7 +115,7 @@ fn compute_dependencies(
                     compute_dependencies(value, &new_locals, filename)
                 }
         }
-        AbstractSyntaxTree::Operator(op, left, right, _) => {
+        AbstractSyntaxTree::Operator(op, left, _, _) => {
             match &**op {
                 "." => {
                     compute_dependencies(left, locals, filename)
@@ -288,12 +288,10 @@ fn check_unnecessary_param(
         let mut ll = all;
         let mut lr = alr;
         // (ll) (lr) (right_term)
-        let mut n = 0;
         while left_term.meta.range == ll.meta.range {
             if let TermInner::Apply(ref nll, ref nlr) = ll.inner {
                 ll = nll;
                 lr = nlr;
-                n += 1;
             } else {
                 return;
             }
@@ -328,7 +326,7 @@ fn check_unnecessary_param(
             let mut values = vec![];
             for n in 0..ntype_params {
                 // deduce omitted params
-                let (value, equal) = find_var(param, &ictright, ntype_params - n - 1);
+                let (value, _) = find_var(param, &ictright, ntype_params - n - 1);
                 ctx.add_inner(value.clone(), (*param).clone());
                 values.push(value);
             }
@@ -336,7 +334,7 @@ fn check_unnecessary_param(
                 Ok(x) => x,
                 Err(_) => return,
             };
-            for n in 0..ntype_params {
+            for _ in 0..ntype_params {
                 ctx.remove_inner();
             }
             if cparam == ictright {
@@ -370,14 +368,10 @@ fn check_unnecessary_param(
 
 fn check_reorder_prototype(
     term: &Term<TermMeta>,
-    env: &Environment<TermMeta>,
-    ctx: &mut Context<TermMeta>,
+    _env: &Environment<TermMeta>,
+    _ctx: &mut Context<TermMeta>,
     filename: &str,
 ) {
-    let cterm = match term.normalize_in_ctx(env, ctx) {
-        Ok(x) => x,
-        Err(_) => return,
-    };
     let mut params = get_forall_params(&term);
     if params.len() == 1 {
         params = get_lambda_params(&term);
@@ -800,7 +794,7 @@ pub(crate) async fn convert_to_term_rec(
                     let mut values = vec![];
                     for n in 0..ntype_params {
                         // deduce omitted params
-                        let (value, equal) = find_var(param, &ictright, ntype_params - n - 1);
+                        let (value, _) = find_var(param, &ictright, ntype_params - n - 1);
                         ctx.add_inner(value.clone(), (*param).clone());
                         values.push(value);
                     }
@@ -808,7 +802,7 @@ pub(crate) async fn convert_to_term_rec(
                         kernel_err::report(x, filename);
                         ()
                     })?;
-                    for n in 0..ntype_params {
+                    for _ in 0..ntype_params {
                         ctx.remove_inner();
                     }
                     if cparam == ictright {
@@ -922,7 +916,7 @@ pub(crate) async fn convert_to_term_rec(
             check_reorder_prototype(&r, env, ctx, filename);
             Ok(r)
         }
-        AbstractSyntaxTree::Operator(op, left, right, operator_range) => match &**op {
+        AbstractSyntaxTree::Operator(op, left, right, _) => match &**op {
             "." => {
                 if let AbstractSyntaxTree::Identifier(components, identifier_range) = &**right {
                     let left_term =

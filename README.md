@@ -22,6 +22,15 @@ instead of `ariadne` (the default), pass the
 flags to `cargo`.
 
 ## TODO
+* Checkpoint before further feature work.
+  - Fix clippy warnings.
+  - Split off async cache into new crate.
+  - Remove early dependency loading.
+  - Check all TODOs in code.
+  - Enable some stricter clippy warnings.
+  - Split large functions.
+  - Split long source files.
+  - Improve project structure (use cargo-modules).
 * Improve logical foundation.
   - Allow axioms from allowlisted paths.
   - Explore if a generalized induction axiom can be
@@ -32,12 +41,6 @@ flags to `cargo`.
   - Investigate what types should be given this
     axiomatization at minimum (e.g. equality).
   - Write axioms.
-* Checkpoint before further feature work.
-  - Check all TODOs in code.
-  - Enable some stricter clippy warnings.
-  - Split large functions.
-  - Split long source files.
-  - Improve project structure (use cargo-modules).
 * Improve performance.
   - Use string interning.
   - Avoid fully normalizing in parser unless necessary.

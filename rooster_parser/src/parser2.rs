@@ -459,7 +459,7 @@ impl AbstractSyntaxTree {
             AbstractSyntaxTree::Application(_, _, _) => Ok(()),
             AbstractSyntaxTree::Forall(_, _, _, _) => Ok(()),
             AbstractSyntaxTree::Lambda(_, _, _, _) => Ok(()),
-            AbstractSyntaxTree::Operator(op, left, right, _) => match &**op {
+            AbstractSyntaxTree::Operator(op, _, _, _) => match &**op {
                 "." => Ok(()),
                 _ => panic!(),
             },

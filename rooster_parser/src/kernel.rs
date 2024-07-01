@@ -47,12 +47,12 @@ pub(crate) async fn update_environment(
     dependency: &String,
 ) -> Result<Environment<TermMeta>, ()> {
     let mut env_vec = env.into_vec();
-    let mut max_index = env_vec.len() - 1;
+    let max_index = env_vec.len() - 1;
     let meta = Arc::new(TermMeta::default());
     let null = (None, Arc::new((TermInner::Prop, &meta).into()));
     let (def, def_type, index) = &*KERNEL__CACHE.get(dependency).await?;
     if *index > max_index {
-        for n in max_index + 1..*index {
+        for _ in max_index + 1..*index {
             env_vec.push(null.clone());
         }
         env_vec.push((Some(def.clone()), def_type.clone()));
