@@ -968,7 +968,24 @@ pub(crate) async fn convert_to_term_rec(
                             return Err(());
                         }
                         let path = path::make_absolute(&global_name, &filename);
-                        let new_env = kernel::update_environment(env.clone(), &path).await?;
+                        let new_env = match kernel::update_environment(env.clone(), &path).await {
+                            Ok(env) => env,
+                            Err(_) => {
+                                report::send(Report {
+                                    is_error: true,
+                                    filename: filename.to_string(),
+                                    offset: identifier_range.start,
+                                    message: format!("Undefined method `{}`", path),
+                                    note: None,
+                                    help: None,
+                                    labels: vec![(
+                                        identifier_range.clone(),
+                                        "No definition found".to_string(),
+                                    )],
+                                });
+                                return Err(());
+                            }
+                        };
                         *env = new_env;
                         convert_to_term_rec(&r, locals, level, filename, env, ctx, imports).await
                     } else {
@@ -1035,11 +1052,16 @@ pub(crate) async fn get_direct_dependencies(
 // Get all dependencies dependencies of a top-level definition.
 #[async_recursion]
 pub(crate) async fn get_all_dependencies(logical_path: &str) -> Result<Arc<HashSet<String>>, ()> {
-    let deps = get_direct_dependencies(logical_path).await?;
+    let deps = match get_direct_dependencies(logical_path).await {
+        Ok(deps) => deps,
+        Err(_) => Arc::new(HashSet::new()),
+    };
     let mut r = HashSet::new();
     for dep in &*deps {
-        let more_deps = get_all_dependencies(dep).await?;
-        r = &r | &more_deps;
+        match get_all_dependencies(dep).await {
+            Ok(more_deps) => r = &r | &more_deps,
+            Err(_) => {}
+        }
     }
     r = &r | &deps;
     Ok(Arc::new(r))

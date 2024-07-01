@@ -22,10 +22,6 @@ instead of `ariadne` (the default), pass the
 flags to `cargo`.
 
 ## TODO
-* More small changes around names.
-  - Namespace-related warnings.
-* Bugfix checkpoint.
-  - Fix undefined identifiers soemtimes not generating an error.
 * Improve logical foundation.
   - Allow axioms from allowlisted paths.
   - Explore if a generalized induction axiom can be

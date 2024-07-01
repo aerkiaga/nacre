@@ -40,7 +40,7 @@ impl UniquenessOfReflexivityProofs {
                 Eq h x_refl
             };
             let trivial_case = x_refl.reflexive;
-            sk x equals_refl trivial_case
+            sk x EqualsRefl trivial_case
         }
     } -> UniquenessOfReflexivityProofs;
 };

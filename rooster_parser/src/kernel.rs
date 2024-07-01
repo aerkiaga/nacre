@@ -20,9 +20,14 @@ async fn create_environment(
     let mut map_index_to_def = HashMap::new();
     let mut max_index = 0;
     for dep in dependencies.iter() {
-        let (def, def_type, index) = &*KERNEL__CACHE.get(dep).await?;
-        map_index_to_def.insert(*index, (Some(def.clone()), def_type.clone()));
-        max_index = max_index.max(*index);
+        match KERNEL__CACHE.get(dep).await {
+            Ok(inner) => {
+                let (def, def_type, index) = &*inner;
+                map_index_to_def.insert(*index, (Some(def.clone()), def_type.clone()));
+                max_index = max_index.max(*index);
+            }
+            Err(_) => {}
+        }
     }
     let mut env_vec = vec![];
     let meta = Arc::new(TermMeta::default());
