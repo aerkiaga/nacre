@@ -23,7 +23,6 @@ flags to `cargo`.
 
 ## TODO
 * Checkpoint before further feature work.
-  - Remove early dependency loading.
   - Split off AST-related code.
   - Clean up AST data type.
   - Check all TODOs in code.
@@ -34,6 +33,7 @@ flags to `cargo`.
   - Use string interning.
   - Avoid fully normalizing in parser unless necessary.
   - Implement comparison without full normalization.
+  - Parallelize verification at conversion level.
 * Add tests.
   - Standard library verification test.
   - Kernel fuzz test.

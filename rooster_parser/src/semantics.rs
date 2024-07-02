@@ -39,121 +39,6 @@ pub(crate) fn apply_imports(name: String, imports: &HashMap<String, Vec<String>>
     }
 }
 
-// TODO: use CoW
-fn compute_dependencies(
-    ast: &AbstractSyntaxTree,
-    locals: &HashSet<String>,
-    filename: &str,
-) -> HashSet<String> {
-    match ast {
-        AbstractSyntaxTree::Block(statements, _) => {
-            let mut r = HashSet::new();
-            let mut new_locals = locals.clone();
-            for statement in statements {
-                if let AbstractSyntaxTree::Assignment(name, _, is_definition, _, _) = statement {
-                    if *is_definition {
-                        if let AbstractSyntaxTree::Identifier(components, _) = &**name {
-                            if components.len() > 1 {
-                                panic!();
-                            }
-                            new_locals.insert(components[0].clone());
-                        } else {
-                            panic!();
-                        }
-                    }
-                }
-                r = &r | &compute_dependencies(statement, &new_locals, filename);
-            }
-            r
-        }
-        AbstractSyntaxTree::List(expressions, _) => expressions
-            .iter()
-            .map(|x| compute_dependencies(x, locals, filename))
-            .reduce(|a, x| &a | &x)
-            .unwrap_or_default(),
-        AbstractSyntaxTree::Enclosed(inner, _, _) => compute_dependencies(inner, locals, filename),
-        AbstractSyntaxTree::Identifier(components, _) => {
-            let name = components.join("::");
-            if name.get(..4) == Some("Type")
-                && (name.len() == 4 || name[4..].parse::<usize>().is_ok())
-            {
-                return HashSet::new();
-            }
-            let mut r = HashSet::new();
-            if !locals.contains(&name) {
-                r.insert(name);
-            }
-            r
-        }
-        AbstractSyntaxTree::Assignment(_, value, _, def_type, _) => {
-            let type_deps = match def_type {
-                Some(dt) => compute_dependencies(dt, locals, filename),
-                None => HashSet::new(),
-            };
-            &compute_dependencies(value, locals, filename) | &type_deps
-        }
-        AbstractSyntaxTree::Application(left, right, _) => {
-            &compute_dependencies(left, locals, filename)
-                | &compute_dependencies(right, locals, filename)
-        }
-        AbstractSyntaxTree::Forall(name, var_type, value, _) => {
-            &compute_dependencies(var_type, locals, filename)
-                | &match name {
-                    Some(s) => {
-                        let mut new_locals = locals.clone();
-                        new_locals.insert(s.clone());
-                        compute_dependencies(value, &new_locals, filename)
-                    }
-                    None => compute_dependencies(value, locals, filename),
-                }
-        }
-        AbstractSyntaxTree::Lambda(name, var_type, value, _) => {
-            &compute_dependencies(var_type, locals, filename)
-                | &{
-                    let mut new_locals = locals.clone();
-                    new_locals.insert(name.clone());
-                    compute_dependencies(value, &new_locals, filename)
-                }
-        }
-        AbstractSyntaxTree::Operator(op, left, _, _) => {
-            match &**op {
-                "." => {
-                    compute_dependencies(left, locals, filename)
-                    // Can't compute dependency on method here,
-                    // so it's added only when translating to term
-                }
-                _ => panic!(),
-            }
-        }
-        AbstractSyntaxTree::Import(_, _) => HashSet::new(),
-        AbstractSyntaxTree::Empty => HashSet::new(),
-        AbstractSyntaxTree::Typed(_, _, range) => {
-            report::send(Report {
-                is_error: true,
-                filename: filename.to_string(),
-                offset: range.start,
-                message: "Invalid statement".to_string(),
-                note: None,
-                help: None,
-                labels: vec![(range.clone(), "not a statement".to_string())],
-            });
-            HashSet::new()
-        }
-        AbstractSyntaxTree::SpecialApp(_, _, _, range) => {
-            report::send(Report {
-                is_error: true,
-                filename: filename.to_string(),
-                offset: range.start,
-                message: "Incomplete expression".to_string(),
-                note: None,
-                help: None,
-                labels: vec![(range.clone(), "unfinished expression".to_string())],
-            });
-            HashSet::new()
-        }
-    }
-}
-
 fn find_var(
     left: &Term<TermMeta>,
     right: &Term<TermMeta>,
@@ -675,29 +560,29 @@ pub(crate) async fn convert_to_term_rec(
                         });
                         return Err(());
                     }
-                    match kernel::get_global_index(&path::make_absolute(&global_name, filename))
-                        .await
-                    {
-                        Ok(n) => {
-                            debug_assert!(env.contains_global(n));
-                            Ok((TermInner::Global(n), &meta).into())
-                        }
-                        Err(_) => {
-                            report::send(Report {
-                                is_error: true,
-                                filename: filename.to_string(),
-                                offset: identifier_range.start,
-                                message: "Undefined identifier".to_string(),
-                                note: None,
-                                help: None,
-                                labels: vec![(
-                                    identifier_range.clone(),
-                                    "No definition found".to_string(),
-                                )],
-                            });
-                            Err(())
-                        }
-                    }
+                    let path = path::make_absolute(&global_name, filename);
+                    let (new_env, index) =
+                        match kernel::update_environment(env.clone(), &path).await {
+                            Ok(env) => env,
+                            Err(_) => {
+                                report::send(Report {
+                                    is_error: true,
+                                    filename: filename.to_string(),
+                                    offset: identifier_range.start,
+                                    message: format!("Undefined identifier `{}`", path),
+                                    note: None,
+                                    help: None,
+                                    labels: vec![(
+                                        identifier_range.clone(),
+                                        "No definition found".to_string(),
+                                    )],
+                                });
+                                return Err(());
+                            }
+                        };
+                    *env = new_env;
+                    debug_assert!(env.contains_global(index));
+                    Ok((TermInner::Global(index), &meta).into())
                 }
             }
         }
@@ -932,24 +817,25 @@ pub(crate) async fn convert_to_term_rec(
                             return Err(());
                         }
                         let path = path::make_absolute(&global_name, filename);
-                        let new_env = match kernel::update_environment(env.clone(), &path).await {
-                            Ok(env) => env,
-                            Err(_) => {
-                                report::send(Report {
-                                    is_error: true,
-                                    filename: filename.to_string(),
-                                    offset: identifier_range.start,
-                                    message: format!("Undefined method `{}`", path),
-                                    note: None,
-                                    help: None,
-                                    labels: vec![(
-                                        identifier_range.clone(),
-                                        "No definition found".to_string(),
-                                    )],
-                                });
-                                return Err(());
-                            }
-                        };
+                        let (new_env, _) =
+                            match kernel::update_environment(env.clone(), &path).await {
+                                Ok(env) => env,
+                                Err(_) => {
+                                    report::send(Report {
+                                        is_error: true,
+                                        filename: filename.to_string(),
+                                        offset: identifier_range.start,
+                                        message: format!("Undefined method `{}`", path),
+                                        note: None,
+                                        help: None,
+                                        labels: vec![(
+                                            identifier_range.clone(),
+                                            "No definition found".to_string(),
+                                        )],
+                                    });
+                                    return Err(());
+                                }
+                            };
                         *env = new_env;
                         convert_to_term_rec(&r, locals, level, filename, env, ctx, imports).await
                     } else {
@@ -974,57 +860,4 @@ pub(crate) async fn convert_to_term(
     let imports = compute_imports(&file_ast);
     let mut ctx = Context::new();
     convert_to_term_rec(ast, &HashMap::new(), 0, filename, env, &mut ctx, &imports).await
-}
-
-fn dependency_loader(logical_path: &str) -> rooster_cache::LoaderFuture<'_, HashSet<String>> {
-    let logical_path_string = logical_path.to_string();
-    Box::pin(async move {
-        let (ast, filename) = get_ast(&logical_path_string).await?;
-        let file_ast = get_file_ast(&filename).await?;
-        let imports = compute_imports(&file_ast);
-        let deps = compute_dependencies(ast, &HashSet::new(), &filename)
-            .iter()
-            .map(|dep| apply_imports(dep.clone(), &imports))
-            .collect();
-        let (type_ast, _) = get_type_ast(&logical_path_string).await?;
-        let type_deps = match type_ast {
-            Some(ast) => compute_dependencies(ast, &HashSet::new(), &filename)
-                .iter()
-                .map(|dep| apply_imports(dep.clone(), &imports))
-                .collect(),
-            None => HashSet::new(),
-        };
-        Ok((&deps | &type_deps)
-            .iter()
-            .map(|dep| path::make_absolute(dep, &filename))
-            .collect())
-    })
-}
-
-// The global cache storing dependencies for each top-level definition
-static DEPENDENCY__CACHE: rooster_cache::Cache<HashSet<String>> =
-    rooster_cache::Cache::new(dependency_loader as _);
-
-// Get direct dependencies of a top-level definition.
-pub(crate) async fn get_direct_dependencies(
-    logical_path: &str,
-) -> Result<Arc<HashSet<String>>, ()> {
-    DEPENDENCY__CACHE.get(logical_path).await
-}
-
-// Get all dependencies dependencies of a top-level definition.
-#[async_recursion]
-pub(crate) async fn get_all_dependencies(logical_path: &str) -> Result<Arc<HashSet<String>>, ()> {
-    let deps = match get_direct_dependencies(logical_path).await {
-        Ok(deps) => deps,
-        Err(_) => Arc::new(HashSet::new()),
-    };
-    let mut r = HashSet::new();
-    for dep in &*deps {
-        if let Ok(more_deps) = get_all_dependencies(dep).await {
-            r = &r | &more_deps;
-        }
-    }
-    r = &r | &deps;
-    Ok(Arc::new(r))
 }

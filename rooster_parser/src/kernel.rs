@@ -1,85 +1,46 @@
 use crate::kernel_err::TermMeta;
 use crate::*;
 
+use once_cell::sync::Lazy;
 use rooster_kernel::Environment;
 use rooster_kernel::Term;
-use rooster_kernel::TermInner;
-use std::collections::HashMap;
-use std::collections::HashSet;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
-use tokio::task::JoinSet;
+use tokio::sync::Mutex;
 
 // A counter to assign indices to top-level definitions
 static INDEX_COUNTER: AtomicUsize = AtomicUsize::new(0);
 
-async fn create_environment(
-    dependencies: Arc<HashSet<String>>,
-) -> Result<Environment<TermMeta>, ()> {
-    let mut map_index_to_def = HashMap::new();
-    let mut max_index = 0;
-    for dep in dependencies.iter() {
-        if let Ok(inner) = KERNEL__CACHE.get(dep).await {
-            let (def, def_type, index) = &*inner;
-            map_index_to_def.insert(*index, (Some(def.clone()), def_type.clone()));
-            max_index = max_index.max(*index);
-        }
-    }
-    let mut env_vec = vec![];
-    let meta = Arc::new(TermMeta::default());
-    let null = (None, Arc::new((TermInner::Prop, &meta).into()));
-    for index in 0..max_index + 1 {
-        let def = match map_index_to_def.remove(&index) {
-            Some(prev) => prev,
-            None => null.clone(),
-        };
-        env_vec.push(def);
-    }
-    Ok(Environment::from_vec(env_vec))
-}
+static GLOBAL_ENV: Lazy<Mutex<Environment<TermMeta>>> =
+    Lazy::new(|| Environment::from_vec(vec![]).into());
 
 pub(crate) async fn update_environment(
     env: Environment<TermMeta>,
     dependency: &str,
-) -> Result<Environment<TermMeta>, ()> {
-    let mut env_vec = env.into_vec();
-    let max_index = env_vec.len() - 1;
-    let meta = Arc::new(TermMeta::default());
-    let null = (None, Arc::new((TermInner::Prop, &meta).into()));
-    let (def, def_type, index) = &*KERNEL__CACHE.get(dependency).await?;
-    if *index > max_index {
-        for _ in max_index + 1..*index {
-            env_vec.push(null.clone());
-        }
-        env_vec.push((Some(def.clone()), def_type.clone()));
-    } else {
-        env_vec[*index] = (Some(def.clone()), def_type.clone());
+) -> Result<(Environment<TermMeta>, usize), ()> {
+    let (def, def_type, index) = &*KERNEL_CACHE.get(dependency).await?;
+    let mut env_vec = GLOBAL_ENV.lock().await.clone().into_vec();
+    let l = env_vec.len();
+    if *index < l {
+        let r = Environment::from_vec(env_vec);
+        return Ok((r, *index));
     }
-    Ok(Environment::from_vec(env_vec))
+    debug_assert!(*index == l);
+    env_vec.push((Some(def.clone()), def_type.clone()));
+    let r = Environment::from_vec(env_vec);
+    *GLOBAL_ENV.lock().await = r.clone(); // TODO: this will only work in single-threaded mode
+    Ok((r, *index))
 }
 
 pub type Definition = (Arc<Term<TermMeta>>, Arc<Term<TermMeta>>, usize);
 
 fn kernel_loader(logical_path: &str) -> rooster_cache::LoaderFuture<'_, Definition> {
     Box::pin(async move {
-        eprintln!("Computing dependencies for {}", logical_path);
-        // First we compute all dependencies, so the operation can be parallelized
-        // TODO: move into new function that can be used by API users
-        let deps = semantics::get_direct_dependencies(logical_path).await?;
-        let mut join_set = JoinSet::new();
-        for dep in deps.iter() {
-            let dep_string = dep.to_string();
-            join_set.spawn(async move { verify(&dep_string).await });
-        }
-        while let Some(result) = join_set.join_next().await {
-            let _ = result.or(Err(()))?;
-        }
-        // Then we verify the current definition
+        // First we verify the current definition
         eprintln!("Verifying {}", logical_path);
         // Start by creating an environment for the kernel
-        let all_deps = semantics::get_all_dependencies(logical_path).await?;
-        let mut env = create_environment(all_deps).await?;
+        let mut env = GLOBAL_ENV.lock().await.clone();
         // Then load the definition term and compute its type
         let (ast, filename) = get_ast(logical_path).await.unwrap();
         let definition = Arc::new(semantics::convert_to_term(ast, &filename, &mut env).await?);
@@ -103,16 +64,11 @@ fn kernel_loader(logical_path: &str) -> rooster_cache::LoaderFuture<'_, Definiti
 }
 
 // The global cache storing definition, type and index for each verified definition
-static KERNEL__CACHE: rooster_cache::Cache<Definition> =
+static KERNEL_CACHE: rooster_cache::Cache<Definition> =
     rooster_cache::Cache::new(kernel_loader as _);
 
 /// Parse and verify the CoC expression corresponding to a particular logical path.
 pub async fn verify(logical_path: &str) -> Result<(), ()> {
-    KERNEL__CACHE.get(logical_path).await?;
+    KERNEL_CACHE.get(logical_path).await?;
     Ok(())
-}
-
-// Get the index associated to a top-level definition
-pub(crate) async fn get_global_index(logical_path: &str) -> Result<usize, ()> {
-    Ok(KERNEL__CACHE.get(logical_path).await?.2)
 }
