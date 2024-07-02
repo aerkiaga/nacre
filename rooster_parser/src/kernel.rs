@@ -16,20 +16,32 @@ static GLOBAL_ENV: Lazy<Mutex<Environment<TermMeta>>> =
     Lazy::new(|| Environment::from_vec(vec![]).into());
 
 pub(crate) async fn update_environment(
-    env: Environment<TermMeta>,
+    _env: Environment<TermMeta>,
     dependency: &str,
 ) -> Result<(Environment<TermMeta>, usize), ()> {
     let (def, def_type, index) = &*KERNEL_CACHE.get(dependency).await?;
     let mut env_vec = GLOBAL_ENV.lock().await.clone().into_vec();
     let l = env_vec.len();
     if *index < l {
-        let r = Environment::from_vec(env_vec);
-        return Ok((r, *index));
+        env_vec[*index] = (Some(def.clone()), def_type.clone());
+    } else {
+        debug_assert!(*index == l);
+        env_vec.push((Some(def.clone()), def_type.clone()));
     }
-    debug_assert!(*index == l);
-    env_vec.push((Some(def.clone()), def_type.clone()));
-    let r = Environment::from_vec(env_vec);
-    *GLOBAL_ENV.lock().await = r.clone(); // TODO: this will only work in single-threaded mode
+    let r = {
+        let mut ge = GLOBAL_ENV.lock().await;
+        let mut env_vec2 = ge.clone().into_vec();
+        for (n, element) in env_vec.into_iter().enumerate() {
+            if n >= env_vec2.len() {
+                env_vec2.push(element);
+            } else if matches!(env_vec2[n].0, None) {
+                env_vec2[n] = element;
+            }
+        }
+        let r = Environment::from_vec(env_vec2);
+        *ge = r.clone();
+        r
+    };
     Ok((r, *index))
 }
 
