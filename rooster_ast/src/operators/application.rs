@@ -1,7 +1,8 @@
 use crate::operators::prototype;
-use crate::parser2::AbstractSyntaxTree;
 use crate::*;
 
+use rooster_types::report;
+use rooster_types::report::Report;
 use std::ops::Range;
 
 // TODO: handle macros, including their special ordering

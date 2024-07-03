@@ -1,5 +1,7 @@
 use crate::*;
 
+use rooster_types::report;
+use rooster_types::report::Report;
 use std::ops::Range;
 use tokio::sync::mpsc;
 
@@ -93,7 +95,7 @@ pub enum AbstractSyntaxTree {
 }
 
 impl AbstractSyntaxTree {
-    pub(crate) fn get_range(&self) -> Range<usize> {
+    pub fn get_range(&self) -> Range<usize> {
         match self {
             AbstractSyntaxTree::Block(_, range) => range,
             AbstractSyntaxTree::List(_, range) => range,
@@ -277,7 +279,7 @@ impl AbstractSyntaxTree {
         }
     }
 
-    pub(crate) fn get_definition(
+    pub fn get_definition(
         &self,
         name: &str,
     ) -> Result<(&AbstractSyntaxTree, Option<&AbstractSyntaxTree>), ()> {

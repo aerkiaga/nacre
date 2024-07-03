@@ -4,19 +4,14 @@ use tokio::io::AsyncReadExt;
 
 mod kernel;
 mod kernel_err;
-mod lexer;
-mod operators;
-mod parser;
-mod parser2;
 mod path;
-mod preprocess;
-mod report;
 mod semantics;
 
 pub use kernel::verify;
-pub use parser2::AbstractSyntaxTree;
-pub use report::Report;
 pub use report::REPORTS;
+pub use rooster_ast::{preprocess_file, AbstractSyntaxTree};
+pub use rooster_types::report;
+pub use rooster_types::report::Report;
 
 fn error_cannot_find(filename: &str) -> ! {
     println!("Error: cannot find file '{}'.", filename);
@@ -64,7 +59,7 @@ fn parser_loader(filename: &str) -> rooster_cache::LoaderFuture<'_, AbstractSynt
     let filename_string = filename.to_string();
     Box::pin(async move {
         let file = get_contents(filename).await?;
-        let ast = preprocess::preprocess_file(&file, filename_string).await?;
+        let ast = preprocess_file(&file, filename_string).await?;
         Ok(ast)
     })
 }

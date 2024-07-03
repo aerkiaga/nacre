@@ -1,5 +1,7 @@
-use crate::parser2::AbstractSyntaxTree;
 use crate::*;
+
+use rooster_types::report;
+use rooster_types::report::Report;
 
 pub(crate) fn parse_prototype(
     left: &AbstractSyntaxTree,

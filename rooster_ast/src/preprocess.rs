@@ -1,6 +1,8 @@
 use crate::*;
 
 use async_recursion::async_recursion;
+use rooster_types::report;
+use rooster_types::report::Report;
 use tokio::sync::mpsc;
 use tokio::sync::oneshot;
 
@@ -9,7 +11,7 @@ pub(crate) async fn preprocess_chunk(
     chunk: String,
     filename: String,
     offset: usize,
-) -> Result<parser2::AbstractSyntaxTree, ()> {
+) -> Result<AbstractSyntaxTree, ()> {
     // Start a concurrent task for tokenization
     let (tokenizer_sender, tokenizer_receiver) = mpsc::unbounded_channel();
     let filename_clone = filename.clone();
@@ -22,19 +24,16 @@ pub(crate) async fn preprocess_chunk(
         parser::parse_stream(tokenizer_receiver, parser_sender).await;
     });
     // Start a concurrent task for operator-precedence parsing
-    let (parser2_sender, parser2_receiver) = oneshot::channel();
-    let parser2_handle = tokio::spawn(async move {
-        let _ = parser2_sender.send(parser2::build_tree(parser_receiver, filename).await);
+    let (ast_sender, ast_receiver) = oneshot::channel();
+    let ast_handle = tokio::spawn(async move {
+        let _ = ast_sender.send(ast::build_tree(parser_receiver, filename).await);
     });
     tokenizer_handle.await.unwrap();
     parser_handle.await.unwrap();
-    parser2_handle.await.unwrap();
-    parser2_receiver.await.unwrap()
+    ast_handle.await.unwrap();
+    ast_receiver.await.unwrap()
 }
 
-pub(crate) async fn preprocess_file(
-    src: &str,
-    filename: String,
-) -> Result<parser2::AbstractSyntaxTree, ()> {
+pub async fn preprocess_file(src: &str, filename: String) -> Result<AbstractSyntaxTree, ()> {
     preprocess_chunk(src.to_string(), filename, 0).await
 }

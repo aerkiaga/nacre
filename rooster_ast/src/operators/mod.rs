@@ -1,7 +1,8 @@
-use crate::parser2::AbstractSyntaxTree;
 use crate::*;
 
 use once_cell::sync::Lazy;
+use rooster_types::report;
+use rooster_types::report::Report;
 use std::collections::HashMap;
 use std::ops::Range;
 
@@ -90,7 +91,7 @@ fn comma_handler(
             left_statements,
             left_range.start..right_range.end,
         ))
-    } else if let parser2::AbstractSyntaxTree::List(mut right_statements, right_range) = right {
+    } else if let AbstractSyntaxTree::List(mut right_statements, right_range) = right {
         let left_range = left.get_range();
         right_statements.insert(0, left);
         Ok(AbstractSyntaxTree::List(
@@ -191,7 +192,7 @@ fn equals_handler(
 }
 
 // TODO: check if they are actually statements
-// TODO: ignore parser2::AbstractSyntaxTree::Empty if present
+// TODO: ignore AbstractSyntaxTree::Empty if present
 fn semicolon_handler(
     left: AbstractSyntaxTree,
     right: AbstractSyntaxTree,
@@ -209,7 +210,7 @@ fn semicolon_handler(
             left_statements,
             left_range.start..right_range.end,
         ))
-    } else if let parser2::AbstractSyntaxTree::Block(mut right_statements, right_range) = right {
+    } else if let AbstractSyntaxTree::Block(mut right_statements, right_range) = right {
         let left_range = left.get_range();
         right_statements.insert(0, left);
         Ok(AbstractSyntaxTree::Block(

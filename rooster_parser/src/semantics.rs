@@ -1,9 +1,9 @@
 use crate::kernel_err::TermMeta;
-use crate::parser2::AbstractSyntaxTree;
 use crate::*;
 
 use async_recursion::async_recursion;
 use once_cell::sync::Lazy;
+use rooster_ast::AbstractSyntaxTree;
 use rooster_kernel::Context;
 use rooster_kernel::Environment;
 use rooster_kernel::Term;
