@@ -1,8 +1,6 @@
 use crate::*;
 
 use async_recursion::async_recursion;
-use rooster_types::report;
-use rooster_types::report::Report;
 use tokio::sync::mpsc;
 use tokio::sync::oneshot;
 
