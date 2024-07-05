@@ -94,6 +94,12 @@ pub enum AbstractSyntaxTree {
     ),
 }
 
+pub enum GetDefinitionError {
+    InvalidAST,
+    NotFound,
+    Other,
+}
+
 impl AbstractSyntaxTree {
     pub fn get_range(&self) -> Range<usize> {
         match self {
@@ -282,7 +288,7 @@ impl AbstractSyntaxTree {
     pub fn get_definition(
         &self,
         name: &str,
-    ) -> Result<(&AbstractSyntaxTree, Option<&AbstractSyntaxTree>), ()> {
+    ) -> Result<(&AbstractSyntaxTree, Option<&AbstractSyntaxTree>), GetDefinitionError> {
         match self {
             AbstractSyntaxTree::Block(statements, _) => {
                 for statement in statements {
@@ -290,7 +296,7 @@ impl AbstractSyntaxTree {
                         return Ok(definition);
                     }
                 }
-                Err(())
+                Err(GetDefinitionError::NotFound)
             }
             AbstractSyntaxTree::Assignment(def_name, value, is_def, def_type, _) => {
                 if *is_def {
@@ -298,16 +304,16 @@ impl AbstractSyntaxTree {
                         if components.join("::") == name {
                             Ok((value, def_type.as_deref()))
                         } else {
-                            Err(())
+                            Err(GetDefinitionError::NotFound)
                         }
                     } else {
-                        Err(())
+                        Err(GetDefinitionError::Other)
                     }
                 } else {
-                    Err(())
+                    Err(GetDefinitionError::Other)
                 }
             }
-            _ => Err(()),
+            _ => Err(GetDefinitionError::InvalidAST),
         }
     }
 

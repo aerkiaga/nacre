@@ -34,7 +34,7 @@ pub(crate) async fn update_environment(
         for (n, element) in env_vec.into_iter().enumerate() {
             if n >= env_vec2.len() {
                 env_vec2.push(element);
-            } else if matches!(env_vec2[n].0, None) {
+            } else if env_vec2[n].0.is_none() {
                 env_vec2[n] = element;
             }
         }
