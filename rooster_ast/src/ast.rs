@@ -101,6 +101,7 @@ pub enum GetDefinitionError {
 }
 
 impl AbstractSyntaxTree {
+    /// Get the range spanned by this node in the source code.
     pub fn get_range(&self) -> Range<usize> {
         match self {
             AbstractSyntaxTree::Block(_, range) => range,
@@ -285,6 +286,9 @@ impl AbstractSyntaxTree {
         }
     }
 
+    /// If this [AbstractSyntaxTree] corresponds to a file, obtains a top-level definition from it.
+    ///
+    /// Must be given the local name of the symbol to retrieve.
     pub fn get_definition(
         &self,
         name: &str,

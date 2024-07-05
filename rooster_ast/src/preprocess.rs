@@ -32,6 +32,9 @@ pub(crate) async fn preprocess_chunk(
     ast_receiver.await.unwrap()
 }
 
+/// Returns the [AbstractSyntaxTree] for a file.
+///
+/// Must be given its source code and filename.
 pub async fn preprocess_file(src: &str, filename: String) -> Result<AbstractSyntaxTree, ()> {
     preprocess_chunk(src.to_string(), filename, 0).await
 }

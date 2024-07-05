@@ -7,6 +7,7 @@ type GlobalRef = usize;
 
 type VariableRef = usize;
 
+/// A [Term] sans metadata.
 pub enum TermInner<T: Meta> {
     /// 𝐏.
     Prop,
@@ -205,9 +206,9 @@ impl<T: Meta> Term<T> {
         }
     }
 
-    // Adds n levels of abstraction around the term.
-    // Returns Err(...) if an integer overflow occurred
-    // or if variable 0 occurs in the term.
+    /// Adds `n` levels of abstraction around the term.
+    /// Returns `Err(...)` if an integer overflow occurred
+    /// or if variable 0 occurs in the term.
     pub fn make_outer_by_n(&self, n: usize) -> Result<Term<T>, Error<T>> {
         self.make_outer_by_n_rec(n, 0)
     }
@@ -274,8 +275,8 @@ impl<T: Meta> Term<T> {
         }
     }
 
-    // Adds n levels of abstraction around the term.
-    // Returns Err(...) if an integer overflow occurred.
+    /// Adds `n` levels of abstraction around the term.
+    /// Returns `Err(...)` if an integer overflow occurred.
     pub fn make_inner_by_n(&self, n: usize) -> Result<Term<T>, Error<T>> {
         self.make_inner_by_n_rec(n, 0)
     }
@@ -403,6 +404,7 @@ impl<T: Meta> Term<T> {
         }
     }*/
 
+    /// Replace the immediately enclosing variable in a term.
     pub fn replace_inner(&self, other: &Term<T>) -> Result<Term<T>, Error<T>> {
         self.replace_variable(0, other)
     }
@@ -423,9 +425,10 @@ impl<T: Meta> std::fmt::Debug for Term<T> {
     }
 }
 
-pub type CtxDefinition<T> = (Option<Term<T>>, Term<T>);
+type CtxDefinition<T> = (Option<Term<T>>, Term<T>);
 
-// The local context of a subterm, including all local variables in order of definition, from the inside out.
+/// The local context of a subterm, with all local variables defined in its enclosing context.
+// Including all local variables in order of definition, from the inside out.
 pub struct Context<T: Meta> {
     inner: Vec<CtxDefinition<T>>,
 }
@@ -443,6 +446,7 @@ impl<T: Meta> Clone for Context<T> {
 }
 
 impl<T: Meta> Context<T> {
+    /// Creates a new empty [Context].
     pub fn new() -> Context<T> {
         Context { inner: vec![] }
     }
@@ -467,16 +471,17 @@ impl<T: Meta> Context<T> {
             .map(|x| x.0.as_ref())?
     }
 
-    // Add a new variable with a definition to a context, at the innermost position.
+    /// Adds a new variable with a definition to a context, at the innermost position.
     pub fn add_inner(&mut self, var_def: Option<Term<T>>, var_type: Term<T>) {
         self.inner.push((var_def, var_type));
     }
 
-    // Removes the innermost variable from a context.
+    /// Removes the innermost variable from a context.
     pub fn remove_inner(&mut self) {
         self.inner.pop();
     }
 
+    /// Returns the replacement for a certain variable defined in the [Context].
     pub fn delta_replacement(&self, v: VariableRef) -> Result<Term<T>, Error<T>> {
         match self.variable_value(v) {
             Some(t) => Ok(t.make_inner_by_n(v + 1)?),
@@ -504,7 +509,7 @@ impl<T: Meta> std::fmt::Debug for Context<T> {
     }
 }
 
-pub type EnvDefinition<T> = (Option<Arc<Term<T>>>, Arc<Term<T>>);
+type EnvDefinition<T> = (Option<Arc<Term<T>>>, Arc<Term<T>>);
 
 /// The global environment that a term lives in, containing all global variables.
 pub struct Environment<T: Meta> {
