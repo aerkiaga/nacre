@@ -4,6 +4,7 @@ use crate::*;
 use once_cell::sync::Lazy;
 use rooster_kernel::Environment;
 use rooster_kernel::Term;
+use rooster_kernel::TermInner;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
@@ -25,7 +26,12 @@ pub(crate) async fn update_environment(
     if *index < l {
         env_vec[*index] = (Some(def.clone()), def_type.clone());
     } else {
-        debug_assert!(*index == l);
+        for _ in 0..*index - l {
+            env_vec.push((
+                None,
+                Arc::new((TermInner::Prop, &Arc::new(TermMeta::default())).into()),
+            ));
+        }
         env_vec.push((Some(def.clone()), def_type.clone()));
     }
     let r = {

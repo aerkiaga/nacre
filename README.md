@@ -33,7 +33,6 @@ flags to `cargo`.
   - Implement comparison without full normalization.
   - Parallelize verification at conversion level.
 * Add tests.
-  - Standard library verification test.
   - Kernel fuzz test.
   - Parser fuzz test.
   - Regular test suite.
