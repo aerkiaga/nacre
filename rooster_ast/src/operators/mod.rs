@@ -30,7 +30,7 @@ fn stop_handler(
     let right_range = right.get_range();
     let left_ast = left.get_inner(&filename)?;
     let right_ast = right.get_inner(&filename)?;
-    Ok(InternalAST::AST(AbstractSyntaxTree::Operator(
+    Ok(InternalAST::Ast(AbstractSyntaxTree::Operator(
         ".".to_string(),
         Box::new(left_ast),
         Box::new(right_ast),
@@ -47,8 +47,8 @@ fn colon_handler(
     right.must_be_expression(&filename)?;
     let left_start = left.get_range().start;
     let right_range = right.get_range();
-    if let InternalAST::AST(left_ast) = left {
-        if let InternalAST::AST(right_ast) = right {
+    if let InternalAST::Ast(left_ast) = left {
+        if let InternalAST::Ast(right_ast) = right {
             match left_ast {
                 AbstractSyntaxTree::Assignment(identifier, value, is_let, def_type, nparams, _) => {
                     if def_type.is_some() {
@@ -63,7 +63,7 @@ fn colon_handler(
                         });
                         return Err(());
                     }
-                    Ok(InternalAST::AST(AbstractSyntaxTree::Assignment(
+                    Ok(InternalAST::Ast(AbstractSyntaxTree::Assignment(
                         identifier,
                         value,
                         is_let,
@@ -129,11 +129,11 @@ fn equals_handler(
     let left_start = left.get_range().start;
     let right_end = right.get_range().end;
     let lrg = left.get_range();
-    if let InternalAST::AST(left_ast) = left {
-        if let InternalAST::AST(right_ast) = right {
+    if let InternalAST::Ast(left_ast) = left {
+        if let InternalAST::Ast(right_ast) = right {
             match left_ast {
                 AbstractSyntaxTree::Identifier(_, _) => {
-                    Ok(InternalAST::AST(AbstractSyntaxTree::Assignment(
+                    Ok(InternalAST::Ast(AbstractSyntaxTree::Assignment(
                         Box::new(left_ast),
                         Box::new(right_ast),
                         false,
@@ -146,7 +146,7 @@ fn equals_handler(
                     if let AbstractSyntaxTree::Identifier(components, _) = *app_left {
                         if components.len() == 1 && components[0] == "let" {
                             if let AbstractSyntaxTree::Identifier(_, _) = *app_right {
-                                Ok(InternalAST::AST(AbstractSyntaxTree::Assignment(
+                                Ok(InternalAST::Ast(AbstractSyntaxTree::Assignment(
                                     Box::new(*app_right),
                                     Box::new(right_ast),
                                     true,
@@ -232,8 +232,8 @@ fn semicolon_handler(
     _filename: String,
     _range: Range<usize>,
 ) -> Result<InternalAST, ()> {
-    if let InternalAST::AST(left_ast) = left {
-        if let InternalAST::AST(right_ast) = right {
+    if let InternalAST::Ast(left_ast) = left {
+        if let InternalAST::Ast(right_ast) = right {
             if let AbstractSyntaxTree::Block(mut left_statements, left_range) = left_ast {
                 let right_range = right_ast.get_range();
                 if let AbstractSyntaxTree::Block(mut right_statements, _) = right_ast {
@@ -241,21 +241,21 @@ fn semicolon_handler(
                 } else {
                     left_statements.push(right_ast.clone());
                 }
-                Ok(InternalAST::AST(AbstractSyntaxTree::Block(
+                Ok(InternalAST::Ast(AbstractSyntaxTree::Block(
                     left_statements.clone(),
                     left_range.start..right_range.end,
                 )))
             } else if let AbstractSyntaxTree::Block(mut right_statements, right_range) = right_ast {
                 let left_range = left_ast.get_range();
                 right_statements.insert(0, left_ast.clone());
-                Ok(InternalAST::AST(AbstractSyntaxTree::Block(
+                Ok(InternalAST::Ast(AbstractSyntaxTree::Block(
                     right_statements.clone(),
                     left_range.start..right_range.end,
                 )))
             } else {
                 let left_start = left_ast.get_range().start;
                 let right_end = right_ast.get_range().end;
-                Ok(InternalAST::AST(AbstractSyntaxTree::Block(
+                Ok(InternalAST::Ast(AbstractSyntaxTree::Block(
                     vec![left_ast.clone(), right_ast.clone()],
                     left_start..right_end,
                 )))

@@ -22,9 +22,9 @@ fn arrow_handler_ast(
         ) => {
             if let AbstractSyntaxTree::Lambda(_, _, _, _) = &*left_right {
                 let right_range = right.get_range();
-                if let InternalAST::AST(right_ast) = right {
+                if let InternalAST::Ast(right_ast) = right {
                     let new_def_type = left_right.lambda_typify(right_ast, nparams);
-                    Ok(InternalAST::AST(AbstractSyntaxTree::Assignment(
+                    Ok(InternalAST::Ast(AbstractSyntaxTree::Assignment(
                         left_left,
                         left_right,
                         is_definition,
@@ -62,8 +62,8 @@ fn arrow_handler_ast(
             }
             let left_start = left_ast.get_range().start;
             let right_end = right.get_range().end;
-            if let InternalAST::AST(right_ast) = right {
-                Ok(InternalAST::AST(AbstractSyntaxTree::Forall(
+            if let InternalAST::Ast(right_ast) = right {
+                Ok(InternalAST::Ast(AbstractSyntaxTree::Forall(
                     None,
                     Box::new(left_ast),
                     Box::new(right_ast),
@@ -107,7 +107,7 @@ pub(crate) fn arrow_handler(
             }
             prototype::parse_prototype(&left, right, filename, keyword)
         }
-        InternalAST::AST(left_ast) => arrow_handler_ast(left_ast, right, filename),
+        InternalAST::Ast(left_ast) => arrow_handler_ast(left_ast, right, filename),
         InternalAST::Empty => Ok(InternalAST::Empty),
         _ => arrow_handler_ast(left.get_inner(&filename)?, right, filename),
     }
