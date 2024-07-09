@@ -1,3 +1,4 @@
+use crate::ast::InternalAST;
 use crate::*;
 
 use once_cell::sync::Lazy;
@@ -20,222 +21,259 @@ mod arrow;
 use arrow::*;
 
 fn stop_handler(
-    left: AbstractSyntaxTree,
-    right: AbstractSyntaxTree,
-    _filename: String,
+    left: InternalAST,
+    right: InternalAST,
+    filename: String,
     _range: Range<usize>,
-) -> Result<AbstractSyntaxTree, ()> {
+) -> Result<InternalAST, ()> {
     let left_range = left.get_range();
     let right_range = right.get_range();
-    Ok(AbstractSyntaxTree::Operator(
+    let left_ast = left.get_inner(&filename)?;
+    let right_ast = right.get_inner(&filename)?;
+    Ok(InternalAST::AST(AbstractSyntaxTree::Operator(
         ".".to_string(),
-        Box::new(left),
-        Box::new(right),
+        Box::new(left_ast),
+        Box::new(right_ast),
         left_range.start..right_range.end,
-    ))
+    )))
 }
 
 fn colon_handler(
-    left: AbstractSyntaxTree,
-    right: AbstractSyntaxTree,
+    left: InternalAST,
+    right: InternalAST,
     filename: String,
     _range: Range<usize>,
-) -> Result<AbstractSyntaxTree, ()> {
+) -> Result<InternalAST, ()> {
     right.must_be_expression(&filename)?;
     let left_start = left.get_range().start;
     let right_range = right.get_range();
-    match left {
-        AbstractSyntaxTree::Assignment(identifier, value, is_let, def_type, _) => {
-            if def_type.is_some() {
-                report::send(Report {
-                    is_error: true,
-                    filename: filename.to_string(),
-                    offset: right_range.start,
-                    message: "duplicate type specification in definition".to_string(),
-                    note: None,
-                    help: Some("remove extra specification".to_string()),
-                    labels: vec![(right_range, "duplicate type".to_string())],
-                });
-                return Err(());
+    if let InternalAST::AST(left_ast) = left {
+        if let InternalAST::AST(right_ast) = right {
+            match left_ast {
+                AbstractSyntaxTree::Assignment(identifier, value, is_let, def_type, nparams, _) => {
+                    if def_type.is_some() {
+                        report::send(Report {
+                            is_error: true,
+                            filename: filename.to_string(),
+                            offset: right_range.start,
+                            message: "duplicate type specification in definition".to_string(),
+                            note: None,
+                            help: Some("remove extra specification".to_string()),
+                            labels: vec![(right_range, "duplicate type".to_string())],
+                        });
+                        return Err(());
+                    }
+                    Ok(InternalAST::AST(AbstractSyntaxTree::Assignment(
+                        identifier,
+                        value,
+                        is_let,
+                        Some(Box::new(right_ast)),
+                        nparams,
+                        left_start..right_range.end,
+                    )))
+                }
+                _ => Ok(InternalAST::Typed(
+                    Box::new(left_ast),
+                    Box::new(right_ast),
+                    left_start..right_range.end,
+                )),
             }
-            Ok(AbstractSyntaxTree::Assignment(
-                identifier,
-                value,
-                is_let,
-                Some(Box::new(right)),
-                left_start..right_range.end,
-            ))
+        } else {
+            panic!();
         }
-        _ => Ok(AbstractSyntaxTree::Typed(
-            Box::new(left),
-            Box::new(right),
-            left_start..right_range.end,
-        )),
+    } else if let InternalAST::Empty = left {
+        Ok(InternalAST::Empty)
+    } else {
+        panic!();
     }
 }
 
 fn comma_handler(
-    left: AbstractSyntaxTree,
-    right: AbstractSyntaxTree,
+    left: InternalAST,
+    right: InternalAST,
     _filename: String,
     _range: Range<usize>,
-) -> Result<AbstractSyntaxTree, ()> {
-    if let AbstractSyntaxTree::List(mut left_statements, left_range) = left {
+) -> Result<InternalAST, ()> {
+    if let InternalAST::List(mut left_statements, left_range) = left {
         let right_range = right.get_range();
-        if let AbstractSyntaxTree::List(mut right_statements, _) = right {
+        if let InternalAST::List(mut right_statements, _) = right {
             left_statements.append(&mut right_statements);
         } else {
             left_statements.push(right);
         }
-        Ok(AbstractSyntaxTree::List(
+        Ok(InternalAST::List(
             left_statements,
             left_range.start..right_range.end,
         ))
-    } else if let AbstractSyntaxTree::List(mut right_statements, right_range) = right {
+    } else if let InternalAST::List(mut right_statements, right_range) = right {
         let left_range = left.get_range();
         right_statements.insert(0, left);
-        Ok(AbstractSyntaxTree::List(
+        Ok(InternalAST::List(
             right_statements,
             left_range.start..right_range.end,
         ))
     } else {
         let left_start = left.get_range().start;
         let right_end = right.get_range().end;
-        Ok(AbstractSyntaxTree::List(
-            vec![left, right],
-            left_start..right_end,
-        ))
+        Ok(InternalAST::List(vec![left, right], left_start..right_end))
     }
 }
 
 fn equals_handler(
-    left: AbstractSyntaxTree,
-    right: AbstractSyntaxTree,
+    left: InternalAST,
+    right: InternalAST,
     filename: String,
     _range: Range<usize>,
-) -> Result<AbstractSyntaxTree, ()> {
+) -> Result<InternalAST, ()> {
     right.must_be_expression(&filename)?;
     let left_start = left.get_range().start;
     let right_end = right.get_range().end;
     let lrg = left.get_range();
-    match left {
-        AbstractSyntaxTree::Identifier(_, _) => Ok(AbstractSyntaxTree::Assignment(
-            Box::new(left),
-            Box::new(right),
-            false,
-            None,
-            left_start..right_end,
-        )),
-        AbstractSyntaxTree::Application(app_left, app_right, _) => {
-            if let AbstractSyntaxTree::Identifier(components, _) = *app_left {
-                if components.len() == 1 && components[0] == "let" {
-                    if let AbstractSyntaxTree::Identifier(_, _) = *app_right {
-                        Ok(AbstractSyntaxTree::Assignment(
-                            Box::new(*app_right),
-                            Box::new(right),
-                            true,
-                            None,
-                            left_start..right_end,
-                        ))
+    if let InternalAST::AST(left_ast) = left {
+        if let InternalAST::AST(right_ast) = right {
+            match left_ast {
+                AbstractSyntaxTree::Identifier(_, _) => {
+                    Ok(InternalAST::AST(AbstractSyntaxTree::Assignment(
+                        Box::new(left_ast),
+                        Box::new(right_ast),
+                        false,
+                        None,
+                        0,
+                        left_start..right_end,
+                    )))
+                }
+                AbstractSyntaxTree::Application(app_left, app_right, _) => {
+                    if let AbstractSyntaxTree::Identifier(components, _) = *app_left {
+                        if components.len() == 1 && components[0] == "let" {
+                            if let AbstractSyntaxTree::Identifier(_, _) = *app_right {
+                                Ok(InternalAST::AST(AbstractSyntaxTree::Assignment(
+                                    Box::new(*app_right),
+                                    Box::new(right_ast),
+                                    true,
+                                    None,
+                                    0,
+                                    left_start..right_end,
+                                )))
+                            } else {
+                                let arrg = app_right.get_range();
+                                report::send(Report {
+                                    is_error: true,
+                                    filename: filename.to_string(),
+                                    offset: arrg.start,
+                                    message: "expected valid identifier in definition".to_string(),
+                                    note: None,
+                                    help: None,
+                                    labels: vec![(arrg, "not a valid identifier".to_string())],
+                                });
+                                Err(())
+                            }
+                        } else {
+                            report::send(Report {
+                                is_error: true,
+                                filename: filename.to_string(),
+                                offset: lrg.start,
+                                message: "expected lvalue in assignment".to_string(),
+                                note: None,
+                                help: Some("you might have meant to write `let ...`".to_string()),
+                                labels: vec![(lrg, "not an lvalue".to_string())],
+                            });
+                            Err(())
+                        }
                     } else {
-                        let arrg = app_right.get_range();
                         report::send(Report {
                             is_error: true,
                             filename: filename.to_string(),
-                            offset: arrg.start,
-                            message: "expected valid identifier in definition".to_string(),
+                            offset: lrg.start,
+                            message: "expected lvalue in assignment".to_string(),
                             note: None,
                             help: None,
-                            labels: vec![(arrg, "not a valid identifier".to_string())],
+                            labels: vec![(lrg, "not an lvalue".to_string())],
                         });
                         Err(())
                     }
-                } else {
+                }
+                _ => {
                     report::send(Report {
                         is_error: true,
                         filename: filename.to_string(),
                         offset: lrg.start,
                         message: "expected lvalue in assignment".to_string(),
                         note: None,
-                        help: Some("you might have meant to write `let ...`".to_string()),
+                        help: None,
                         labels: vec![(lrg, "not an lvalue".to_string())],
                     });
                     Err(())
                 }
-            } else {
-                report::send(Report {
-                    is_error: true,
-                    filename: filename.to_string(),
-                    offset: lrg.start,
-                    message: "expected lvalue in assignment".to_string(),
-                    note: None,
-                    help: None,
-                    labels: vec![(lrg, "not an lvalue".to_string())],
-                });
-                Err(())
             }
+        } else {
+            panic!();
         }
-        AbstractSyntaxTree::Empty => Err(()),
-        _ => {
-            report::send(Report {
-                is_error: true,
-                filename: filename.to_string(),
-                offset: lrg.start,
-                message: "expected lvalue in assignment".to_string(),
-                note: None,
-                help: None,
-                labels: vec![(lrg, "not an lvalue".to_string())],
-            });
-            Err(())
-        }
+    } else if let InternalAST::Empty = left {
+        Err(())
+    } else {
+        report::send(Report {
+            is_error: true,
+            filename: filename.to_string(),
+            offset: lrg.start,
+            message: "expected lvalue in assignment".to_string(),
+            note: None,
+            help: None,
+            labels: vec![(lrg, "not an lvalue".to_string())],
+        });
+        Err(())
     }
 }
 
 // TODO: check if they are actually statements
 // TODO: ignore AbstractSyntaxTree::Empty if present
 fn semicolon_handler(
-    left: AbstractSyntaxTree,
-    right: AbstractSyntaxTree,
+    left: InternalAST,
+    right: InternalAST,
     _filename: String,
     _range: Range<usize>,
-) -> Result<AbstractSyntaxTree, ()> {
-    if let AbstractSyntaxTree::Block(mut left_statements, left_range) = left {
-        let right_range = right.get_range();
-        if let AbstractSyntaxTree::Block(mut right_statements, _) = right {
-            left_statements.append(&mut right_statements);
+) -> Result<InternalAST, ()> {
+    if let InternalAST::AST(left_ast) = left {
+        if let InternalAST::AST(right_ast) = right {
+            if let AbstractSyntaxTree::Block(mut left_statements, left_range) = left_ast {
+                let right_range = right_ast.get_range();
+                if let AbstractSyntaxTree::Block(mut right_statements, _) = right_ast {
+                    left_statements.append(&mut right_statements);
+                } else {
+                    left_statements.push(right_ast.clone());
+                }
+                Ok(InternalAST::AST(AbstractSyntaxTree::Block(
+                    left_statements.clone(),
+                    left_range.start..right_range.end,
+                )))
+            } else if let AbstractSyntaxTree::Block(mut right_statements, right_range) = right_ast {
+                let left_range = left_ast.get_range();
+                right_statements.insert(0, left_ast.clone());
+                Ok(InternalAST::AST(AbstractSyntaxTree::Block(
+                    right_statements.clone(),
+                    left_range.start..right_range.end,
+                )))
+            } else {
+                let left_start = left_ast.get_range().start;
+                let right_end = right_ast.get_range().end;
+                Ok(InternalAST::AST(AbstractSyntaxTree::Block(
+                    vec![left_ast.clone(), right_ast.clone()],
+                    left_start..right_end,
+                )))
+            }
         } else {
-            left_statements.push(right);
+            panic!();
         }
-        Ok(AbstractSyntaxTree::Block(
-            left_statements,
-            left_range.start..right_range.end,
-        ))
-    } else if let AbstractSyntaxTree::Block(mut right_statements, right_range) = right {
-        let left_range = left.get_range();
-        right_statements.insert(0, left);
-        Ok(AbstractSyntaxTree::Block(
-            right_statements,
-            left_range.start..right_range.end,
-        ))
+    } else if let InternalAST::Empty = left {
+        Ok(InternalAST::Empty)
     } else {
-        let left_start = left.get_range().start;
-        let right_end = right.get_range().end;
-        Ok(AbstractSyntaxTree::Block(
-            vec![left, right],
-            left_start..right_end,
-        ))
+        panic!();
     }
 }
 
 type OperatorDefinition = (
     f32,
     bool,
-    fn(
-        AbstractSyntaxTree,
-        AbstractSyntaxTree,
-        String,
-        Range<usize>,
-    ) -> Result<AbstractSyntaxTree, ()>,
+    fn(InternalAST, InternalAST, String, Range<usize>) -> Result<InternalAST, ()>,
 );
 
 // TODO: make some operators left-associative

@@ -1,3 +1,4 @@
+use crate::ast::InternalAST;
 use crate::*;
 
 use async_recursion::async_recursion;
@@ -9,7 +10,7 @@ pub(crate) async fn preprocess_chunk(
     chunk: String,
     filename: String,
     offset: usize,
-) -> Result<AbstractSyntaxTree, ()> {
+) -> Result<InternalAST, ()> {
     // Start a concurrent task for tokenization
     let (tokenizer_sender, tokenizer_receiver) = mpsc::unbounded_channel();
     let filename_clone = filename.clone();
@@ -36,5 +37,7 @@ pub(crate) async fn preprocess_chunk(
 ///
 /// Must be given its source code and filename.
 pub async fn preprocess_file(src: &str, filename: String) -> Result<AbstractSyntaxTree, ()> {
-    preprocess_chunk(src.to_string(), filename, 0).await
+    preprocess_chunk(src.to_string(), filename.clone(), 0)
+        .await?
+        .get_inner(&filename)
 }

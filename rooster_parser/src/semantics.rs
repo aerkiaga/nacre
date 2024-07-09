@@ -423,6 +423,7 @@ pub(crate) async fn convert_to_term_rec(
                         value,
                         is_definition,
                         def_type,
+                        _nparams,
                         assignment_range,
                     ) => {
                         if def_type.is_some() {
@@ -473,7 +474,6 @@ pub(crate) async fn convert_to_term_rec(
                             todo!();
                         }
                     }
-                    AbstractSyntaxTree::Empty => {}
                     _ => {
                         if n != statements.len() - 1 {
                             let range = statement.get_range();
@@ -517,10 +517,6 @@ pub(crate) async fn convert_to_term_rec(
                 n += 1;
             }
             Ok(r)
-        }
-        AbstractSyntaxTree::List(_expressions, _) => panic!(),
-        AbstractSyntaxTree::Enclosed(inner, _, _) => {
-            convert_to_term_rec(inner, locals, level, filename, env, ctx, imports).await
         }
         AbstractSyntaxTree::Identifier(components, identifier_range) => {
             let name = components.join("::");
@@ -586,7 +582,7 @@ pub(crate) async fn convert_to_term_rec(
                 }
             }
         }
-        AbstractSyntaxTree::Assignment(_, _, _, _, _) => panic!(),
+        AbstractSyntaxTree::Assignment(_, _, _, _, _, _) => panic!(),
         AbstractSyntaxTree::Application(left, right, application_range) => {
             let mut left_term =
                 convert_to_term_rec(left, locals, level, filename, env, ctx, imports).await?;

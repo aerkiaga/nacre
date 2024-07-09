@@ -23,8 +23,6 @@ flags to `cargo`.
 
 ## TODO
 * Checkpoint before further feature work.
-  - Clean up crates' APIs and document it.
-  - Clean up AST data type.
   - Check all TODOs in code.
   - Enable some stricter clippy warnings.
   - Split large functions.

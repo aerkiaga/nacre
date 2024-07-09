@@ -1,25 +1,27 @@
+use crate::ast::InternalAST;
 use crate::*;
 
 use rooster_types::report;
 use rooster_types::report::Report;
 
 pub(crate) fn parse_prototype(
-    left: &AbstractSyntaxTree,
-    right: AbstractSyntaxTree,
+    left: &InternalAST,
+    right: InternalAST,
     filename: String,
     keyword: &str,
-) -> Result<AbstractSyntaxTree, ()> {
+) -> Result<InternalAST, ()> {
     let mut params = left.clone().special_app_flatten(keyword);
     if params.len() < 2 {
         unreachable!();
     }
-    let mut r = right;
+    let mut r = right.clone();
     params.remove(0);
     let max_n = params.len() - 1;
+    let mut nparams = 0;
     let mut at_least_one = false;
     let left_start = left.get_range().start;
     for (n, param_group) in params.into_iter().rev().enumerate() {
-        if let AbstractSyntaxTree::Enclosed(inner, ch, param_group_range) = param_group {
+        if let InternalAST::Enclosed(inner, ch, param_group_range) = param_group {
             if keyword == "impl" {
                 let left_range = left.get_range();
                 report::send(Report {
@@ -38,7 +40,7 @@ pub(crate) fn parse_prototype(
             }
             if ch == '(' {
                 for element in inner.into_list().into_iter().rev() {
-                    if let AbstractSyntaxTree::Typed(var_name, var_type, _) = element {
+                    if let InternalAST::Typed(var_name, var_type, _) = element {
                         if let AbstractSyntaxTree::Identifier(components, identifier_range) =
                             *var_name
                         {
@@ -63,19 +65,20 @@ pub(crate) fn parse_prototype(
                             } else {
                                 identifier_range.start
                             };
+                            nparams += 1;
                             r = match keyword {
-                                "fn" => AbstractSyntaxTree::Lambda(
+                                "fn" => InternalAST::AST(AbstractSyntaxTree::Lambda(
                                     components[0].clone(),
                                     var_type,
-                                    Box::new(r),
+                                    Box::new(r.get_inner(&filename)?),
                                     start_range..rr.end,
-                                ),
-                                "type" => AbstractSyntaxTree::Forall(
+                                )),
+                                "type" => InternalAST::AST(AbstractSyntaxTree::Forall(
                                     Some(components[0].clone()),
                                     var_type,
-                                    Box::new(r),
+                                    Box::new(r.get_inner(&filename)?),
                                     start_range..rr.end,
-                                ),
+                                )),
                                 _ => unreachable!(),
                             };
                             at_least_one = true;
@@ -150,12 +153,17 @@ pub(crate) fn parse_prototype(
                 return Err(());
             }
         } else if n == max_n {
-            if let AbstractSyntaxTree::Identifier(ref components, _) = param_group {
+            if let InternalAST::AST(AbstractSyntaxTree::Identifier(ref components, _)) = param_group
+            {
                 let param_group_range = param_group.get_range();
                 let range_end = r.get_range().end;
                 if keyword == "impl" {
-                    if let AbstractSyntaxTree::Enclosed(inner, _, _) = r {
-                        return Ok(inner.do_namespace(components, &filename));
+                    if let InternalAST::Enclosed(inner, _, _) = right {
+                        if let InternalAST::AST(ast) = *inner {
+                            return Ok(InternalAST::AST(ast.do_namespace(components, &filename)?));
+                        } else {
+                            panic!();
+                        }
                     } else {
                         unreachable!();
                     }
@@ -175,13 +183,18 @@ pub(crate) fn parse_prototype(
                         });
                         return Err(());
                     }
-                    return Ok(AbstractSyntaxTree::Assignment(
-                        Box::new(param_group),
-                        Box::new(r),
-                        true,
-                        None,
-                        left_start..range_end,
-                    ));
+                    if let InternalAST::AST(ast) = param_group {
+                        return Ok(InternalAST::AST(AbstractSyntaxTree::Assignment(
+                            Box::new(ast),
+                            Box::new(r.get_inner(&filename)?),
+                            true,
+                            None,
+                            nparams,
+                            left_start..range_end,
+                        )));
+                    } else {
+                        panic!();
+                    }
                 }
             } else {
                 unreachable!();

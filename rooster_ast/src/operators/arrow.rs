@@ -1,3 +1,4 @@
+use crate::ast::InternalAST;
 use crate::operators::prototype;
 use crate::*;
 
@@ -5,14 +6,84 @@ use rooster_types::report;
 use rooster_types::report::Report;
 use std::ops::Range;
 
+fn arrow_handler_ast(
+    left_ast: AbstractSyntaxTree,
+    right: InternalAST,
+    filename: String,
+) -> Result<InternalAST, ()> {
+    match left_ast.clone() {
+        AbstractSyntaxTree::Assignment(
+            left_left,
+            left_right,
+            is_definition,
+            _def_type,
+            nparams,
+            left_range,
+        ) => {
+            if let AbstractSyntaxTree::Lambda(_, _, _, _) = &*left_right {
+                let right_range = right.get_range();
+                if let InternalAST::AST(right_ast) = right {
+                    let new_def_type = left_right.lambda_typify(right_ast, nparams);
+                    Ok(InternalAST::AST(AbstractSyntaxTree::Assignment(
+                        left_left,
+                        left_right,
+                        is_definition,
+                        Some(Box::new(new_def_type)),
+                        nparams,
+                        left_range.start..right_range.end,
+                    )))
+                } else {
+                    panic!();
+                }
+            } else {
+                unreachable!();
+            }
+        }
+        _ => {
+            left_ast
+                .must_be_expression(&filename)
+                .and(right.must_be_expression(&filename))?;
+            if let AbstractSyntaxTree::Lambda(_, _, _, ref left_range) = left_ast {
+                let right_range = right.get_range();
+                report::send(Report {
+                    is_error: false,
+                    filename: filename.clone(),
+                    offset: left_range.start,
+                    message: "type definition using `->` operator likely not intended".to_string(),
+                    note: Some(
+                        "anonymous functions cannot have an explicit return type".to_string(),
+                    ),
+                    help: None,
+                    labels: vec![(
+                        left_range.start..right_range.end,
+                        "interpreted as `... -> ...`".to_string(),
+                    )],
+                });
+            }
+            let left_start = left_ast.get_range().start;
+            let right_end = right.get_range().end;
+            if let InternalAST::AST(right_ast) = right {
+                Ok(InternalAST::AST(AbstractSyntaxTree::Forall(
+                    None,
+                    Box::new(left_ast),
+                    Box::new(right_ast),
+                    left_start..right_end,
+                )))
+            } else {
+                panic!();
+            }
+        }
+    }
+}
+
 pub(crate) fn arrow_handler(
-    left: AbstractSyntaxTree,
-    right: AbstractSyntaxTree,
+    left: InternalAST,
+    right: InternalAST,
     filename: String,
     _range: Range<usize>,
-) -> Result<AbstractSyntaxTree, ()> {
+) -> Result<InternalAST, ()> {
     match left {
-        AbstractSyntaxTree::SpecialApp(_, _, ref keyword, _) => {
+        InternalAST::SpecialApp(_, _, ref keyword, _) => {
             match &**keyword {
                 "type" => {}
                 "fn" => {
@@ -36,55 +107,8 @@ pub(crate) fn arrow_handler(
             }
             prototype::parse_prototype(&left, right, filename, keyword)
         }
-        AbstractSyntaxTree::Assignment(
-            left_left,
-            left_right,
-            is_definition,
-            _def_type,
-            left_range,
-        ) => {
-            if let AbstractSyntaxTree::Lambda(_, _, _, _) = &*left_right {
-                let right_range = right.get_range();
-                let new_def_type = left_right.lambda_typify(right);
-                Ok(AbstractSyntaxTree::Assignment(
-                    left_left,
-                    left_right,
-                    is_definition,
-                    Some(Box::new(new_def_type)),
-                    left_range.start..right_range.end,
-                ))
-            } else {
-                unreachable!();
-            }
-        }
-        _ => {
-            left.must_be_expression(&filename)
-                .and(right.must_be_expression(&filename))?;
-            if let AbstractSyntaxTree::Lambda(_, _, _, ref left_range) = left {
-                let right_range = right.get_range();
-                report::send(Report {
-                    is_error: false,
-                    filename: filename.clone(),
-                    offset: left_range.start,
-                    message: "type definition using `->` operator likely not intended".to_string(),
-                    note: Some(
-                        "anonymous functions cannot have an explicit return type".to_string(),
-                    ),
-                    help: None,
-                    labels: vec![(
-                        left_range.start..right_range.end,
-                        "interpreted as `... -> ...`".to_string(),
-                    )],
-                });
-            }
-            let left_start = left.get_range().start;
-            let right_end = right.get_range().end;
-            Ok(AbstractSyntaxTree::Forall(
-                None,
-                Box::new(left),
-                Box::new(right),
-                left_start..right_end,
-            ))
-        }
+        InternalAST::AST(left_ast) => arrow_handler_ast(left_ast, right, filename),
+        InternalAST::Empty => Ok(InternalAST::Empty),
+        _ => arrow_handler_ast(left.get_inner(&filename)?, right, filename),
     }
 }

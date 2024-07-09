@@ -1,3 +1,4 @@
+use crate::ast::InternalAST;
 use crate::*;
 
 use rooster_types::report;
@@ -5,18 +6,21 @@ use rooster_types::report::Report;
 use std::ops::Range;
 
 pub(crate) fn namespace_handler(
-    left: AbstractSyntaxTree,
-    right: AbstractSyntaxTree,
+    left: InternalAST,
+    right: InternalAST,
     filename: String,
     _range: Range<usize>,
-) -> Result<AbstractSyntaxTree, ()> {
-    if let AbstractSyntaxTree::Identifier(mut left_components, left_range) = left {
-        if let AbstractSyntaxTree::Identifier(mut right_components, right_range) = right {
+) -> Result<InternalAST, ()> {
+    if let InternalAST::AST(AbstractSyntaxTree::Identifier(mut left_components, left_range)) = left
+    {
+        if let InternalAST::AST(AbstractSyntaxTree::Identifier(mut right_components, right_range)) =
+            right
+        {
             left_components.append(&mut right_components);
-            Ok(AbstractSyntaxTree::Identifier(
+            Ok(InternalAST::AST(AbstractSyntaxTree::Identifier(
                 left_components,
                 left_range.start..right_range.end,
-            ))
+            )))
         } else {
             let mut right_range = right.get_range();
             if right_range == (0..0) {
