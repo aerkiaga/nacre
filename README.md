@@ -12,8 +12,7 @@ and access its path like this. You can import symbols
 from `std` using the following syntax:
 
 ```rust
-let Eq = super::std::logic::Eq;
-let Eq::sym = super::std::logic::Eq::symmetric;
+use super::std::logic::Eq;
 ```
 
 To use `annotate-snippets` for error reporting
@@ -38,7 +37,7 @@ flags to `cargo`.
   - Use string interning.
   - Avoid fully normalizing in parser unless necessary.
   - Implement comparison without full normalization.
-  - Parallelize verification at conversion level.
+  - Parallelize verification at AST conversion level.
 * Add tests.
   - Kernel fuzz test.
   - Parser fuzz test.
