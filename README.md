@@ -1,7 +1,7 @@
 # Rooster
 A programming language for verified software.
 
-## Testing
+## Usage
 Type in the workspace directory:
 
     cargo run std::logic::Eq::symmetric
@@ -20,6 +20,13 @@ To use `annotate-snippets` for error reporting
 instead of `ariadne` (the default), pass the
 `--features annotate-snippets` and `--no-default-features`
 flags to `cargo`.
+
+## Testing
+    cargo check         # build
+    cargo clippy        # linter
+    cargo test          # integration tests
+    cargo llvm-cov      # test coverage
+    cargo bench         # performance regressions
 
 ## TODO
 * Checkpoint before further feature work.
