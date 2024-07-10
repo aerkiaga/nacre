@@ -562,7 +562,6 @@ impl<T: Meta> Environment<T> {
 
     /// Add a new global definition to an environment,
     /// returning `Err(())` if it could not be added.
-    // TODO: make the type also optional (can't be both None)
     pub fn add_definition(
         &mut self,
         global_def: Option<Arc<Term<T>>>,

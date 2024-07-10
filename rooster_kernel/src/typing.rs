@@ -14,7 +14,6 @@ fn combine_forall_types<T: Meta>(
 ) -> Result<Term<T>, Error<T>> {
     let cta = ta.normalize_in_ctx(env, ctx)?;
     let ctb = tb.normalize_in_ctx(env, ctx)?; /* x:A is not necessary */
-    // TODO: improve metadata handling
     match ctb.inner {
         TermInner::Prop => {
             if cta.is_sort() {

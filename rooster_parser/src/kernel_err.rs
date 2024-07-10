@@ -214,7 +214,6 @@ fn levenshtein_matrix(
     // Compute Levenshtein distances for all prefixes
     for j in 1..v2.len() + 1 {
         for i in 1..v1.len() + 1 {
-            // TODO: update context appropriately if possible
             let t1 = get_type(v1[i - 1]);
             let t2 = get_type(v2[j - 1]);
             for _ in 0..i - 1 {

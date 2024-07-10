@@ -52,7 +52,6 @@ async fn print_report(report: rooster_parser::Report) {
                 .with_color(colors[n]),
         );
     }
-    // TODO: get filename somehow
     let kind = if report.is_error {
         ariadne::ReportKind::Error
     } else {

@@ -7,8 +7,6 @@ use rooster_types::report::Report;
 use std::collections::HashMap;
 use std::ops::Range;
 
-// TODO: recover from more errors
-
 mod prototype;
 
 mod namespace;
@@ -224,8 +222,6 @@ fn equals_handler(
     }
 }
 
-// TODO: check if they are actually statements
-// TODO: ignore AbstractSyntaxTree::Empty if present
 fn semicolon_handler(
     left: InternalAST,
     right: InternalAST,

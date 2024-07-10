@@ -20,8 +20,6 @@ fn error_cannot_find(filename: &str) -> ! {
 
 fn file_loader(filename: &str) -> rooster_cache::LoaderFuture<'_, String> {
     Box::pin(async move {
-        // TODO: load file only if necessary
-        // TODO: convert logical to physical paths
         let mut file = match File::open(filename).await {
             Ok(x) => x,
             Err(_) => error_cannot_find(filename),
@@ -51,7 +49,6 @@ static FILE_CACHE: rooster_cache::Cache<String> = rooster_cache::Cache::new(file
 
 /// Get the raw contents of a particular file.
 pub async fn get_contents(filename: &str) -> Result<Arc<String>, ()> {
-    // TODO: normalize filename
     FILE_CACHE.get(filename).await
 }
 
@@ -70,7 +67,6 @@ static PARSER_CACHE: rooster_cache::Cache<AbstractSyntaxTree> =
 
 /// Get the [AbstractSyntaxTree] for a particular file.
 pub async fn get_file_ast(filename: &str) -> Result<Arc<AbstractSyntaxTree>, ()> {
-    // TODO: normalize filename
     PARSER_CACHE.get(filename).await
 }
 
@@ -117,7 +113,6 @@ static DEFINITION_CACHE: rooster_cache::Cache<(
 pub(crate) async fn get_ast(
     logical_path: &str,
 ) -> Result<(&'static AbstractSyntaxTree, String), ()> {
-    // TODO: normalize filename
     DEFINITION_CACHE
         .get(logical_path)
         .await
@@ -128,7 +123,6 @@ pub(crate) async fn get_ast(
 pub(crate) async fn get_type_ast(
     logical_path: &str,
 ) -> Result<(Option<&'static AbstractSyntaxTree>, String), ()> {
-    // TODO: normalize filename
     DEFINITION_CACHE
         .get(logical_path)
         .await

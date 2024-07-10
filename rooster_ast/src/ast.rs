@@ -331,32 +331,7 @@ impl AbstractSyntaxTree {
     pub(crate) fn must_be_expression(&self, filename: &str) -> Result<(), ()> {
         match self {
             AbstractSyntaxTree::Block(_, _) => Ok(()),
-            AbstractSyntaxTree::Identifier(components, range) => {
-                if components.len() == 1 {
-                    // TODO refactor out this
-                    match &*components[0] {
-                        "fn" | "type" | "impl" | "let" => {
-                            report::send(Report {
-                                is_error: true,
-                                filename: filename.to_string(),
-                                offset: range.start,
-                                message: "Expected valid expression, found reserved keyword"
-                                    .to_string(),
-                                note: None,
-                                help: None,
-                                labels: vec![(
-                                    range.clone(),
-                                    format!("reserved keyword `{}`", components[0]),
-                                )],
-                            });
-                            Err(())
-                        }
-                        _ => Ok(()),
-                    }
-                } else {
-                    Ok(())
-                }
-            }
+            AbstractSyntaxTree::Identifier(components, range) => Ok(()),
             AbstractSyntaxTree::Assignment(_, _, is_let, _, _, range) => {
                 if *is_let {
                     report::send(Report {
@@ -378,7 +353,7 @@ impl AbstractSyntaxTree {
                         help: Some(
                             "use `==` for boolean equality, `===` for equality proposition"
                                 .to_string(),
-                        ), // TODO: update if operators change
+                        ),
                         labels: vec![(range.clone(), "assignment statement".to_string())],
                     });
                 }

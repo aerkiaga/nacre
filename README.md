@@ -5,6 +5,7 @@ A programming language for verified software.
 Type in the workspace directory:
 
 ```shell
+cd rooster
 cargo run std::logic::Eq::symmetric
 ```
 
@@ -37,7 +38,6 @@ cargo afl fuzz -i rooster_kernel/examples/in -o rooster_kernel/examples/out targ
 
 ## TODO
 * Checkpoint before further feature work.
-  - Check all TODOs in code.
   - Enable some stricter clippy warnings.
   - Split large functions.
   - Split long source files.
