@@ -3,4 +3,4 @@ target/
 Cargo.lock
 **/*.rs.bk
 notes/
-rooster_kernel/examples/out/
+**/examples/out/

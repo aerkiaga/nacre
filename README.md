@@ -1,15 +1,15 @@
-# Rooster
+# Nacre
 A programming language for verified software.
 
 ## Usage
 Type in the workspace directory:
 
 ```shell
-cd rooster
+cd nacre
 cargo run std::logic::Eq::symmetric
 ```
 
-This will verify `Eq::symmetric` in `./std/logic.roo`.
+This will verify `Eq::symmetric` in `./std/logic.na`.
 To verify any theorem of yours, type it in a file
 and access its path like this. You can import symbols
 from `std` using the following syntax:
@@ -33,7 +33,7 @@ cargo bench         # performance regressions
 
 # fuzz testing
 cargo afl build --example fuzz_consistency
-cargo afl fuzz -i rooster_kernel/examples/in -o rooster_kernel/examples/out target/debug/examples/fuzz_consistency
+cargo afl fuzz -i nacre_kernel/examples/in -o nacre_kernel/examples/out target/debug/examples/fuzz_consistency
 ```
 
 ## TODO

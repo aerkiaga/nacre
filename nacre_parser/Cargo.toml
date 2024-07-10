@@ -1,0 +1,13 @@
+[package]
+name = "nacre_parser"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+async-recursion = "1"
+once_cell = "1"
+nacre_ast = {path = "../nacre_ast"}
+nacre_cache = {path = "../nacre_cache"}
+nacre_kernel = {path = "../nacre_kernel"}
+nacre_types = {path = "../nacre_types"}
+tokio = {version = "1", features = ["fs", "io-util", "macros", "rt-multi-thread", "sync"]}
