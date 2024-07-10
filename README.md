@@ -38,7 +38,6 @@ cargo afl fuzz -i nacre_kernel/examples/in -o nacre_kernel/examples/out target/d
 
 ## TODO
 * Checkpoint before further feature work.
-  - Enable some stricter clippy warnings.
   - Split large functions.
   - Split long source files.
 * Improve performance.

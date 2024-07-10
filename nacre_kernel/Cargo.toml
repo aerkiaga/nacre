@@ -7,3 +7,6 @@ edition = "2021"
 
 [dev-dependencies]
 afl = "*"
+
+[lints.clippy]
+too_many_lines = "warn"
