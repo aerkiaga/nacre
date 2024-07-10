@@ -37,6 +37,6 @@ const LOGICAL_PATHS: &[&str] = &[
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_std() {
     for logical_path in LOGICAL_PATHS {
-        let _ = rooster_parser::verify(logical_path).await;
+        rooster_parser::verify(logical_path).await.unwrap();
     }
 }

@@ -47,7 +47,6 @@ cargo afl fuzz -i rooster_kernel/examples/in -o rooster_kernel/examples/out targ
   - Implement comparison without full normalization.
   - Parallelize verification at AST conversion level.
 * Add tests.
-  - Kernel fuzz test.
   - Parser fuzz test.
   - Regular test suite.
   - Mutation testing.
