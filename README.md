@@ -4,7 +4,9 @@ A programming language for verified software.
 ## Usage
 Type in the workspace directory:
 
-    cargo run std::logic::Eq::symmetric
+```shell
+cargo run std::logic::Eq::symmetric
+```
 
 This will verify `Eq::symmetric` in `./std/logic.roo`.
 To verify any theorem of yours, type it in a file
@@ -21,11 +23,17 @@ instead of `ariadne` (the default), pass the
 flags to `cargo`.
 
 ## Testing
-    cargo check         # build
-    cargo clippy        # linter
-    cargo test          # integration tests
-    cargo llvm-cov      # test coverage
-    cargo bench         # performance regressions
+```shell
+cargo check         # build
+cargo clippy        # linter
+cargo test --tests  # integration tests
+cargo llvm-cov      # test coverage
+cargo bench         # performance regressions
+
+# fuzz testing
+cargo afl build --example fuzz_consistency
+cargo afl fuzz -i rooster_kernel/examples/in -o rooster_kernel/examples/out target/debug/examples/fuzz_consistency
+```
 
 ## TODO
 * Checkpoint before further feature work.

@@ -581,7 +581,7 @@ impl<T: Meta> Environment<T> {
                     });
                 }
             }
-            self.inner.insert(0, (global_def, global_type));
+            self.inner.push((global_def, global_type));
             Ok(())
         } else {
             Err(Error::Other)

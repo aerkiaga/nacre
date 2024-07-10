@@ -35,8 +35,8 @@ impl<T: Meta> Term<T> {
         }
     }
 
-    // Checks well-formedness of a term in an environment.
-    pub(crate) fn well_formed(&self, env: &Environment<T>) -> bool {
+    /// Checks well-formedness of a term in an environment.
+    pub fn well_formed(&self, env: &Environment<T>) -> bool {
         self.is_well_formed(env, &mut Context::new())
     }
 }
