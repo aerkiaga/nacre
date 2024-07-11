@@ -71,10 +71,7 @@ async fn print_report(report: nacre_parser::Report) {
         .eprint((
             &*report.filename,
             ariadne::Source::<String>::from(
-                (*nacre_parser::get_contents(&report.filename)
-                    .await
-                    .unwrap())
-                .to_string(),
+                (*nacre_parser::get_contents(&report.filename).await.unwrap()).to_string(),
             ),
         ))
         .unwrap();

@@ -1,10 +1,10 @@
 use crate::kernel_err::TermMeta;
 use crate::*;
 
-use once_cell::sync::Lazy;
 use nacre_kernel::Environment;
 use nacre_kernel::Term;
 use nacre_kernel::TermInner;
+use once_cell::sync::Lazy;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
@@ -82,8 +82,7 @@ fn kernel_loader(logical_path: &str) -> nacre_cache::LoaderFuture<'_, Definition
 }
 
 // The global cache storing definition, type and index for each verified definition
-static KERNEL_CACHE: nacre_cache::Cache<Definition> =
-    nacre_cache::Cache::new(kernel_loader as _);
+static KERNEL_CACHE: nacre_cache::Cache<Definition> = nacre_cache::Cache::new(kernel_loader as _);
 
 /// Parse and verify the CoC expression corresponding to a particular logical path.
 pub async fn verify(logical_path: &str) -> Result<(), ()> {

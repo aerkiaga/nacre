@@ -2,12 +2,12 @@ use crate::kernel_err::TermMeta;
 use crate::*;
 
 use async_recursion::async_recursion;
-use once_cell::sync::Lazy;
 use nacre_ast::AbstractSyntaxTree;
 use nacre_kernel::Context;
 use nacre_kernel::Environment;
 use nacre_kernel::Term;
 use nacre_kernel::TermInner;
+use once_cell::sync::Lazy;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::ops::Range;

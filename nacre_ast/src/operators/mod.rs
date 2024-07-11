@@ -1,9 +1,9 @@
 use crate::ast::InternalAST;
 use crate::*;
 
-use once_cell::sync::Lazy;
 use nacre_types::report;
 use nacre_types::report::Report;
+use once_cell::sync::Lazy;
 use std::collections::HashMap;
 use std::ops::Range;
 

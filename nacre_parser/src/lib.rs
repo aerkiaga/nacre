@@ -8,10 +8,10 @@ mod path;
 mod semantics;
 
 pub use kernel::verify;
-pub use report::REPORTS;
 pub use nacre_ast::{preprocess_file, AbstractSyntaxTree};
 pub use nacre_types::report;
 pub use nacre_types::report::Report;
+pub use report::REPORTS;
 
 fn error_cannot_find(filename: &str) -> ! {
     println!("Error: cannot find file '{}'.", filename);
