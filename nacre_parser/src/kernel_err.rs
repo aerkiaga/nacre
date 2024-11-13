@@ -298,24 +298,90 @@ fn levenshtein_compare<'a>(
     (r1, r2)
 }
 
-fn handle_prototype(
-    t1: &Term<TermMeta>,
-    t2: &Term<TermMeta>,
+fn handle_prototype_format_arguments(
+    opt_params: (ParamsWithGaps, ParamsWithGaps),
     env: &Environment<TermMeta>,
     ctx1: &mut Context<TermMeta>,
     ctx2: &mut Context<TermMeta>,
-    is_lambda: bool,
-) -> ((String, String), ComparisonResult) {
-    // Get two lists of parameters
-    let mut params1 = list_params(t1, is_lambda);
-    let mut params2 = list_params(t2, is_lambda);
-    let nparam1 = params1.len();
-    let nparam2 = params2.len();
-    let mut ret1 = params1.pop().unwrap();
-    let mut ret2 = params2.pop().unwrap();
-    // Map insertions, replacements and deletions
-    let (mut opt_params1, mut opt_params2) = levenshtein_compare(params1, params2, env, ctx1, ctx2);
-    // Handle trailing parameters
+) -> (Vec<String>, Vec<String>, bool) {
+    let (opt_params1, opt_params2) = opt_params;
+    let mut r1 = vec![];
+    let mut r2 = vec![];
+    let mut n1 = 0;
+    let mut n2 = 0;
+    let mut at_least_one_equal = false;
+    for n in 0..opt_params1.len() {
+        match opt_params1[n] {
+            Some(p1) => {
+                let name1 = p1.meta.name.clone().unwrap_or("_".to_string());
+                let t1 = get_type(p1);
+                match opt_params2[n] {
+                    Some(p2) => {
+                        let name2 = p2.meta.name.clone().unwrap_or("_".to_string());
+                        let t2 = get_type(p2);
+                        let (cname1, cname2) = adjust_strings(name1, name2);
+                        for _ in 0..n1 {
+                            ctx1.add_inner(
+                                None,
+                                (TermInner::Prop, &Arc::new(TermMeta::default())).into(),
+                            );
+                        }
+                        for _ in 0..n2 {
+                            ctx2.add_inner(
+                                None,
+                                (TermInner::Prop, &Arc::new(TermMeta::default())).into(),
+                            );
+                        }
+                        let ((st1, st2), res) =
+                            produce_comparison_rec(t1, t2, env, ctx1, ctx2, false);
+                        if res.is_equal() {
+                            at_least_one_equal = true;
+                        }
+                        for _ in 0..n1 {
+                            ctx1.remove_inner();
+                        }
+                        for _ in 0..n2 {
+                            ctx2.remove_inner();
+                        }
+                        r1.push(format!("{}: {}", cname1, st1));
+                        r2.push(format!("{}: {}", cname2, st2));
+                        n2 += 1;
+                    }
+                    None => {
+                        r1.push(format!("`{}: {}`", name1, produce_term(t1)));
+                        r2.push("".to_string());
+                    }
+                }
+                n1 += 1;
+            }
+            None => match opt_params2[n] {
+                Some(p2) => {
+                    let name2 = p2.meta.name.clone().unwrap_or("_".to_string());
+                    let t2 = get_type(p2);
+                    r1.push("".to_string());
+                    r2.push(format!("`{}: {}`", name2, produce_term(t2)));
+                    n2 += 1;
+                }
+                None => {
+                    unreachable!();
+                }
+            },
+        }
+    }
+    (r1, r2, at_least_one_equal)
+}
+
+fn handle_prototype_trailing_parameters<'a>(
+    nparam: (usize, usize),
+    ret: (&Term<TermMeta>, &Term<TermMeta>),
+    opt_params: (ParamsWithGaps<'a>, ParamsWithGaps<'a>),
+    env: &Environment<TermMeta>,
+    ctx1: &mut Context<TermMeta>,
+    ctx2: &mut Context<TermMeta>,
+) -> (ParamsWithGaps<'a>, ParamsWithGaps<'a>) {
+    let (nparam1, nparam2) = nparam;
+    let (mut ret1, mut ret2) = ret;
+    let (mut opt_params1, mut opt_params2) = opt_params;
     for _ in 0..nparam1 {
         ctx1.add_inner(
             None,
@@ -382,70 +448,31 @@ fn handle_prototype(
             op_other.pop();
         }
     }
+    (opt_params1, opt_params2)
+}
+
+fn handle_prototype(
+    t1: &Term<TermMeta>,
+    t2: &Term<TermMeta>,
+    env: &Environment<TermMeta>,
+    ctx1: &mut Context<TermMeta>,
+    ctx2: &mut Context<TermMeta>,
+    is_lambda: bool,
+) -> ((String, String), ComparisonResult) {
+    // Get two lists of parameters
+    let mut params1 = list_params(t1, is_lambda);
+    let mut params2 = list_params(t2, is_lambda);
+    let nparam1 = params1.len();
+    let nparam2 = params2.len();
+    let ret1 = params1.pop().unwrap();
+    let ret2 = params2.pop().unwrap();
+    // Map insertions, replacements and deletions
+    let (mut opt_params1, mut opt_params2) = levenshtein_compare(params1, params2, env, ctx1, ctx2);
+    // Handle trailing parameters
+    (opt_params1, opt_params2) = handle_prototype_trailing_parameters((nparam1, nparam2), (ret1, ret2), (opt_params1, opt_params2), env, ctx1, ctx2);
     // Format arguments correctly
-    let mut r1 = vec![];
-    let mut r2 = vec![];
-    let mut n1 = 0;
-    let mut n2 = 0;
-    let mut at_least_one_equal = false;
-    for n in 0..opt_params1.len() {
-        match opt_params1[n] {
-            Some(p1) => {
-                let name1 = p1.meta.name.clone().unwrap_or("_".to_string());
-                let t1 = get_type(p1);
-                match opt_params2[n] {
-                    Some(p2) => {
-                        let name2 = p2.meta.name.clone().unwrap_or("_".to_string());
-                        let t2 = get_type(p2);
-                        let (cname1, cname2) = adjust_strings(name1, name2);
-                        for _ in 0..n1 {
-                            ctx1.add_inner(
-                                None,
-                                (TermInner::Prop, &Arc::new(TermMeta::default())).into(),
-                            );
-                        }
-                        for _ in 0..n2 {
-                            ctx2.add_inner(
-                                None,
-                                (TermInner::Prop, &Arc::new(TermMeta::default())).into(),
-                            );
-                        }
-                        let ((st1, st2), res) =
-                            produce_comparison_rec(t1, t2, env, ctx1, ctx2, false);
-                        if res.is_equal() {
-                            at_least_one_equal = true;
-                        }
-                        for _ in 0..n1 {
-                            ctx1.remove_inner();
-                        }
-                        for _ in 0..n2 {
-                            ctx2.remove_inner();
-                        }
-                        r1.push(format!("{}: {}", cname1, st1));
-                        r2.push(format!("{}: {}", cname2, st2));
-                        n2 += 1;
-                    }
-                    None => {
-                        r1.push(format!("`{}: {}`", name1, produce_term(t1)));
-                        r2.push("".to_string());
-                    }
-                }
-                n1 += 1;
-            }
-            None => match opt_params2[n] {
-                Some(p2) => {
-                    let name2 = p2.meta.name.clone().unwrap_or("_".to_string());
-                    let t2 = get_type(p2);
-                    r1.push("".to_string());
-                    r2.push(format!("`{}: {}`", name2, produce_term(t2)));
-                    n2 += 1;
-                }
-                None => {
-                    unreachable!();
-                }
-            },
-        }
-    }
+    let (mut r1, mut r2, at_least_one_equal) =
+        handle_prototype_format_arguments((opt_params1, opt_params2), env, ctx1, ctx2);
     // Handle commas
     let mut add_comma = false;
     for n in (0..r1.len()).rev() {
@@ -479,6 +506,74 @@ fn handle_prototype(
             ComparisonResult::Different
         },
     )
+}
+
+fn comparison_try_expand(
+    ta: &Term<TermMeta>,
+    tb: &Term<TermMeta>,
+    reverse: bool,
+    env: &Environment<TermMeta>,
+    ctx1: &mut Context<TermMeta>,
+    ctx2: &mut Context<TermMeta>,
+) -> Option<((String, String), ComparisonResult)> {
+    match &ta.inner {
+        TermInner::Global(g) => {
+            if let Ok(cta) = env.delta_replacement(*g) {
+                let (s12, res) = if reverse {
+                    produce_comparison_rec(tb, &cta, env, ctx1, ctx2, false)
+                } else {
+                    produce_comparison_rec(&cta, tb, env, ctx1, ctx2, false)
+                };
+                if res > ComparisonResult::Different {
+                    return Some((s12, res));
+                }
+            }
+        }
+        TermInner::Variable(v) => {
+            if let Ok(cta) = ctx1.delta_replacement(*v) {
+                let (s12, res) = if reverse {
+                    produce_comparison_rec(tb, &cta, env, ctx1, ctx2, false)
+                } else {
+                    produce_comparison_rec(&cta, tb, env, ctx1, ctx2, false)
+                };
+                if res > ComparisonResult::Different {
+                    return Some((s12, res));
+                }
+            }
+        }
+        TermInner::Apply(l, r) => match &l.inner {
+            TermInner::Lambda(_ll, lr) => {
+                if let Ok(cta) = lr.replace_inner(r) {
+                    let (s12, res) = if reverse {
+                    produce_comparison_rec(tb, &cta, env, ctx1, ctx2, false)
+                } else {
+                    produce_comparison_rec(&cta, tb, env, ctx1, ctx2, false)
+                };
+                    if res > ComparisonResult::Different {
+                        return Some((s12, res));
+                    }
+                }
+            }
+            _ => {
+                if let Ok(cl) = l.normalize_in_ctx(env, ctx1) {
+                    if let TermInner::Lambda(_ll, lr) = &cl.inner {
+                        if let Ok(cta) = lr.replace_inner(r) {
+                            let (s12, res) = if reverse {
+                    produce_comparison_rec(tb, &cta, env, ctx1, ctx2, false)
+                } else {
+                    produce_comparison_rec(&cta, tb, env, ctx1, ctx2, false)
+                };
+                            if res > ComparisonResult::Different {
+                                return Some((s12, res));
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        _ => {}
+    }
+    None
 }
 
 fn produce_comparison_rec(
@@ -518,90 +613,8 @@ fn produce_comparison_rec(
         }
     }
     // try to expand
-    match &t1.inner {
-        TermInner::Global(g) => {
-            if let Ok(ct1) = env.delta_replacement(*g) {
-                let (s12, res) = produce_comparison_rec(&ct1, t2, env, ctx1, ctx2, false);
-                if res > ComparisonResult::Different {
-                    return (s12, res);
-                }
-            }
-        }
-        TermInner::Variable(v) => {
-            if let Ok(ct1) = ctx1.delta_replacement(*v) {
-                let (s12, res) = produce_comparison_rec(&ct1, t2, env, ctx1, ctx2, false);
-                if res > ComparisonResult::Different {
-                    return (s12, res);
-                }
-            }
-        }
-        TermInner::Apply(l, r) => match &l.inner {
-            TermInner::Lambda(_ll, lr) => {
-                if let Ok(ct1) = lr.replace_inner(r) {
-                    let (s12, res) = produce_comparison_rec(&ct1, t2, env, ctx1, ctx2, false);
-                    if res > ComparisonResult::Different {
-                        return (s12, res);
-                    }
-                }
-            }
-            _ => {
-                if let Ok(cl) = l.normalize_in_ctx(env, ctx1) {
-                    if let TermInner::Lambda(_ll, lr) = &cl.inner {
-                        if let Ok(ct1) = lr.replace_inner(r) {
-                            let (s12, res) =
-                                produce_comparison_rec(&ct1, t2, env, ctx1, ctx2, false);
-                            if res > ComparisonResult::Different {
-                                return (s12, res);
-                            }
-                        }
-                    }
-                }
-            }
-        },
-        _ => {}
-    }
-    match &t2.inner {
-        TermInner::Global(g) => {
-            if let Ok(ct2) = env.delta_replacement(*g) {
-                let (s12, res) = produce_comparison_rec(t1, &ct2, env, ctx1, ctx2, false);
-                if res > ComparisonResult::Different {
-                    return (s12, res);
-                }
-            }
-        }
-        TermInner::Variable(v) => {
-            if let Ok(ct2) = ctx2.delta_replacement(*v) {
-                let (s12, res) = produce_comparison_rec(t1, &ct2, env, ctx1, ctx2, false);
-                if res > ComparisonResult::Different {
-                    return (s12, res);
-                }
-            }
-        }
-        TermInner::Apply(l, r) => match &l.inner {
-            TermInner::Lambda(_ll, lr) => {
-                if let Ok(ct2) = lr.replace_inner(r) {
-                    let (s12, res) = produce_comparison_rec(t1, &ct2, env, ctx1, ctx2, false);
-                    if res > ComparisonResult::Different {
-                        return (s12, res);
-                    }
-                }
-            }
-            _ => {
-                if let Ok(cl) = l.normalize_in_ctx(env, ctx2) {
-                    if let TermInner::Lambda(_ll, lr) = &cl.inner {
-                        if let Ok(ct2) = lr.replace_inner(r) {
-                            let (s12, res) =
-                                produce_comparison_rec(t1, &ct2, env, ctx1, ctx2, false);
-                            if res > ComparisonResult::Different {
-                                return (s12, res);
-                            }
-                        }
-                    }
-                }
-            }
-        },
-        _ => {}
-    }
+    comparison_try_expand(t1, t2, false, env, ctx1, ctx2);
+    comparison_try_expand(t2, t1, true, env, ctx1, ctx2);
     (
         adjust_strings(
             format!("`{}`", produce_term(t1)),

@@ -30,8 +30,10 @@ cargo clippy        # linter
 cargo test --tests  # integration tests
 cargo llvm-cov      # test coverage
 cargo bench         # performance regressions
+```
 
 # fuzz testing
+```shell
 cargo afl build --example fuzz_consistency
 cargo afl fuzz -i nacre_kernel/examples/in -o nacre_kernel/examples/out target/debug/examples/fuzz_consistency
 ```
