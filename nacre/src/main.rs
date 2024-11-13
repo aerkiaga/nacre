@@ -57,10 +57,12 @@ async fn print_report(report: nacre_parser::Report) {
     } else {
         ariadne::ReportKind::Warning
     };
-    let mut r =
-        ariadne::Report::<(&str, Range<usize>)>::build(kind, &*report.filename, report.offset)
-            .with_message(format_text(report.message))
-            .with_labels(labels);
+    let mut r = ariadne::Report::<(&str, Range<usize>)>::build(
+        kind,
+        (&*report.filename, report.offset..report.offset),
+    )
+    .with_message(format_text(report.message))
+    .with_labels(labels);
     if let Some(note) = report.note {
         r.set_note(format_text(note));
     }
