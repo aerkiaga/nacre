@@ -13,7 +13,7 @@ use tokio::sync::mpsc;
 compile_error!("please select only one compiler diagnostics backend in crate features");
 
 fn print_usage() {
-    println!("Usage: nacre <filename>")
+    println!("Usage: nacre <logical path>")
 }
 
 fn error_incorrect_args() {
@@ -206,8 +206,9 @@ async fn main() {
     let logical_path = args.nth(1).unwrap();
     // we use a mpsc because Notify is not cancellation-safe
     let (notify_completion_send, mut notify_completion) = mpsc::channel(1);
+    let logical_path_clone = logical_path.clone();
     let task_handle = tokio::spawn(async move {
-        let _ = nacre_parser::verify(&logical_path).await;
+        let _ = nacre_parser::verify(&logical_path_clone).await;
         notify_completion_send.send(()).await.unwrap();
     });
     let mut report_receiver = nacre_parser::REPORTS.subscribe();
@@ -224,4 +225,6 @@ async fn main() {
         print_report(report).await;
     }
     task_handle.await.unwrap();
+    let ir = nacre_compiler::compile(vec![logical_path]).await.unwrap();
+    println!("{:?}", ir);
 }

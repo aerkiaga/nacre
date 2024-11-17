@@ -16,6 +16,11 @@ static INDEX_COUNTER: AtomicUsize = AtomicUsize::new(0);
 static GLOBAL_ENV: Lazy<Mutex<Environment<TermMeta>>> =
     Lazy::new(|| Environment::from_vec(vec![]).into());
 
+/// Returns a copy of the global [Environment].
+pub async fn get_global_environment() -> Environment<TermMeta> {
+    GLOBAL_ENV.lock().await.clone()
+}
+
 pub(crate) async fn update_environment(
     _env: Environment<TermMeta>,
     dependency: &str,
@@ -88,4 +93,24 @@ static KERNEL_CACHE: nacre_cache::Cache<Definition> = nacre_cache::Cache::new(ke
 pub async fn verify(logical_path: &str) -> Result<(), ()> {
     KERNEL_CACHE.get(logical_path).await?;
     Ok(())
+}
+
+/// Returns the index of the expression corresponding to a logical path.
+///
+/// Will parse and verify the expression, much like [verify].
+pub async fn get_definition_index(logical_path: &str) -> Result<usize, ()> {
+    let def = KERNEL_CACHE.get(logical_path).await?;
+    let index = def.2;
+    let mut env_lock = GLOBAL_ENV.lock().await;
+    let mut env = env_lock.clone().into_vec();
+    for i in env.len()..std::cmp::max(env.len(), index + 1) {
+        env.push((
+            None,
+            Arc::new((TermInner::Prop, &Arc::new(TermMeta::default())).into()),
+        ));
+    }
+    let def2 = (&*def).clone();
+    env[index] = (Some(def2.0), def2.1);
+    *env_lock = Environment::from_vec(env);
+    Ok(index)
 }
