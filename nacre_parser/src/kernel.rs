@@ -21,6 +21,14 @@ pub async fn get_global_environment() -> Environment<TermMeta> {
     GLOBAL_ENV.lock().await.clone()
 }
 
+static GLOBAL_ENV_NAMES: Lazy<Mutex<Vec<String>>> = Lazy::new(|| vec![].into());
+
+/// Returns a copy of the identifiers corresponding to
+/// definitions in the global environment.
+pub async fn get_global_environment_names() -> Vec<String> {
+    GLOBAL_ENV_NAMES.lock().await.clone()
+}
+
 pub(crate) async fn update_environment(
     _env: Environment<TermMeta>,
     dependency: &str,
@@ -80,6 +88,7 @@ fn kernel_loader(logical_path: &str) -> nacre_cache::LoaderFuture<'_, Definition
         });
         env.add_definition(Some(definition.clone()), type_term.clone())
             .map_err(|e| kernel_err::report(e, &filename))?;
+        GLOBAL_ENV_NAMES.lock().await.push(logical_path.to_string());
         eprintln!("Verified {}", logical_path);
         let index = INDEX_COUNTER.fetch_add(1, Ordering::Relaxed);
         Ok((definition, type_term, index))

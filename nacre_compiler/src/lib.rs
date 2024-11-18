@@ -1,5 +1,6 @@
 use nacre_parser::get_definition_index;
 use nacre_parser::get_global_environment;
+use nacre_parser::get_global_environment_names;
 use std::collections::HashSet;
 
 mod base;
@@ -36,6 +37,8 @@ impl std::fmt::Debug for IrInstr {
 
 struct IrDef {
     env_index: Option<usize>,
+    name: Option<String>,
+    export: bool,
     params: usize,
     captures: HashSet<usize>,
     code: Vec<IrInstr>,
@@ -45,6 +48,12 @@ impl std::fmt::Debug for IrDef {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         if let Some(index) = self.env_index {
             write!(f, "// env index: {}\n", index)?;
+        }
+        if let Some(name) = &self.name {
+            write!(f, "// name: {}\n", name)?;
+        }
+        if self.export {
+            write!(f, "// export\n")?;
         }
         write!(
             f,
@@ -104,6 +113,7 @@ pub async fn compile(identifiers: Vec<String>) -> Result<Ir, ()> {
         indices.push(get_definition_index(&id).await?);
     }
     let env = get_global_environment().await.into_vec();
-    let ir = base::compute_initial_ir(&indices, &env);
+    let names = get_global_environment_names().await;
+    let ir = base::compute_initial_ir(&indices, &env, &names);
     Ok(ir)
 }
