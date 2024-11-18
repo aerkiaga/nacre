@@ -227,4 +227,5 @@ async fn main() {
     task_handle.await.unwrap();
     let ir = nacre_compiler::compile(vec![logical_path]).await.unwrap();
     println!("{:?}", ir);
+    ir.emit_code();
 }

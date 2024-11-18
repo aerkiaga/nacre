@@ -4,6 +4,8 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+inkwell = {version = "0.5.0", features = ["llvm18-0"]}
+llvm-sys-180 = { package = "llvm-sys", version = "180", features = ["prefer-dynamic"] }
 nacre_kernel = {path = "../nacre_kernel"}
 nacre_parser = {path = "../nacre_parser"}
 tokio = {version = "1", features = ["fs", "io-util", "macros", "rt-multi-thread", "sync"]}
