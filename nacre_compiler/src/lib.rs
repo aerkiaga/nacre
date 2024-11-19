@@ -11,6 +11,7 @@ enum IrInstr {
     Capture(usize),
     Apply(usize, Vec<usize>),
     Closure(usize, Vec<usize>),
+    Move(usize),
 }
 
 impl std::fmt::Debug for IrInstr {
@@ -30,6 +31,7 @@ impl std::fmt::Debug for IrInstr {
                 func,
                 c.iter().map(|x| format!(" ${}", x)).collect::<String>()
             )?,
+            Self::Move(n) => write!(f, "${}\n", n)?,
         }
         Ok(())
     }

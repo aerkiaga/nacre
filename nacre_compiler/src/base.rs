@@ -2,6 +2,7 @@ use crate::{Ir, IrDef, IrInstr};
 use nacre_kernel::Term;
 use nacre_kernel::TermInner;
 use nacre_parser::TermMeta;
+use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
 
@@ -14,6 +15,7 @@ fn compute_ir_instruction(
     term: &Term<TermMeta>,
     env: &Vec<Definition>,
     names: &Vec<String>,
+    defs: &mut HashMap<usize, usize>,
 ) -> Result<(), ()> {
     match &term.inner {
         TermInner::Global(g) => {
@@ -41,20 +43,32 @@ fn compute_ir_instruction(
         }
         TermInner::Variable(v) => {
             let def = ir.defs[ir_index].as_mut().unwrap();
-            if *v == 0 {
-                def.code.push(IrInstr::Param(0));
-            } else {
-                def.code.push(IrInstr::Capture(*v - 1));
-                def.captures.insert(*v - 1);
+            match defs.get(v) {
+            	Some(&usize::MAX) => def.code.push(IrInstr::Param(0)),
+            	Some(n) => def.code.push(IrInstr::Move(*n)),
+            	_ => {
+            		let mut par = 1;
+            		for (k, v) in defs.iter() {
+            			if *v == usize::MAX {
+            				par = *k;
+            			}
+            		}
+		            def.code.push(IrInstr::Capture(*v - par));
+		            def.captures.insert(*v - par);
+		        }
             }
         }
         TermInner::Lambda(a, b) => {
             let def = ir.defs[ir_index].as_mut().unwrap();
+            let mut new_defs = HashMap::new();
+            let mut old_defs = HashMap::new();
+            (old_defs, *defs) = (defs.clone(), new_defs);
+            defs.insert(0, usize::MAX);
             if let TermInner::Prop = a.inner {
-                compute_ir_instruction(ir, ir_index, env_to_ir_index, b, env, names);
+                compute_ir_instruction(ir, ir_index, env_to_ir_index, b, env, names, defs);
             } else if def.params == 0 && def.code.len() == 0 {
                 def.params = 1;
-                compute_ir_instruction(ir, ir_index, env_to_ir_index, b, env, names);
+                compute_ir_instruction(ir, ir_index, env_to_ir_index, b, env, names, defs);
             } else {
                 ir.defs.push(Some(IrDef {
                     env_index: None,
@@ -65,7 +79,7 @@ fn compute_ir_instruction(
                     code: vec![],
                 }));
                 let closure_ir_index = ir.defs.len() - 1;
-                compute_ir_instruction(ir, ir.defs.len() - 1, env_to_ir_index, b, env, names);
+                compute_ir_instruction(ir, ir.defs.len() - 1, env_to_ir_index, b, env, names, defs);
                 let captures = ir.defs[closure_ir_index].as_ref().unwrap().captures.clone();
                 let def = ir.defs[ir_index].as_mut().unwrap();
                 for (n, c) in captures.iter().enumerate() {
@@ -81,11 +95,12 @@ fn compute_ir_instruction(
                 def.code
                     .push(IrInstr::Closure(closure_ir_index, passed_captures));
             }
+            *defs = old_defs;
         }
         TermInner::Apply(a, b) => {
-            compute_ir_instruction(ir, ir_index, env_to_ir_index, a, env, names);
+            compute_ir_instruction(ir, ir_index, env_to_ir_index, a, env, names, defs);
             let a_index = ir.defs[ir_index].as_ref().unwrap().code.len() - 1;
-            if let Ok(_) = compute_ir_instruction(ir, ir_index, env_to_ir_index, b, env, names) {
+            if let Ok(_) = compute_ir_instruction(ir, ir_index, env_to_ir_index, b, env, names, defs) {
                 let b_index = ir.defs[ir_index].as_ref().unwrap().code.len() - 1;
                 ir.defs[ir_index]
                     .as_mut()
@@ -95,7 +110,17 @@ fn compute_ir_instruction(
             }
         }
         TermInner::Let(a, b) => {
-            todo!();
+        	compute_ir_instruction(ir, ir_index, env_to_ir_index, a, env, names, defs);
+            let a_index = ir.defs[ir_index].as_ref().unwrap().code.len() - 1;
+            let mut new_defs = HashMap::new();
+            let mut old_defs = HashMap::new();
+            for (k, v) in defs.iter() {
+            	new_defs.insert(k + 1, *v);
+            }
+            (old_defs, *defs) = (defs.clone(), new_defs);
+            defs.insert(0, a_index);
+            compute_ir_instruction(ir, ir_index, env_to_ir_index, b, env, names, defs);
+            *defs = old_defs;
         }
         _ => {
             return Err(());
@@ -122,7 +147,7 @@ fn compute_ir_definition(
         captures: HashSet::new(),
         code: vec![],
     });
-    compute_ir_instruction(ir, ir_index, env_to_ir_index, &term, env, names);
+    compute_ir_instruction(ir, ir_index, env_to_ir_index, &term, env, names, &mut HashMap::new());
 }
 
 pub(crate) fn compute_initial_ir(

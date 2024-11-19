@@ -57,11 +57,9 @@ as reference for later development).
   - Implement struct and enum definition syntax.
   - Add support for more kinds of lvalues.
 * Implement barebones code generation.
-  - Write code to convert CoC into closures.
   - Write code to optimize closures into static code
   	and data structures.
   - Add at least a few built-in types.
-  - Investigate and use LLVM.
 
 ### Research phase
 Once the bootstrapping compiler is capable of
