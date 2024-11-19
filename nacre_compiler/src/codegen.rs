@@ -17,7 +17,6 @@ pub(crate) fn emit_code(ir: &Ir) -> Result<(), ()> {
     let closure_type = context.ptr_type(AddressSpace::from(0));
     // first param is self, second is actual param
     let fn_type = closure_type.fn_type(&[closure_type.into(), closure_type.into()], false);
-    let bare_fn_type = closure_type.fn_type(&[closure_type.into()], false);
     let mut functions = vec![];
     for (n, def) in ir.defs.iter().enumerate() {
         let function = if let Some(d) = def {
@@ -26,11 +25,7 @@ pub(crate) fn emit_code(ir: &Ir) -> Result<(), ()> {
             } else {
                 format!(".fn{}", n)
             };
-            let function_type = if d.captures.len() == 0 {
-                bare_fn_type
-            } else {
-                bare_fn_type
-            };
+            let function_type = fn_type;
             let function_linkage = if d.export {
                 Some(Linkage::External)
             } else {
@@ -38,7 +33,7 @@ pub(crate) fn emit_code(ir: &Ir) -> Result<(), ()> {
             };
             module.add_function(&function_name, function_type, function_linkage)
         } else {
-            module.add_function(&format!(".fn{}", n), bare_fn_type, None)
+            module.add_function(&format!(".fn{}", n), fn_type, None)
         };
         functions.push(function);
     }
@@ -51,11 +46,7 @@ pub(crate) fn emit_code(ir: &Ir) -> Result<(), ()> {
                 for instr in &d.code {
                     match instr {
                         IrInstr::Param(p) => {
-                            let param = functions[n]
-                                .get_nth_param(
-                                    *p as u32 + if d.captures.len() == 0 { 0 } else { 1 },
-                                )
-                                .unwrap();
+                            let param = functions[n].get_nth_param(*p as u32 + 1).unwrap();
                             values.push(param);
                         }
                         IrInstr::Capture(c) => {
@@ -79,19 +70,7 @@ pub(crate) fn emit_code(ir: &Ir) -> Result<(), ()> {
                         }
                         IrInstr::Apply(f, p) => {
                             let param = values[p[0]].clone();
-                            let r = if let IrInstr::Closure(f2, c2) = &d.code[*f] {
-                                if ir.defs[*f2].as_ref().unwrap().captures.len() == 0 {
-                                    let func = functions[*f2];
-                                    Some(
-                                        builder.build_call(func, &[param.into()], "apply").unwrap(),
-                                    )
-                                } else {
-                                    None
-                                }
-                            } else {
-                                None
-                            };
-                            let r = r.unwrap_or({
+                            let r = {
                                 let closure = values[*f].clone().into_pointer_value();
                                 let func = builder
                                     .build_load(
@@ -109,39 +88,35 @@ pub(crate) fn emit_code(ir: &Ir) -> Result<(), ()> {
                                         "apply",
                                     )
                                     .unwrap()
-                            });
+                            };
                             values.push(r.try_as_basic_value().left().unwrap());
                         }
                         IrInstr::Closure(f, c) => {
                             let len = c.len() as u64 + 1;
                             let func = functions[*f].as_global_value().as_pointer_value();
-                            if len == 1 {
-                                values.push(func.into());
-                            } else {
-                                let i32_type = context.i32_type();
-                                let closure = builder
-                                    .build_array_malloc(
+                            let i32_type = context.i32_type();
+                            let closure = builder
+                                .build_array_malloc(
+                                    closure_type,
+                                    i32_type.const_int(len, false),
+                                    "closure",
+                                )
+                                .unwrap();
+                            builder.build_store(closure, func);
+                            for (capn, cap) in c.iter().enumerate() {
+                                let capture_address = unsafe {
+                                    builder.build_gep(
                                         closure_type,
-                                        i32_type.const_int(len, false),
-                                        "closure",
+                                        closure,
+                                        &[i32_type.const_int(capn as u64 + 1, false)],
+                                        "capture_addr",
                                     )
-                                    .unwrap();
-                                builder.build_store(closure, func);
-                                for (capn, cap) in c.iter().enumerate() {
-                                    let capture_address = unsafe {
-                                        builder.build_gep(
-                                            closure_type,
-                                            closure,
-                                            &[i32_type.const_int(capn as u64 + 1, false)],
-                                            "capture_addr",
-                                        )
-                                    }
-                                    .unwrap();
-                                    let capture_value = values[*cap].clone();
-                                    builder.build_store(capture_address, capture_value);
                                 }
-                                values.push(closure.into());
+                                .unwrap();
+                                let capture_value = values[*cap].clone();
+                                builder.build_store(capture_address, capture_value);
                             }
+                            values.push(closure.into());
                         }
                     }
                 }
@@ -170,10 +145,11 @@ pub(crate) fn emit_code(ir: &Ir) -> Result<(), ()> {
             "",
             "",
             OptimizationLevel::Default,
-            RelocMode::Default,
+            RelocMode::PIC,
             CodeModel::Default,
         )
         .unwrap();
     target_machine.write_to_file(&module, FileType::Assembly, std::path::Path::new("./out.s"));
+    target_machine.write_to_file(&module, FileType::Object, std::path::Path::new("./out.o"));
     Ok(())
 }
