@@ -44,18 +44,18 @@ fn compute_ir_instruction(
         TermInner::Variable(v) => {
             let def = ir.defs[ir_index].as_mut().unwrap();
             match defs.get(v) {
-            	Some(&usize::MAX) => def.code.push(IrInstr::Param(0)),
-            	Some(n) => def.code.push(IrInstr::Move(*n)),
-            	_ => {
-            		let mut par = 1;
-            		for (k, v) in defs.iter() {
-            			if *v == usize::MAX {
-            				par = *k;
-            			}
-            		}
-		            def.code.push(IrInstr::Capture(*v - par));
-		            def.captures.insert(*v - par);
-		        }
+                Some(&usize::MAX) => def.code.push(IrInstr::Param(0)),
+                Some(n) => def.code.push(IrInstr::Move(*n)),
+                _ => {
+                    let mut par = 0;
+                    for (k, v) in defs.iter() {
+                        if *v == usize::MAX {
+                            par = *k;
+                        }
+                    }
+                    def.code.push(IrInstr::Capture(*v - par - 1));
+                    def.captures.insert(*v - par - 1);
+                }
             }
         }
         TermInner::Lambda(a, b) => {
@@ -83,11 +83,19 @@ fn compute_ir_instruction(
                 let captures = ir.defs[closure_ir_index].as_ref().unwrap().captures.clone();
                 let def = ir.defs[ir_index].as_mut().unwrap();
                 for (n, c) in captures.iter().enumerate() {
-                    if *c == 0 {
-                        def.code.push(IrInstr::Param(0));
-                    } else {
-                        def.code.push(IrInstr::Capture(c - 1));
-                        def.captures.insert(c - 1);
+                    match defs.get(c) {
+                        Some(&usize::MAX) => def.code.push(IrInstr::Param(0)),
+                        Some(n) => def.code.push(IrInstr::Move(*n)),
+                        _ => {
+                            let mut par = 0;
+                            for (k, v) in defs.iter() {
+                                if *v == usize::MAX {
+                                    par = *k;
+                                }
+                            }
+                            def.code.push(IrInstr::Capture(c - par - 1));
+                            def.captures.insert(c - par - 1);
+                        }
                     }
                 }
                 let passed_captures =
@@ -100,7 +108,9 @@ fn compute_ir_instruction(
         TermInner::Apply(a, b) => {
             compute_ir_instruction(ir, ir_index, env_to_ir_index, a, env, names, defs);
             let a_index = ir.defs[ir_index].as_ref().unwrap().code.len() - 1;
-            if let Ok(_) = compute_ir_instruction(ir, ir_index, env_to_ir_index, b, env, names, defs) {
+            if let Ok(_) =
+                compute_ir_instruction(ir, ir_index, env_to_ir_index, b, env, names, defs)
+            {
                 let b_index = ir.defs[ir_index].as_ref().unwrap().code.len() - 1;
                 ir.defs[ir_index]
                     .as_mut()
@@ -110,12 +120,12 @@ fn compute_ir_instruction(
             }
         }
         TermInner::Let(a, b) => {
-        	compute_ir_instruction(ir, ir_index, env_to_ir_index, a, env, names, defs);
+            compute_ir_instruction(ir, ir_index, env_to_ir_index, a, env, names, defs);
             let a_index = ir.defs[ir_index].as_ref().unwrap().code.len() - 1;
             let mut new_defs = HashMap::new();
             let mut old_defs = HashMap::new();
             for (k, v) in defs.iter() {
-            	new_defs.insert(k + 1, *v);
+                new_defs.insert(k + 1, *v);
             }
             (old_defs, *defs) = (defs.clone(), new_defs);
             defs.insert(0, a_index);
@@ -147,7 +157,15 @@ fn compute_ir_definition(
         captures: HashSet::new(),
         code: vec![],
     });
-    compute_ir_instruction(ir, ir_index, env_to_ir_index, &term, env, names, &mut HashMap::new());
+    compute_ir_instruction(
+        ir,
+        ir_index,
+        env_to_ir_index,
+        &term,
+        env,
+        names,
+        &mut HashMap::new(),
+    );
 }
 
 pub(crate) fn compute_initial_ir(

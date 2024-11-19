@@ -119,8 +119,8 @@ pub(crate) fn emit_code(ir: &Ir) -> Result<(), ()> {
                             values.push(closure.into());
                         }
                         IrInstr::Move(p) => {
-                        	let param = values[*p].clone();
-                        	values.push(param.into());
+                            let param = values[*p].clone();
+                            values.push(param.into());
                         }
                     }
                 }
