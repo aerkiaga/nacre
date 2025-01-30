@@ -43,8 +43,8 @@ pub(crate) fn emit_code(ir: &Ir) -> Result<(), ()> {
                 let basic_block = context.append_basic_block(functions[n], "");
                 builder.position_at_end(basic_block);
                 let mut values = vec![];
-                for instr in &d.code {
-                    match instr {
+                for loc in &d.code {
+                    match &loc.instr {
                         IrInstr::Param(p) => {
                             let param = functions[n].get_nth_param(*p as u32 + 1).unwrap();
                             values.push(param);

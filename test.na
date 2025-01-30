@@ -1,0 +1,3 @@
+use super::nacre::std::test::Bool;
+
+let a = Bool::not Bool::false;

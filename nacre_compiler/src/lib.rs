@@ -17,22 +17,34 @@ enum IrInstr {
 impl std::fmt::Debug for IrInstr {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::Param(n) => write!(f, "param {}\n", n)?,
-            Self::Capture(n) => write!(f, "capture {}\n", n)?,
+            Self::Param(n) => write!(f, "param {}", n)?,
+            Self::Capture(n) => write!(f, "capture {}", n)?,
             Self::Apply(func, p) => write!(
                 f,
-                "apply ${}{}\n",
+                "apply ${}{}",
                 func,
                 p.iter().map(|x| format!(" ${}", x)).collect::<String>()
             )?,
             Self::Closure(func, c) => write!(
                 f,
-                "closure @{}{}\n",
+                "closure @{}{}",
                 func,
                 c.iter().map(|x| format!(" ${}", x)).collect::<String>()
             )?,
-            Self::Move(n) => write!(f, "${}\n", n)?,
+            Self::Move(n) => write!(f, "${}", n)?,
         }
+        Ok(())
+    }
+}
+
+struct IrLoc {
+    instr: IrInstr,
+}
+
+impl std::fmt::Debug for IrLoc {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.instr.fmt(f)?;
+        write!(f, "\n")?;
         Ok(())
     }
 }
@@ -43,7 +55,7 @@ struct IrDef {
     export: bool,
     params: usize,
     captures: HashSet<usize>,
-    code: Vec<IrInstr>,
+    code: Vec<IrLoc>,
 }
 
 impl std::fmt::Debug for IrDef {

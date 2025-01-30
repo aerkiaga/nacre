@@ -1,4 +1,4 @@
-use crate::{Ir, IrDef, IrInstr};
+use crate::{Ir, IrDef, IrInstr, IrLoc};
 use nacre_kernel::Term;
 use nacre_kernel::TermInner;
 use nacre_parser::TermMeta;
@@ -23,7 +23,7 @@ fn compute_ir_instruction(
                 Some(ir_index2) => {}
                 None => {
                     ir.defs.push(None);
-                    compute_ir_definition(ir, ir.defs.len() - 1, *g, env_to_ir_index, env, names);
+                    compute_ir_definition(ir, ir.defs.len() - 1, *g, env_to_ir_index, env, names)?;
                 }
             }
             let closure_ir_index = env_to_ir_index[*g].unwrap();
@@ -31,21 +31,30 @@ fn compute_ir_instruction(
             let def = ir.defs[ir_index].as_mut().unwrap();
             for (n, c) in captures.iter().enumerate() {
                 if *c == 0 {
-                    def.code.push(IrInstr::Param(0));
+                    def.code.push(IrLoc {
+                        instr: IrInstr::Param(0),
+                    });
                 } else {
-                    def.code.push(IrInstr::Capture(c - 1));
+                    def.code.push(IrLoc {
+                        instr: IrInstr::Capture(c - 1),
+                    });
                     def.captures.insert(c - 1);
                 }
             }
             let passed_captures = ((def.code.len() - captures.len())..(def.code.len())).collect();
-            def.code
-                .push(IrInstr::Closure(closure_ir_index, passed_captures));
+            def.code.push(IrLoc {
+                instr: IrInstr::Closure(closure_ir_index, passed_captures),
+            });
         }
         TermInner::Variable(v) => {
             let def = ir.defs[ir_index].as_mut().unwrap();
             match defs.get(v) {
-                Some(&usize::MAX) => def.code.push(IrInstr::Param(0)),
-                Some(n) => def.code.push(IrInstr::Move(*n)),
+                Some(&usize::MAX) => def.code.push(IrLoc {
+                    instr: IrInstr::Param(0),
+                }),
+                Some(n) => def.code.push(IrLoc {
+                    instr: IrInstr::Move(*n),
+                }),
                 _ => {
                     let mut par = 0;
                     for (k, v) in defs.iter() {
@@ -53,7 +62,9 @@ fn compute_ir_instruction(
                             par = *k;
                         }
                     }
-                    def.code.push(IrInstr::Capture(*v - par - 1));
+                    def.code.push(IrLoc {
+                        instr: IrInstr::Capture(*v - par - 1),
+                    });
                     def.captures.insert(*v - par - 1);
                 }
             }
@@ -65,10 +76,10 @@ fn compute_ir_instruction(
             (old_defs, *defs) = (defs.clone(), new_defs);
             defs.insert(0, usize::MAX);
             if let TermInner::Prop = a.inner {
-                compute_ir_instruction(ir, ir_index, env_to_ir_index, b, env, names, defs);
+                compute_ir_instruction(ir, ir_index, env_to_ir_index, b, env, names, defs)?;
             } else if def.params == 0 && def.code.len() == 0 {
                 def.params = 1;
-                compute_ir_instruction(ir, ir_index, env_to_ir_index, b, env, names, defs);
+                compute_ir_instruction(ir, ir_index, env_to_ir_index, b, env, names, defs)?;
             } else {
                 ir.defs.push(Some(IrDef {
                     env_index: None,
@@ -79,13 +90,17 @@ fn compute_ir_instruction(
                     code: vec![],
                 }));
                 let closure_ir_index = ir.defs.len() - 1;
-                compute_ir_instruction(ir, ir.defs.len() - 1, env_to_ir_index, b, env, names, defs);
+                compute_ir_instruction(ir, ir.defs.len() - 1, env_to_ir_index, b, env, names, defs)?;
                 let captures = ir.defs[closure_ir_index].as_ref().unwrap().captures.clone();
                 let def = ir.defs[ir_index].as_mut().unwrap();
                 for (n, c) in captures.iter().enumerate() {
                     match defs.get(c) {
-                        Some(&usize::MAX) => def.code.push(IrInstr::Param(0)),
-                        Some(n) => def.code.push(IrInstr::Move(*n)),
+                        Some(&usize::MAX) => def.code.push(IrLoc {
+                            instr: IrInstr::Param(0),
+                        }),
+                        Some(n) => def.code.push(IrLoc {
+                            instr: IrInstr::Move(*n),
+                        }),
                         _ => {
                             let mut par = 0;
                             for (k, v) in defs.iter() {
@@ -93,34 +108,35 @@ fn compute_ir_instruction(
                                     par = *k;
                                 }
                             }
-                            def.code.push(IrInstr::Capture(c - par - 1));
+                            def.code.push(IrLoc {
+                                instr: IrInstr::Capture(c - par - 1),
+                            });
                             def.captures.insert(c - par - 1);
                         }
                     }
                 }
                 let passed_captures =
                     ((def.code.len() - captures.len())..(def.code.len())).collect();
-                def.code
-                    .push(IrInstr::Closure(closure_ir_index, passed_captures));
+                def.code.push(IrLoc {
+                    instr: IrInstr::Closure(closure_ir_index, passed_captures),
+                });
             }
             *defs = old_defs;
         }
         TermInner::Apply(a, b) => {
-            compute_ir_instruction(ir, ir_index, env_to_ir_index, a, env, names, defs);
+            compute_ir_instruction(ir, ir_index, env_to_ir_index, a, env, names, defs)?;
             let a_index = ir.defs[ir_index].as_ref().unwrap().code.len() - 1;
             if let Ok(_) =
                 compute_ir_instruction(ir, ir_index, env_to_ir_index, b, env, names, defs)
             {
                 let b_index = ir.defs[ir_index].as_ref().unwrap().code.len() - 1;
-                ir.defs[ir_index]
-                    .as_mut()
-                    .unwrap()
-                    .code
-                    .push(IrInstr::Apply(a_index, vec![b_index]));
+                ir.defs[ir_index].as_mut().unwrap().code.push(IrLoc {
+                    instr: IrInstr::Apply(a_index, vec![b_index]),
+                });
             }
         }
         TermInner::Let(a, b) => {
-            compute_ir_instruction(ir, ir_index, env_to_ir_index, a, env, names, defs);
+            compute_ir_instruction(ir, ir_index, env_to_ir_index, a, env, names, defs)?;
             let a_index = ir.defs[ir_index].as_ref().unwrap().code.len() - 1;
             let mut new_defs = HashMap::new();
             let mut old_defs = HashMap::new();
@@ -129,7 +145,7 @@ fn compute_ir_instruction(
             }
             (old_defs, *defs) = (defs.clone(), new_defs);
             defs.insert(0, a_index);
-            compute_ir_instruction(ir, ir_index, env_to_ir_index, b, env, names, defs);
+            compute_ir_instruction(ir, ir_index, env_to_ir_index, b, env, names, defs)?;
             *defs = old_defs;
         }
         _ => {
@@ -146,7 +162,7 @@ fn compute_ir_definition(
     env_to_ir_index: &mut Vec<Option<usize>>,
     env: &Vec<Definition>,
     names: &Vec<String>,
-) {
+) -> Result<(), ()> {
     env_to_ir_index[env_index] = Some(ir_index);
     let term = env[env_index].0.as_ref().unwrap();
     ir.defs[ir_index] = Some(IrDef {
@@ -165,7 +181,7 @@ fn compute_ir_definition(
         env,
         names,
         &mut HashMap::new(),
-    );
+    )
 }
 
 pub(crate) fn compute_initial_ir(
