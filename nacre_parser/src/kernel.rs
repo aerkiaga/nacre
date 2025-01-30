@@ -112,13 +112,13 @@ pub async fn get_definition_index(logical_path: &str) -> Result<usize, ()> {
     let index = def.2;
     let mut env_lock = GLOBAL_ENV.lock().await;
     let mut env = env_lock.clone().into_vec();
-    for i in env.len()..std::cmp::max(env.len(), index + 1) {
+    for _ in env.len()..std::cmp::max(env.len(), index + 1) {
         env.push((
             None,
             Arc::new((TermInner::Prop, &Arc::new(TermMeta::default())).into()),
         ));
     }
-    let def2 = (&*def).clone();
+    let def2 = (*def).clone();
     env[index] = (Some(def2.0), def2.1);
     *env_lock = Environment::from_vec(env);
     Ok(index)

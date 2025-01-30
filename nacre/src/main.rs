@@ -1,9 +1,5 @@
 #[cfg(feature = "annotate-snippets")]
-use annotate_snippets::Level;
-#[cfg(feature = "annotate-snippets")]
-use annotate_snippets::Renderer;
-#[cfg(feature = "annotate-snippets")]
-use annotate_snippets::Snippet;
+use annotate_snippets::{Level, Renderer, Snippet};
 #[cfg(feature = "ariadne")]
 use ariadne::Fmt;
 use std::ops::Range;
@@ -227,5 +223,5 @@ async fn main() {
     task_handle.await.unwrap();
     let ir = nacre_compiler::compile(vec![logical_path]).await.unwrap();
     println!("{:?}", ir);
-    ir.emit_code();
+    ir.emit_code().unwrap();
 }
