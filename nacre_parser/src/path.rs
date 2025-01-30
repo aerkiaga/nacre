@@ -43,7 +43,7 @@ pub async fn is_directory(directory: &str, name: &str) -> Result<bool, ()> {
 }
 
 // Gets logical path, returns file path and identifier
-pub(crate) async fn get_physical_path(logical_path: &str) -> (String, String) {
+pub(crate) async fn get_physical_path(logical_path: &str) -> Result<(String, String), ()> {
     let mut file_path = ".".to_string();
     let mut identifier = "".to_string();
     let mut n = 0;
@@ -67,7 +67,7 @@ pub(crate) async fn get_physical_path(logical_path: &str) -> (String, String) {
                     }
                 }
                 Err(_) => {
-                    panic!();
+                    return Err(())
                 }
             }
         } else {
@@ -78,7 +78,7 @@ pub(crate) async fn get_physical_path(logical_path: &str) -> (String, String) {
     if n % 2 == 0 {
         panic!();
     }
-    (file_path, identifier)
+    Ok((file_path, identifier))
 }
 
 // Checks whether a certain relative path can be accessed from a file

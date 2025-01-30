@@ -60,7 +60,7 @@ fn kernel_loader(logical_path: &str) -> nacre_cache::LoaderFuture<'_, Definition
         // Start by creating an environment for the kernel
         let mut env = GLOBAL_ENV.lock().await.clone();
         // Then load the definition term and compute its type
-        let (ast, filename) = get_ast(logical_path).await.unwrap();
+        let (ast, filename) = get_ast(logical_path).await?;
         let definition = Arc::new(semantics::convert_to_term(ast, &filename, &mut env).await?);
         let tt_opt = match get_type_ast(logical_path).await.unwrap().0 {
             Some(ast) => Some(semantics::convert_to_term(ast, &filename, &mut env).await?),

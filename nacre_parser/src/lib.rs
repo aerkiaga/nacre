@@ -84,7 +84,7 @@ fn definition_loader(
 > {
     let logical_path_string = logical_path.to_string();
     Box::pin(async move {
-        let (filename, identifier) = path::get_physical_path(&logical_path_string).await;
+        let (filename, identifier) = path::get_physical_path(&logical_path_string).await?;
         let file_ast = get_file_ast(&filename).await?;
         let r = file_ast.get_definition(&identifier).map_err(|_| ())?;
         // Since PARSER_CACHE is static, the Arc will never get dropped, so
