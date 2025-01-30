@@ -38,6 +38,20 @@ cargo afl build --example fuzz_consistency
 cargo afl fuzz -i nacre_kernel/examples/in -o nacre_kernel/examples/out target/debug/examples/fuzz_consistency
 ```
 
+## Compilation
+Run the following:
+
+```shell
+cargo run test::a
+objcopy --redefine-sym test::a=test_a out.o
+cc -o test test.c out.o
+./test
+```
+
+This will compile a simple Nacre example, link it against
+test code and run it. At the moment, code generation is very
+basic and the ABI is not complete.
+
 ## Roadmap
 ### Early bootstrapping phase
 Currently, a compiler is being developed in Rust,

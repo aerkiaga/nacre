@@ -1,3 +1,5 @@
 use super::nacre::std::test::Bool;
 
-let a = Bool::false.not;
+fn a(x: Bool) {
+    x.not
+};
