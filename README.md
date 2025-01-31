@@ -27,7 +27,7 @@ flags to `cargo`.
 ```shell
 cargo check         # build
 cargo clippy        # linter
-cargo test --tests  # integration tests
+cargo test          # integration tests
 cargo llvm-cov      # test coverage
 cargo bench         # performance regressions
 cargo mutants       # mutation testing
