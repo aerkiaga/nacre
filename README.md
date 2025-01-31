@@ -30,6 +30,7 @@ cargo clippy        # linter
 cargo test --tests  # integration tests
 cargo llvm-cov      # test coverage
 cargo bench         # performance regressions
+cargo mutants       # mutation testing
 ```
 
 ### Fuzz testing
@@ -70,6 +71,7 @@ as reference for later development).
   - Implement named parameters in function application.
   - Implement struct and enum definition syntax.
   - Add support for more kinds of lvalues.
+  - Add core operators.
 * Implement barebones code generation.
   - Write code to optimize closures into static code
   	and data structures.

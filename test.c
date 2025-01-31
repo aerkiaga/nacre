@@ -41,7 +41,7 @@ int from_bool(Bool x) {
     return (int) (long) x;
 }
 
-extern struct Closure *test_a(struct Closure *self, struct Closure *x);
+extern Bool test_a(struct Closure *self, Bool x);
 
 int main() {
     struct Closure *ac = (struct Closure*) malloc(sizeof(struct Closure*));
