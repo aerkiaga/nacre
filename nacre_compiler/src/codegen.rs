@@ -1,10 +1,93 @@
 use crate::{Ir, IrInstr};
+use inkwell::builder::Builder;
 use inkwell::context::Context;
 use inkwell::module::Linkage;
 use inkwell::targets::{
     CodeModel, FileType, InitializationConfig, RelocMode, Target, TargetTriple,
 };
+use inkwell::values::{BasicValueEnum, FunctionValue};
 use inkwell::{AddressSpace, OptimizationLevel};
+
+fn emit_instr_param<'a>(p: &usize, function: &FunctionValue<'a>) -> BasicValueEnum<'a> {
+    function.get_nth_param(*p as u32 + 1).unwrap()
+}
+
+fn emit_instr_capture<'a>(
+    c: &usize,
+    function: &FunctionValue<'a>,
+    context: &'a Context,
+    builder: &'a Builder,
+) -> BasicValueEnum<'a> {
+    // TODO: compute actual captures
+    let self_param = function.get_nth_param(0).unwrap();
+    let closure = self_param.into_pointer_value();
+    let i32_type = context.i32_type();
+    let closure_type = context.ptr_type(AddressSpace::from(0));
+    let capture_address = unsafe {
+        builder.build_gep(
+            closure_type,
+            closure,
+            &[i32_type.const_int(*c as u64 + 1, false)],
+            "capture_addr",
+        )
+    }
+    .unwrap();
+    builder
+        .build_load(closure_type, capture_address, "capture")
+        .unwrap()
+}
+
+fn emit_instr_apply<'a>(
+    closure: BasicValueEnum<'a>,
+    param: BasicValueEnum<'a>,
+    context: &'a Context,
+    builder: &'a Builder,
+) -> BasicValueEnum<'a> {
+    let closure_type = context.ptr_type(AddressSpace::from(0));
+    let fn_type = closure_type.fn_type(&[closure_type.into(), closure_type.into()], false);
+    let r = {
+        let closure = closure.into_pointer_value();
+        let func = builder
+            .build_load(context.ptr_type(AddressSpace::from(0)), closure, "func")
+            .unwrap()
+            .into_pointer_value();
+        builder
+            .build_indirect_call(fn_type, func, &[closure.into(), param.into()], "apply")
+            .unwrap()
+    };
+    r.try_as_basic_value().left().unwrap()
+}
+
+fn emit_instr_closure<'a>(
+    func: FunctionValue,
+    captures: Vec<BasicValueEnum>,
+    context: &'a Context,
+    builder: &'a Builder,
+) -> Result<BasicValueEnum<'a>, ()> {
+    let len = captures.len() as u64 + 1;
+    let func = func.as_global_value().as_pointer_value();
+    let i32_type = context.i32_type();
+    let closure_type = context.ptr_type(AddressSpace::from(0));
+    let closure = builder
+        .build_array_malloc(closure_type, i32_type.const_int(len, false), "closure")
+        .unwrap();
+    builder.build_store(closure, func).or(Err(()))?;
+    for (capn, capture_value) in captures.iter().enumerate() {
+        let capture_address = unsafe {
+            builder.build_gep(
+                closure_type,
+                closure,
+                &[i32_type.const_int(capn as u64 + 1, false)],
+                "capture_addr",
+            )
+        }
+        .unwrap();
+        builder
+            .build_store(capture_address, *capture_value)
+            .or(Err(()))?;
+    }
+    Ok(closure.into())
+}
 
 pub(crate) fn emit_code(ir: &Ir) -> Result<(), ()> {
     let context = Context::create();
@@ -41,79 +124,27 @@ pub(crate) fn emit_code(ir: &Ir) -> Result<(), ()> {
             for loc in &d.code {
                 match &loc.instr {
                     IrInstr::Param(p) => {
-                        let param = functions[n].get_nth_param(*p as u32 + 1).unwrap();
-                        values.push(param);
+                        values.push(emit_instr_param(p, &functions[n]));
                     }
                     IrInstr::Capture(c) => {
-                        // TODO: compute actual captures
-                        let self_param = functions[n].get_nth_param(0).unwrap();
-                        let closure = self_param.into_pointer_value();
-                        let i32_type = context.i32_type();
-                        let capture_address = unsafe {
-                            builder.build_gep(
-                                closure_type,
-                                closure,
-                                &[i32_type.const_int(*c as u64 + 1, false)],
-                                "capture_addr",
-                            )
-                        }
-                        .unwrap();
-                        let capture = builder
-                            .build_load(closure_type, capture_address, "capture")
-                            .unwrap();
-                        values.push(capture);
+                        values.push(emit_instr_capture(c, &functions[n], &context, &builder));
                     }
                     IrInstr::Apply(f, p) => {
-                        let param = values[p[0]];
-                        let r = {
-                            let closure = values[*f].into_pointer_value();
-                            let func = builder
-                                .build_load(
-                                    context.ptr_type(AddressSpace::from(0)),
-                                    closure,
-                                    "func",
-                                )
-                                .unwrap()
-                                .into_pointer_value();
-                            builder
-                                .build_indirect_call(
-                                    fn_type,
-                                    func,
-                                    &[closure.into(), param.into()],
-                                    "apply",
-                                )
-                                .unwrap()
-                        };
-                        values.push(r.try_as_basic_value().left().unwrap());
+                        values.push(emit_instr_apply(
+                            values[*f],
+                            values[p[0]],
+                            &context,
+                            &builder,
+                        ));
                     }
                     IrInstr::Closure(f, c) => {
-                        let len = c.len() as u64 + 1;
-                        let func = functions[*f].as_global_value().as_pointer_value();
-                        let i32_type = context.i32_type();
-                        let closure = builder
-                            .build_array_malloc(
-                                closure_type,
-                                i32_type.const_int(len, false),
-                                "closure",
-                            )
-                            .unwrap();
-                        builder.build_store(closure, func).or(Err(()))?;
-                        for (capn, cap) in c.iter().enumerate() {
-                            let capture_address = unsafe {
-                                builder.build_gep(
-                                    closure_type,
-                                    closure,
-                                    &[i32_type.const_int(capn as u64 + 1, false)],
-                                    "capture_addr",
-                                )
-                            }
-                            .unwrap();
-                            let capture_value = values[*cap];
-                            builder
-                                .build_store(capture_address, capture_value)
-                                .or(Err(()))?;
-                        }
-                        values.push(closure.into());
+                        let captures: Vec<_> = c.iter().map(|cap| values[*cap]).collect();
+                        values.push(emit_instr_closure(
+                            functions[*f],
+                            captures,
+                            &context,
+                            &builder,
+                        )?);
                     }
                     IrInstr::Move(p) => {
                         let param = values[*p];

@@ -1,11 +1,12 @@
-use std::process::Command;
 use std::fs;
+use std::process::Command;
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_compile() {
-    nacre_parser::verify("tests::compile::test::a").await.unwrap();
-    let ir = nacre_compiler::compile(vec!["tests::compile::test::a".to_string()]).await.unwrap();
-    ir.emit_code();
+    let ir = nacre_compiler::compile(vec!["tests::compile::test::a".to_string()])
+        .await
+        .unwrap();
+    ir.emit_code().expect("Compilation failed");
     fs::remove_file("out.s").unwrap();
     let objcopy_status = Command::new("objcopy")
         .arg("--redefine-sym")
