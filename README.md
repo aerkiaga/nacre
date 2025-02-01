@@ -23,6 +23,12 @@ instead of `ariadne` (the default), pass the
 `--features annotate-snippets` and `--no-default-features`
 flags to `cargo`.
 
+At the moment, code generation is very
+basic and the ABI is not complete.
+There is an integration test for compilation,
+which emits an object file and links it
+against a test program, which is then run.
+
 ## Testing
 ```shell
 cargo check         # build
@@ -38,20 +44,6 @@ cargo mutants       # mutation testing
 cargo afl build --example fuzz_consistency
 cargo afl fuzz -i nacre_kernel/examples/in -o nacre_kernel/examples/out target/debug/examples/fuzz_consistency
 ```
-
-## Compilation
-Run the following:
-
-```shell
-cargo run test::a
-objcopy --redefine-sym test::a=test_a out.o
-cc -o test test.c out.o
-./test
-```
-
-This will compile a simple Nacre example, link it against
-test code and run it. At the moment, code generation is very
-basic and the ABI is not complete.
 
 ## Roadmap
 ### Early bootstrapping phase

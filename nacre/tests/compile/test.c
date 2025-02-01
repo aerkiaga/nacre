@@ -56,5 +56,5 @@ int main() {
     int ni1 = from_bool(nb1);
     int r = (i0 == ni1 && i1 == ni0);
     printf("Test: %s\n", r? "pass" : "fail");
-    return r;
+    return !r;
 }

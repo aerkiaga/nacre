@@ -1,5 +1,0 @@
-use super::nacre::std::test::Bool;
-
-fn a(x: Bool) {
-    x.not
-};
