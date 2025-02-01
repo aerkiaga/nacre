@@ -72,7 +72,7 @@ impl<T: Send + Sync> Cache<T> {
             let notify = Arc::new(Notify::new());
             let mut map = self.storage.write().await;
             let k = key.to_string();
-            if let None = map.get(&k) {
+            if map.get(&k).is_none() {
                 map.insert(k, CacheEntry::Pending(notify.clone()));
                 Some(notify)
             } else {
