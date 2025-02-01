@@ -1,7 +1,5 @@
 //! Implements an in-memory cache in an asynchronous, thread-safe manner.
 
-#![feature(map_try_insert)]
-
 use once_cell::sync::Lazy;
 use std::collections::HashMap;
 use std::future::Future;
@@ -72,14 +70,13 @@ impl<T: Send + Sync> Cache<T> {
         // First, atomically check if entry exists and insert pending if not
         let option = {
             let notify = Arc::new(Notify::new());
-            match self
-                .storage
-                .write()
-                .await
-                .try_insert(key.to_string(), CacheEntry::Pending(notify.clone()))
-            {
-                Ok(_) => Some(notify),
-                Err(_) => None,
+            let mut map = self.storage.write().await;
+            let k = key.to_string();
+            if let None = map.get(&k) {
+                map.insert(k, CacheEntry::Pending(notify.clone()));
+                Some(notify)
+            } else {
+                None
             }
         };
 

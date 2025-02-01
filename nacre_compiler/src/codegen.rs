@@ -1,7 +1,9 @@
 use crate::{Ir, IrInstr};
 use inkwell::context::Context;
 use inkwell::module::Linkage;
-use inkwell::targets::{CodeModel, FileType, InitializationConfig, RelocMode, Target, TargetTriple};
+use inkwell::targets::{
+    CodeModel, FileType, InitializationConfig, RelocMode, Target, TargetTriple,
+};
 use inkwell::{AddressSpace, OptimizationLevel};
 
 pub(crate) fn emit_code(ir: &Ir) -> Result<(), ()> {
