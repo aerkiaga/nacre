@@ -9,6 +9,7 @@ use nacre_kernel::TermInner;
 use std::ops::Range;
 
 /// Metadata for [Term] nodes.
+#[derive(Debug)] // TODO: more specific implementation
 pub struct TermMeta {
     pub range: Range<usize>,
     pub name: Option<String>,

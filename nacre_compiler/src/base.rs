@@ -26,13 +26,15 @@ fn compute_global(
         }
     }
     let closure_ir_index = env_to_ir_index[*g].unwrap();
-    let captures = ir.defs[closure_ir_index].as_ref().unwrap().captures.clone();
+    let closure = ir.defs[closure_ir_index].as_ref().unwrap();
+    let closure_type = typing::compute_closure(closure, &mut ir.types);
+    let captures = closure.captures.clone();
     debug_assert!(captures.is_empty());
     let def = ir.defs[ir_index].as_mut().unwrap();
     let passed_captures = vec![];
     def.code.push(IrLoc {
         instr: IrInstr::Closure(closure_ir_index, passed_captures),
-        value_type: None, //TODO
+        value_type: closure_type,
     });
     Ok(())
 }
@@ -48,12 +50,12 @@ fn compute_variable(
         // variable corresponds to lambda parameter
         Some(&usize::MAX) => def.code.push(IrLoc {
             instr: IrInstr::Param(0),
-            value_type: None, //TODO
+            value_type: def.param_types[0],
         }),
         // variable corresponds to let definition
         Some(n) => def.code.push(IrLoc {
             instr: IrInstr::Move(*n),
-            value_type: None, //TODO
+            value_type: def.code[*n].value_type,
         }),
         // variable corresponds to something else (capture)
         _ => {
@@ -83,8 +85,9 @@ fn compute_lambda(
     defs: &mut HashMap<usize, usize>,
 ) -> Result<(), ()> {
     let (a, b) = lam;
-    let param_type = typing::compute_type(a, &mut ir.types);
     let def = ir.defs[ir_index].as_mut().unwrap();
+    // TODO: check if normalization is necessary
+    let param_type = typing::compute_type(a, &mut ir.types, env, def, defs);
     let new_defs = HashMap::new();
     let old_defs: HashMap<_, _>;
     (old_defs, *defs) = (defs.clone(), new_defs);
@@ -95,6 +98,7 @@ fn compute_lambda(
     } else if def.params == 0 && def.code.is_empty() {
         // outer body of global definition
         def.params = 1;
+        def.param_types = vec![param_type];
         compute_ir_instruction(ir, ir_index, env_to_ir_index, b, env, names, defs)?;
     } else {
         // inner lambda, create anonymous global definition
@@ -109,15 +113,17 @@ fn compute_lambda(
         }));
         let closure_ir_index = ir.defs.len() - 1;
         compute_ir_instruction(ir, ir.defs.len() - 1, env_to_ir_index, b, env, names, defs)?;
+        let closure = ir.defs[closure_ir_index].as_ref().unwrap();
+        let closure_type = typing::compute_closure(closure, &mut ir.types);
         // pass down captures
-        let captures = ir.defs[closure_ir_index].as_ref().unwrap().captures.clone();
+        let captures = closure.captures.clone();
         let def = ir.defs[ir_index].as_mut().unwrap();
         for c in captures.iter() {
             match defs.get(c) {
                 // capture parameter
                 Some(&usize::MAX) => def.code.push(IrLoc {
                     instr: IrInstr::Param(0),
-                    value_type: None, //TODO
+                    value_type: def.param_types[0],
                 }),
                 // capture local definition
                 Some(n) => def.code.push(IrLoc {
@@ -144,7 +150,7 @@ fn compute_lambda(
         let passed_captures = ((def.code.len() - captures.len())..(def.code.len())).collect();
         def.code.push(IrLoc {
             instr: IrInstr::Closure(closure_ir_index, passed_captures),
-            value_type: None, //TODO
+            value_type: closure_type,
         });
     }
     *defs = old_defs;
@@ -162,12 +168,23 @@ fn compute_apply(
 ) -> Result<(), ()> {
     let (a, b) = app;
     compute_ir_instruction(ir, ir_index, env_to_ir_index, a, env, names, defs)?;
-    let a_index = ir.defs[ir_index].as_ref().unwrap().code.len() - 1;
+    let a_index = ir.defs[ir_index].as_mut().unwrap().code.len() - 1;
     if compute_ir_instruction(ir, ir_index, env_to_ir_index, b, env, names, defs).is_ok() {
-        let b_index = ir.defs[ir_index].as_ref().unwrap().code.len() - 1;
-        ir.defs[ir_index].as_mut().unwrap().code.push(IrLoc {
+        let def = ir.defs[ir_index].as_mut().unwrap();
+        let b_index = def.code.len() - 1;
+        let a_type = def.code[a_index].value_type;
+        let b_type = def.code[b_index].value_type;
+        if b_type.is_none() {
+            def.code.push(IrLoc {
+                instr: IrInstr::Move(a_index),
+                value_type: a_type,
+            });
+            return Ok(());
+        }
+        let typ = typing::compute_apply(a_type, b_type, &mut ir.types);
+        def.code.push(IrLoc {
             instr: IrInstr::Apply(a_index, vec![b_index]),
-            value_type: None, //TODO
+            value_type: typ,
         });
     }
     Ok(())

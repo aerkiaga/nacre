@@ -108,10 +108,11 @@ impl std::fmt::Debug for IrDef {
         )?;
         for typ in &self.param_types {
             match typ {
-                None => writeln!(f, "void")?,
-                Some(t) => writeln!(f, "<{t}>")?,
+                None => write!(f, " void")?,
+                Some(t) => write!(f, " <{t}>")?,
             }
         }
+        writeln!(f)?;
         if !self.captures.is_empty() {
             let mut captures = self.captures.iter().collect::<Vec<_>>();
             captures.sort();

@@ -6,6 +6,7 @@ use std::sync::Arc;
 pub trait Meta: Send + Sync {}
 
 /// Kernel error type.
+#[derive(Debug)] // TODO: more specific implementation
 pub enum Error<T: Meta> {
     /// Mismatched type in definition.
     MismatchedType {
