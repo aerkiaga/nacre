@@ -1,3 +1,4 @@
+use crate::typing;
 use crate::{Ir, IrDef, IrInstr, IrLoc};
 use nacre_kernel::Term;
 use nacre_kernel::TermInner;
@@ -18,6 +19,7 @@ fn compute_global(
 ) -> Result<(), ()> {
     match env_to_ir_index[*g] {
         Some(_ir_index2) => {}
+        // compute definition if it does not exist
         None => {
             ir.defs.push(None);
             compute_ir_definition(ir, ir.defs.len() - 1, *g, env_to_ir_index, env, names)?;
@@ -25,22 +27,12 @@ fn compute_global(
     }
     let closure_ir_index = env_to_ir_index[*g].unwrap();
     let captures = ir.defs[closure_ir_index].as_ref().unwrap().captures.clone();
+    debug_assert!(captures.is_empty());
     let def = ir.defs[ir_index].as_mut().unwrap();
-    for c in captures.iter() {
-        if *c == 0 {
-            def.code.push(IrLoc {
-                instr: IrInstr::Param(0),
-            });
-        } else {
-            def.code.push(IrLoc {
-                instr: IrInstr::Capture(c - 1),
-            });
-            def.captures.insert(c - 1);
-        }
-    }
-    let passed_captures = ((def.code.len() - captures.len())..(def.code.len())).collect();
+    let passed_captures = vec![];
     def.code.push(IrLoc {
         instr: IrInstr::Closure(closure_ir_index, passed_captures),
+        value_type: None, //TODO
     });
     Ok(())
 }
@@ -53,12 +45,17 @@ fn compute_variable(
 ) -> Result<(), ()> {
     let def = ir.defs[ir_index].as_mut().unwrap();
     match defs.get(v) {
+        // variable corresponds to lambda parameter
         Some(&usize::MAX) => def.code.push(IrLoc {
             instr: IrInstr::Param(0),
+            value_type: None, //TODO
         }),
+        // variable corresponds to let definition
         Some(n) => def.code.push(IrLoc {
             instr: IrInstr::Move(*n),
+            value_type: None, //TODO
         }),
+        // variable corresponds to something else (capture)
         _ => {
             let mut par = 0;
             for (k, v) in defs.iter() {
@@ -68,6 +65,7 @@ fn compute_variable(
             }
             def.code.push(IrLoc {
                 instr: IrInstr::Capture(*v - par - 1),
+                value_type: None, //TODO
             });
             def.captures.insert(*v - par - 1);
         }
@@ -85,39 +83,51 @@ fn compute_lambda(
     defs: &mut HashMap<usize, usize>,
 ) -> Result<(), ()> {
     let (a, b) = lam;
+    let param_type = typing::compute_type(a, &mut ir.types);
     let def = ir.defs[ir_index].as_mut().unwrap();
     let new_defs = HashMap::new();
     let old_defs: HashMap<_, _>;
     (old_defs, *defs) = (defs.clone(), new_defs);
-    defs.insert(0, usize::MAX);
+    defs.insert(0, usize::MAX); // innermost definition is now a parameter
     if let TermInner::Prop = a.inner {
+        // fn(a: Type) { b }, ignore a for now
         compute_ir_instruction(ir, ir_index, env_to_ir_index, b, env, names, defs)?;
     } else if def.params == 0 && def.code.is_empty() {
+        // outer body of global definition
         def.params = 1;
         compute_ir_instruction(ir, ir_index, env_to_ir_index, b, env, names, defs)?;
     } else {
+        // inner lambda, create anonymous global definition
         ir.defs.push(Some(IrDef {
             env_index: None,
             name: None,
             export: false,
             params: 1,
+            param_types: vec![param_type],
             captures: HashSet::new(),
             code: vec![],
         }));
         let closure_ir_index = ir.defs.len() - 1;
         compute_ir_instruction(ir, ir.defs.len() - 1, env_to_ir_index, b, env, names, defs)?;
+        // pass down captures
         let captures = ir.defs[closure_ir_index].as_ref().unwrap().captures.clone();
         let def = ir.defs[ir_index].as_mut().unwrap();
         for c in captures.iter() {
             match defs.get(c) {
+                // capture parameter
                 Some(&usize::MAX) => def.code.push(IrLoc {
                     instr: IrInstr::Param(0),
+                    value_type: None, //TODO
                 }),
+                // capture local definition
                 Some(n) => def.code.push(IrLoc {
                     instr: IrInstr::Move(*n),
+                    value_type: None, //TODO
                 }),
+                // capture enclosing capture
                 _ => {
                     let mut par = 0;
+                    // find enclosing parameter
                     for (k, v) in defs.iter() {
                         if *v == usize::MAX {
                             par = *k;
@@ -125,6 +135,7 @@ fn compute_lambda(
                     }
                     def.code.push(IrLoc {
                         instr: IrInstr::Capture(c - par - 1),
+                        value_type: None, //TODO
                     });
                     def.captures.insert(c - par - 1);
                 }
@@ -133,6 +144,7 @@ fn compute_lambda(
         let passed_captures = ((def.code.len() - captures.len())..(def.code.len())).collect();
         def.code.push(IrLoc {
             instr: IrInstr::Closure(closure_ir_index, passed_captures),
+            value_type: None, //TODO
         });
     }
     *defs = old_defs;
@@ -155,6 +167,7 @@ fn compute_apply(
         let b_index = ir.defs[ir_index].as_ref().unwrap().code.len() - 1;
         ir.defs[ir_index].as_mut().unwrap().code.push(IrLoc {
             instr: IrInstr::Apply(a_index, vec![b_index]),
+            value_type: None, //TODO
         });
     }
     Ok(())
@@ -224,6 +237,7 @@ fn compute_ir_definition(
         name: Some(names[env_index].clone()),
         export: false,
         params: 0,
+        param_types: vec![],
         captures: HashSet::new(),
         code: vec![],
     });
@@ -246,6 +260,7 @@ pub(crate) fn compute_initial_ir(
     let mut env_to_ir_index: Vec<Option<usize>> = (0..env.len()).map(|_| None).collect();
     let reserved_indices = indices.len();
     let mut r = Ir {
+        types: vec![],
         defs: (0..reserved_indices).map(|_| None).collect(),
     };
     for (n, initial_env_index) in indices.iter().enumerate().take(reserved_indices) {

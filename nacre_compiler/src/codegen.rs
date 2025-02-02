@@ -18,7 +18,6 @@ fn emit_instr_capture<'a>(
     context: &'a Context,
     builder: &'a Builder,
 ) -> BasicValueEnum<'a> {
-    // TODO: compute actual captures
     let self_param = function.get_nth_param(0).unwrap();
     let closure = self_param.into_pointer_value();
     let i32_type = context.i32_type();

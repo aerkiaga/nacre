@@ -6,6 +6,9 @@ use std::fmt::Write;
 
 mod base;
 mod codegen;
+mod typing;
+
+use typing::IrType;
 
 /// An IR instruction, taking some operands and producing an output.
 pub enum IrInstr {
@@ -54,12 +57,16 @@ impl std::fmt::Debug for IrInstr {
 pub struct IrLoc {
     /// Instruction executed at this location.
     pub instr: IrInstr,
+    pub value_type: Option<usize>,
 }
 
 impl std::fmt::Debug for IrLoc {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         self.instr.fmt(f)?;
-        writeln!(f)?;
+        match self.value_type {
+            Some(t) => writeln!(f, " : <{t}>")?,
+            None => writeln!(f, " : void")?,
+        }
         Ok(())
     }
 }
@@ -74,7 +81,9 @@ pub struct IrDef {
     pub export: bool,
     /// Number of parameters taken by the function.
     pub params: usize,
-    /// Number of captures taken by the function.
+    /// Types of all parameters.
+    pub param_types: Vec<Option<usize>>,
+    /// Set of indices of values captured by the function.
     pub captures: HashSet<usize>,
     /// IR code.
     pub code: Vec<IrLoc>,
@@ -97,6 +106,12 @@ impl std::fmt::Debug for IrDef {
             self.params,
             self.captures.len()
         )?;
+        for typ in &self.param_types {
+            match typ {
+                None => writeln!(f, "void")?,
+                Some(t) => writeln!(f, "<{t}>")?,
+            }
+        }
         if !self.captures.is_empty() {
             let mut captures = self.captures.iter().collect::<Vec<_>>();
             captures.sort();
@@ -119,6 +134,8 @@ impl std::fmt::Debug for IrDef {
 
 /// IR representation of a program.
 pub struct Ir {
+    /// List of types, possibly containing gaps.
+    pub types: Vec<Option<IrType>>,
     /// List of definitions, possibly containing gaps.
     pub defs: Vec<Option<IrDef>>,
 }
@@ -126,6 +143,12 @@ pub struct Ir {
 impl std::fmt::Debug for Ir {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         writeln!(f, "*** Intermediate representation ***")?;
+        for (n, typ) in self.types.iter().enumerate() {
+            if let Some(t) = typ {
+                writeln!(f, "  <{}>:", n)?;
+                t.fmt(f)?
+            }
+        }
         for (n, def) in self.defs.iter().enumerate() {
             if let Some(d) = def {
                 writeln!(f, "  @{}:", n)?;
