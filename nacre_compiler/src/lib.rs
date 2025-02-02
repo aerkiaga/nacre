@@ -85,6 +85,8 @@ pub struct IrDef {
     pub param_types: Vec<Option<usize>>,
     /// Set of indices of values captured by the function.
     pub captures: HashSet<usize>,
+    /// Types of all captures.
+    pub capture_types: Vec<Option<usize>>,
     /// IR code.
     pub code: Vec<IrLoc>,
 }
@@ -106,13 +108,26 @@ impl std::fmt::Debug for IrDef {
             self.params,
             self.captures.len()
         )?;
-        for typ in &self.param_types {
-            match typ {
-                None => write!(f, " void")?,
-                Some(t) => write!(f, " <{t}>")?,
+        if !self.param_types.is_empty() {
+            write!(f, "//")?;
+            for typ in &self.param_types {
+                match typ {
+                    None => write!(f, " void")?,
+                    Some(t) => write!(f, " <{t}>")?,
+                }
             }
+            writeln!(f)?;
         }
-        writeln!(f)?;
+        if !self.capture_types.is_empty() {
+            write!(f, "//")?;
+            for typ in &self.capture_types {
+                match typ {
+                    None => write!(f, " void")?,
+                    Some(t) => write!(f, " <{t}>")?,
+                }
+            }
+            writeln!(f)?;
+        }
         if !self.captures.is_empty() {
             let mut captures = self.captures.iter().collect::<Vec<_>>();
             captures.sort();

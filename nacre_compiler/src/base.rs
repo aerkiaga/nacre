@@ -67,7 +67,7 @@ fn compute_variable(
             }
             def.code.push(IrLoc {
                 instr: IrInstr::Capture(*v - par - 1),
-                value_type: None, //TODO
+                value_type: def.capture_types[*v - par - 1],
             });
             def.captures.insert(*v - par - 1);
         }
@@ -86,7 +86,6 @@ fn compute_lambda(
 ) -> Result<(), ()> {
     let (a, b) = lam;
     let def = ir.defs[ir_index].as_mut().unwrap();
-    // TODO: check if normalization is necessary
     let param_type = typing::compute_type(a, &mut ir.types, env, def, defs);
     let new_defs = HashMap::new();
     let old_defs: HashMap<_, _>;
@@ -102,6 +101,20 @@ fn compute_lambda(
         compute_ir_instruction(ir, ir_index, env_to_ir_index, b, env, names, defs)?;
     } else {
         // inner lambda, create anonymous global definition
+        let mut capture_types = vec![];
+        let mut i = 0;
+        loop {
+            match defs.get(&i) {
+                None => break,
+                Some(&usize::MAX) => {
+                    capture_types.push(def.param_types[0]);
+                }
+                Some(n) => {
+                    capture_types.push(def.code[*n].value_type);
+                }
+            }
+            i += 1;
+        }
         ir.defs.push(Some(IrDef {
             env_index: None,
             name: None,
@@ -109,6 +122,7 @@ fn compute_lambda(
             params: 1,
             param_types: vec![param_type],
             captures: HashSet::new(),
+            capture_types: capture_types,
             code: vec![],
         }));
         let closure_ir_index = ir.defs.len() - 1;
@@ -128,7 +142,7 @@ fn compute_lambda(
                 // capture local definition
                 Some(n) => def.code.push(IrLoc {
                     instr: IrInstr::Move(*n),
-                    value_type: None, //TODO
+                    value_type: def.code[*n].value_type,
                 }),
                 // capture enclosing capture
                 _ => {
@@ -141,7 +155,7 @@ fn compute_lambda(
                     }
                     def.code.push(IrLoc {
                         instr: IrInstr::Capture(c - par - 1),
-                        value_type: None, //TODO
+                        value_type: def.capture_types[c - par - 1],
                     });
                     def.captures.insert(c - par - 1);
                 }
@@ -256,6 +270,7 @@ fn compute_ir_definition(
         params: 0,
         param_types: vec![],
         captures: HashSet::new(),
+        capture_types: vec![],
         code: vec![],
     });
     compute_ir_instruction(
