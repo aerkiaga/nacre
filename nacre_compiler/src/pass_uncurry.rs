@@ -14,9 +14,7 @@ fn move_code(code: &mut [IrLoc], dist: usize) {
             IrInstr::Apply(f, p) => {
                 IrInstr::Apply(*f + dist, p.iter().map(|x| *x + dist).collect())
             }
-            IrInstr::Closure(f, c) => {
-                IrInstr::Closure(*f + dist, c.iter().map(|x| *x + dist).collect())
-            }
+            IrInstr::Closure(f, c) => IrInstr::Closure(*f, c.iter().map(|x| *x + dist).collect()),
             IrInstr::Move(x) => IrInstr::Move(*x + dist),
             instr => instr.clone(),
         };
@@ -110,6 +108,13 @@ fn uncurry_def(ir: &mut Ir, n: usize) {
     let n_params = def.params;
     // make sure the returned closure is uncurried too
     uncurry_def(ir, closure_index);
+    // prepare receiver
+    let def = match &mut ir.defs[n] {
+        None => return,
+        Some(d) => d,
+    };
+    remove_back(&mut def.code, len - 1);
+    let len = def.code.len();
     // prepare code to append
     let mut second_code = ir.defs[closure_index].as_ref().unwrap().code.clone();
     move_code(&mut second_code, len);
@@ -124,7 +129,6 @@ fn uncurry_def(ir: &mut Ir, n: usize) {
         None => return,
         Some(d) => d,
     };
-    remove_back(&mut def.code, len - 1);
     def.code.append(&mut second_code);
     // join definitions
     def.params += other_params;
