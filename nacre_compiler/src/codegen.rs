@@ -130,24 +130,29 @@ pub(crate) fn emit_code(ir: &Ir) -> Result<(), ()> {
             } else {
                 Some(Linkage::Private)
             };
-            module.add_function(&function_name, function_type, function_linkage)
+            Some(module.add_function(&function_name, function_type, function_linkage))
         } else {
-            module.add_function(&format!(".fn{}", n), fn_type, None)
+            None
         };
         functions.push(function);
     }
     for (n, def) in ir.defs.iter().enumerate() {
         if let Some(d) = def {
-            let basic_block = context.append_basic_block(functions[n], "");
+            let basic_block = context.append_basic_block(functions[n].unwrap(), "");
             builder.position_at_end(basic_block);
             let mut values = vec![];
             for loc in &d.code {
                 match &loc.instr {
                     IrInstr::Param(p) => {
-                        values.push(emit_instr_param(p, &functions[n]));
+                        values.push(emit_instr_param(p, &functions[n].unwrap()));
                     }
                     IrInstr::Capture(c) => {
-                        values.push(emit_instr_capture(c, &functions[n], &context, &builder));
+                        values.push(emit_instr_capture(
+                            c,
+                            &functions[n].unwrap(),
+                            &context,
+                            &builder,
+                        ));
                     }
                     IrInstr::Apply(f, p) => {
                         values.push(emit_instr_apply(
@@ -160,7 +165,7 @@ pub(crate) fn emit_code(ir: &Ir) -> Result<(), ()> {
                     IrInstr::Closure(f, c) => {
                         let captures: Vec<_> = c.iter().map(|cap| values[*cap]).collect();
                         values.push(emit_instr_closure(
-                            functions[*f],
+                            functions[*f].unwrap(),
                             captures,
                             &context,
                             &builder,
