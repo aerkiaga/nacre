@@ -38,12 +38,18 @@ fn emit_instr_capture<'a>(
 
 fn emit_instr_apply<'a>(
     closure: BasicValueEnum<'a>,
-    param: BasicValueEnum<'a>,
+    params: Vec<BasicValueEnum<'a>>,
     context: &'a Context,
     builder: &'a Builder,
 ) -> BasicValueEnum<'a> {
     let closure_type = context.ptr_type(AddressSpace::from(0));
-    let fn_type = closure_type.fn_type(&[closure_type.into(), closure_type.into()], false);
+    let fn_type = closure_type.fn_type(
+        &[closure_type.into()]
+            .into_iter()
+            .chain(params.iter().map(|_| closure_type.into()))
+            .collect::<Vec<_>>(),
+        false,
+    );
     let r = {
         let closure = closure.into_pointer_value();
         let func = builder
@@ -51,7 +57,15 @@ fn emit_instr_apply<'a>(
             .unwrap()
             .into_pointer_value();
         builder
-            .build_indirect_call(fn_type, func, &[closure.into(), param.into()], "apply")
+            .build_indirect_call(
+                fn_type,
+                func,
+                &[closure.into()]
+                    .into_iter()
+                    .chain(params.into_iter().map(|x| x.into()))
+                    .collect::<Vec<_>>(),
+                "apply",
+            )
             .unwrap()
     };
     r.try_as_basic_value().left().unwrap()
@@ -103,7 +117,14 @@ pub(crate) fn emit_code(ir: &Ir) -> Result<(), ()> {
             } else {
                 format!(".fn{}", n)
             };
-            let function_type = fn_type;
+            let return_type = closure_type;
+            let function_type = return_type.fn_type(
+                &[closure_type.into()]
+                    .into_iter()
+                    .chain(d.param_types.iter().map(|_| closure_type.into()))
+                    .collect::<Vec<_>>(),
+                false,
+            );
             let function_linkage = if d.export {
                 Some(Linkage::External)
             } else {
@@ -131,7 +152,7 @@ pub(crate) fn emit_code(ir: &Ir) -> Result<(), ()> {
                     IrInstr::Apply(f, p) => {
                         values.push(emit_instr_apply(
                             values[*f],
-                            values[p[0]],
+                            p.iter().map(|x| values[*x]).collect(),
                             &context,
                             &builder,
                         ));

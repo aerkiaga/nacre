@@ -1,50 +1,38 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-struct Closure {
-    struct Closure *(*f)(struct Closure *self, struct Closure *x);
-    struct Closure *c[];
+struct BoolClosure {
+    void *(*f)(struct BoolClosure *self, void *t, void *f);
 };
 
-typedef struct Closure *Bool;
+typedef struct BoolClosure *Bool;
 
-struct Closure *true_def2(struct Closure *self, struct Closure *x) {
-    return self->c[0];
+void *true_def(struct BoolClosure *self, void *t, void *f) {
+    return t;
 }
 
-struct Closure *true_def(struct Closure *self, struct Closure *x) {
-    struct Closure *r = (struct Closure*) malloc(2 * sizeof(struct Closure*));
-    r->f = true_def2;
-    r->c[0] = x;
-    return r;
-}
-
-struct Closure *false_def2(struct Closure *self, struct Closure *x) {
-    return x;
-}
-
-struct Closure *false_def(struct Closure *self, struct Closure *x) {
-    struct Closure *r = (struct Closure*) malloc(sizeof(struct Closure*));
-    r->f = false_def2;
-    return r;
+void *false_def(struct BoolClosure *self, void *t, void *f) {
+    return f;
 }
 
 Bool into_bool(int x) {
-    struct Closure *r = (struct Closure*) malloc(sizeof(struct Closure*));
+    struct BoolClosure *r = (struct BoolClosure*) malloc(sizeof(struct BoolClosure*));
     r->f = x? true_def : false_def;
     return r;
 }
 
 int from_bool(Bool x) {
-    x = x->f(x, (void*) 1);
-    x = x->f(x, (void*) 0);
-    return (int) (long) x;
+    return (int) (long) x->f(x, (void*) 1, (void*) 0);
 }
 
-extern Bool test_a(struct Closure *self, Bool x);
+struct AClosure {
+    Bool (*f)(struct AClosure *self, Bool x);
+};
+
+extern Bool test_a(struct AClosure *self, Bool x);
 
 int main() {
-    struct Closure *ac = (struct Closure*) malloc(sizeof(struct Closure*));
+    struct AClosure *ac = (struct AClosure*) malloc(sizeof(struct AClosure*));
     ac->f = test_a;
     Bool b0 = into_bool(0);
     int i0 = from_bool(b0);

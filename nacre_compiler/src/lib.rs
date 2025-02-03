@@ -6,11 +6,13 @@ use std::fmt::Write;
 
 mod base;
 mod codegen;
+mod pass_uncurry;
 mod typing;
 
 use typing::IrType;
 
 /// An IR instruction, taking some operands and producing an output.
+#[derive(Clone)]
 pub enum IrInstr {
     /// Loads the parameter corresponding to some index from the current definition.
     Param(usize),
@@ -54,6 +56,7 @@ impl std::fmt::Debug for IrInstr {
 }
 
 /// A single line of IR code.
+#[derive(Clone)]
 pub struct IrLoc {
     /// Instruction executed at this location.
     pub instr: IrInstr,
@@ -189,6 +192,7 @@ pub async fn compile(identifiers: Vec<String>) -> Result<Ir, ()> {
     }
     let env = get_global_environment().await.into_vec();
     let names = get_global_environment_names().await;
-    let ir = base::compute_initial_ir(&indices, &env, &names);
+    let mut ir = base::compute_initial_ir(&indices, &env, &names);
+    pass_uncurry::pass_uncurry(&mut ir);
     Ok(ir)
 }

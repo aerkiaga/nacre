@@ -122,7 +122,7 @@ fn compute_lambda(
             params: 1,
             param_types: vec![param_type],
             captures: HashSet::new(),
-            capture_types: capture_types,
+            capture_types,
             code: vec![],
         }));
         let closure_ir_index = ir.defs.len() - 1;
