@@ -155,6 +155,34 @@ fn uncurry_applications(ir: &mut Ir, n: usize) {
     clean_up_nondeps(code, code.len() - 1);
 }
 
+fn get_def_dependencies(r: &mut HashSet<usize>, ir: &Ir, n: usize) {
+    r.insert(n);
+    let code = &ir.defs[n].as_ref().unwrap().code;
+    for loc in code {
+        if let IrInstr::Closure(f, _) = &loc.instr {
+            if !r.contains(f) {
+                get_def_dependencies(r, ir, *f);
+            }
+        };
+    }
+}
+
+fn pass_clean_up(ir: &mut Ir) {
+    let mut deps = HashSet::new();
+    for (n, def) in ir.defs.iter().enumerate() {
+        if let Some(d) = def {
+            if d.export && !deps.contains(&n) {
+                get_def_dependencies(&mut deps, ir, n);
+            }
+        }
+    }
+    for n in 0..ir.defs.len() {
+        if !deps.contains(&n) {
+            ir.defs[n] = None;
+        }
+    }
+}
+
 pub(crate) fn pass_uncurry(ir: &mut Ir) {
     // First, uncurry all global definitions
     for n in 0..ir.defs.len() {
@@ -168,4 +196,5 @@ pub(crate) fn pass_uncurry(ir: &mut Ir) {
     }
     // Finally, identify any remaining partial applications
     // TODO
+    pass_clean_up(ir);
 }
