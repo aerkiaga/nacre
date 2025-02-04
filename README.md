@@ -5,17 +5,16 @@ A programming language for verified software.
 Type in the workspace directory:
 
 ```shell
-cd nacre
-cargo run std::logic::Eq::symmetric
+cargo run nacre::std::logic::Eq::symmetric
 ```
 
-This will verify `Eq::symmetric` in `./std/logic.na`.
+This will verify `Eq::symmetric` in `./nacre/std/logic.na`.
 To verify any theorem of yours, type it in a file
 and access its path like this. You can import symbols
 from `std` using the following syntax:
 
 ```rust
-use super::std::logic::Eq;
+use super::nacre::std::logic::Eq;
 ```
 
 To use `annotate-snippets` for error reporting
@@ -64,10 +63,12 @@ as reference for later development).
   - Implement struct and enum definition syntax.
   - Add support for more kinds of lvalues.
   - Add core operators.
-* Implement barebones code generation.
-  - Write code to optimize closures into static code
-  	and data structures.
-  - Add at least a few built-in types.
+* Complete and stabilize code generation.
+  - Structs and enum variants with contents.
+  - Built-in operators.
+  - Array and integer types.
+  - Generic types (and related CoC-level transformations).
+  - Partial application.
 
 ### Research phase
 Once the bootstrapping compiler is capable of
