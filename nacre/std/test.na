@@ -5,24 +5,24 @@ type Unit(T: Type, t: T) -> T: Type;
 type Bool(T: Type, a: T, b: T) -> T: Type;
 
 impl Bool {
-    fn true(T: Type, a: T, b: T) {a}: Bool;
+    fn true(T: Type, a: T, b: T) {b}: Bool;
     
-    fn false(T: Type, a: T, b: T) {b}: Bool;
+    fn false(T: Type, a: T, b: T) {a}: Bool;
     
     fn not(self: Bool) {
-        self Bool::false Bool::true
+        self Bool::true Bool::false
     } -> Bool;
     
     fn and(self: Bool, other: Bool) {
-        self other Bool::false
+        self Bool::false other
     } -> Bool;
     
     fn or(self: Bool, other: Bool) {
-        self Bool::true other
+        self other Bool::true
     } -> Bool;
     
     fn xor(self: Bool, other: Bool) {
-        self other.not other
+        self other other.not
     } -> Bool;
 };
 
