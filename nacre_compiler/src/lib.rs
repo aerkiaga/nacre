@@ -24,6 +24,8 @@ pub enum IrInstr {
     Closure(usize, Vec<usize>),
     /// Returns a copy of the input local as output.
     Move(usize),
+    /// Builds an enum variant with an index and a contained local value.
+    Enum(usize, Option<usize>),
 }
 
 impl std::fmt::Debug for IrInstr {
@@ -50,6 +52,10 @@ impl std::fmt::Debug for IrInstr {
                 })
             )?,
             Self::Move(n) => write!(f, "${}", n)?,
+            Self::Enum(v, c) => match c {
+                Some(inner) => write!(f, "enum {} ${}", v, inner)?,
+                None => write!(f, "enum {}", v)?,
+            },
         }
         Ok(())
     }

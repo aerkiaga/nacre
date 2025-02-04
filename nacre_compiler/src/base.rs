@@ -2,12 +2,54 @@ use crate::typing;
 use crate::{Ir, IrDef, IrInstr, IrLoc};
 use nacre_kernel::Term;
 use nacre_kernel::TermInner;
+use nacre_kernel::{Context, Environment};
 use nacre_parser::TermMeta;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
 
 type Definition = (Option<Arc<Term<TermMeta>>>, Arc<Term<TermMeta>>);
+
+fn compute_inductive_const(
+    ir: &mut Ir,
+    ir_index: usize,
+    term: &Term<TermMeta>,
+    env: &Vec<Definition>,
+    defs: &mut HashMap<usize, usize>,
+) -> Result<(), ()> {
+    let mut t = term;
+    let mut variant_count = 0;
+    while let TermInner::Lambda(_, b) = &t.inner {
+        variant_count += 1;
+        t = b;
+    }
+    // TODO: handle structs, enum contents
+    let variant = if let TermInner::Variable(v) = t.inner {
+        assert!(v < variant_count);
+        variant_count - v - 1
+    } else {
+        panic!()
+    };
+    assert!(variant_count > 1); // TODO: handle structs
+                                // TODO: move computation into crate::typing
+    let e = Environment::from_vec(env.clone()); // TODO: pass actual env
+    let mut c = Context::new();
+    c.add_inner(
+        None,
+        Term {
+            inner: TermInner::Prop,
+            meta: TermMeta::default().into(),
+        },
+    );
+    let term_type = term.compute_type(&e, &mut c).unwrap();
+    let def = ir.defs[ir_index].as_mut().unwrap();
+    let value_type = typing::compute_enum(&term_type, &mut ir.types, env, def, defs);
+    def.code.push(IrLoc {
+        instr: IrInstr::Enum(variant, None),
+        value_type,
+    });
+    Ok(())
+}
 
 fn compute_global(
     g: &usize,
@@ -30,12 +72,21 @@ fn compute_global(
     let closure_type = typing::compute_closure(closure, &mut ir.types);
     let captures = closure.captures.clone();
     debug_assert!(captures.is_empty());
+    let other_def = ir.defs[closure_ir_index].as_ref().unwrap();
+    let n_params = other_def.params;
+    let return_type = other_def.code.last().unwrap().value_type;
     let def = ir.defs[ir_index].as_mut().unwrap();
     let passed_captures = vec![];
     def.code.push(IrLoc {
         instr: IrInstr::Closure(closure_ir_index, passed_captures),
         value_type: closure_type,
     });
+    if n_params == 0 {
+        def.code.push(IrLoc {
+            instr: IrInstr::Apply(def.code.len() - 1, vec![]),
+            value_type: return_type,
+        });
+    }
     Ok(())
 }
 
@@ -92,8 +143,7 @@ fn compute_lambda(
     (old_defs, *defs) = (defs.clone(), new_defs);
     defs.insert(0, usize::MAX); // innermost definition is now a parameter
     if let TermInner::Prop = a.inner {
-        // fn(a: Type) { b }, ignore a for now
-        compute_ir_instruction(ir, ir_index, env_to_ir_index, b, env, names, defs)?;
+        compute_inductive_const(ir, ir_index, b, env, defs)?;
     } else if def.params == 0 && def.code.is_empty() {
         // outer body of global definition
         def.params = 1;
@@ -129,6 +179,8 @@ fn compute_lambda(
         compute_ir_instruction(ir, ir.defs.len() - 1, env_to_ir_index, b, env, names, defs)?;
         let closure = ir.defs[closure_ir_index].as_ref().unwrap();
         let closure_type = typing::compute_closure(closure, &mut ir.types);
+        let n_params = closure.params;
+        let return_type = closure.code.last().unwrap().value_type;
         // pass down captures
         let captures = closure.captures.clone();
         let def = ir.defs[ir_index].as_mut().unwrap();
@@ -166,6 +218,12 @@ fn compute_lambda(
             instr: IrInstr::Closure(closure_ir_index, passed_captures),
             value_type: closure_type,
         });
+        if n_params == 0 {
+            def.code.push(IrLoc {
+                instr: IrInstr::Apply(def.code.len() - 1, vec![]),
+                value_type: return_type,
+            });
+        }
     }
     *defs = old_defs;
     Ok(())

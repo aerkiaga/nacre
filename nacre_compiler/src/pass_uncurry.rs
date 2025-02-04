@@ -80,7 +80,11 @@ fn trace_deps(code: &Vec<IrLoc>, output: usize) -> HashSet<usize> {
         }),
         IrInstr::Closure(_, p) => p.iter().fold(r, |y, x| &y | &trace_deps(code, *x)),
         IrInstr::Move(l) => &r | &trace_deps(code, *l),
-        _ => r,
+        IrInstr::Enum(_, c) => match c {
+            Some(inner) => &r | &trace_deps(code, *inner),
+            None => r,
+        },
+        IrInstr::Param(_) | IrInstr::Capture(_) => r,
     }
 }
 
