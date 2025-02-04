@@ -8,10 +8,12 @@ use nacre_kernel::Term;
 use nacre_kernel::TermInner;
 use std::ops::Range;
 
-pub(crate) struct TermMeta {
-    pub(crate) range: Range<usize>,
-    pub(crate) name: Option<String>,
-    pub(crate) filename: String,
+/// Metadata for [Term] nodes.
+#[derive(Debug)] // TODO: more specific implementation
+pub struct TermMeta {
+    pub range: Range<usize>,
+    pub name: Option<String>,
+    pub filename: String,
 }
 
 impl Default for TermMeta {
@@ -469,7 +471,14 @@ fn handle_prototype(
     // Map insertions, replacements and deletions
     let (mut opt_params1, mut opt_params2) = levenshtein_compare(params1, params2, env, ctx1, ctx2);
     // Handle trailing parameters
-    (opt_params1, opt_params2) = handle_prototype_trailing_parameters((nparam1, nparam2), (ret1, ret2), (opt_params1, opt_params2), env, ctx1, ctx2);
+    (opt_params1, opt_params2) = handle_prototype_trailing_parameters(
+        (nparam1, nparam2),
+        (ret1, ret2),
+        (opt_params1, opt_params2),
+        env,
+        ctx1,
+        ctx2,
+    );
     // Format arguments correctly
     let (mut r1, mut r2, at_least_one_equal) =
         handle_prototype_format_arguments((opt_params1, opt_params2), env, ctx1, ctx2);
@@ -545,10 +554,10 @@ fn comparison_try_expand(
             TermInner::Lambda(_ll, lr) => {
                 if let Ok(cta) = lr.replace_inner(r) {
                     let (s12, res) = if reverse {
-                    produce_comparison_rec(tb, &cta, env, ctx1, ctx2, false)
-                } else {
-                    produce_comparison_rec(&cta, tb, env, ctx1, ctx2, false)
-                };
+                        produce_comparison_rec(tb, &cta, env, ctx1, ctx2, false)
+                    } else {
+                        produce_comparison_rec(&cta, tb, env, ctx1, ctx2, false)
+                    };
                     if res > ComparisonResult::Different {
                         return Some((s12, res));
                     }
@@ -559,10 +568,10 @@ fn comparison_try_expand(
                     if let TermInner::Lambda(_ll, lr) = &cl.inner {
                         if let Ok(cta) = lr.replace_inner(r) {
                             let (s12, res) = if reverse {
-                    produce_comparison_rec(tb, &cta, env, ctx1, ctx2, false)
-                } else {
-                    produce_comparison_rec(&cta, tb, env, ctx1, ctx2, false)
-                };
+                                produce_comparison_rec(tb, &cta, env, ctx1, ctx2, false)
+                            } else {
+                                produce_comparison_rec(&cta, tb, env, ctx1, ctx2, false)
+                            };
                             if res > ComparisonResult::Different {
                                 return Some((s12, res));
                             }

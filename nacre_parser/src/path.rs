@@ -66,9 +66,7 @@ pub(crate) async fn get_physical_path(logical_path: &str) -> Result<(String, Str
                         found_file = true;
                     }
                 }
-                Err(_) => {
-                    return Err(())
-                }
+                Err(_) => return Err(()),
             }
         } else {
             identifier.push_str(component);

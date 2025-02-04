@@ -23,13 +23,20 @@ instead of `ariadne` (the default), pass the
 `--features annotate-snippets` and `--no-default-features`
 flags to `cargo`.
 
+At the moment, code generation is very
+basic and the ABI is not complete.
+There is an integration test for compilation,
+which emits an object file and links it
+against a test program, which is then run.
+
 ## Testing
 ```shell
 cargo check         # build
 cargo clippy        # linter
-cargo test --tests  # integration tests
+cargo test          # integration tests
 cargo llvm-cov      # test coverage
 cargo bench         # performance regressions
+cargo mutants       # mutation testing
 ```
 
 ### Fuzz testing
@@ -56,12 +63,11 @@ as reference for later development).
   - Implement named parameters in function application.
   - Implement struct and enum definition syntax.
   - Add support for more kinds of lvalues.
+  - Add core operators.
 * Implement barebones code generation.
-  - Write code to convert CoC into closures.
   - Write code to optimize closures into static code
   	and data structures.
   - Add at least a few built-in types.
-  - Investigate and use LLVM.
 
 ### Research phase
 Once the bootstrapping compiler is capable of
