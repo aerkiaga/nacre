@@ -1,0 +1,5 @@
+use super::super::super::std::test::Bool;
+
+fn test(x: Bool, y: Bool) {
+    x.and y
+};

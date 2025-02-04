@@ -1,4 +1,4 @@
-use crate::{Ir, IrInstr, IrLoc};
+use crate::{Ir, IrInstr, IrLoc, IrType};
 use std::collections::HashSet;
 
 fn trace_back(code: &Vec<IrLoc>, output: usize) -> usize {
@@ -187,13 +187,29 @@ fn pass_clean_up(ir: &mut Ir) {
     }
 }
 
+fn uncurry_type(ir: &mut Ir, n: usize) {
+    if let Some(IrType::Closure(p1, Some(r1i))) = &ir.types[n] {
+        let r = *r1i;
+        if let IrType::Closure(p2, r2) = ir.types[r].as_ref().unwrap() {
+            let mut p = p1.clone();
+            let mut p2c = p2.clone();
+            let rr = *r2;
+            uncurry_type(ir, r);
+            p.append(&mut p2c);
+            ir.types[n] = Some(IrType::Closure(p, rr));
+        }
+    }
+}
+
 pub(crate) fn pass_uncurry(ir: &mut Ir) {
     // First, uncurry all global definitions
     for n in 0..ir.defs.len() {
         uncurry_def(ir, n);
     }
     // Second, uncurry all types
-    // TODO
+    for n in 0..ir.types.len() {
+        uncurry_type(ir, n);
+    }
     // Then, uncurry applications themselves
     for n in 0..ir.defs.len() {
         uncurry_applications(ir, n);

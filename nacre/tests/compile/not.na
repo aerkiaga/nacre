@@ -1,5 +1,5 @@
 use super::super::super::std::test::Bool;
 
-fn a(x: Bool) {
+fn test(x: Bool) {
     x.not
 };
