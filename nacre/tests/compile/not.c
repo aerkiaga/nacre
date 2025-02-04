@@ -16,6 +16,6 @@ int main() {
     int nb0 = !ac->f(ac, (Bool) !0);
     int nb1 = !ac->f(ac, (Bool) !1);
     int r = (nb0 && !nb1);
-    printf("Test: %s\n", r? "pass" : "fail");
+    //printf("Test: %s\n", r? "pass" : "fail");
     return !r;
 }

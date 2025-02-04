@@ -1,3 +1,5 @@
+use serial_test::serial;
+use std::env;
 use std::fs;
 use std::process::Command;
 
@@ -16,26 +18,28 @@ async fn test_compile_file(name: &str) {
     assert!(objcopy_status.success(), "objcopy returned error status");
     let cc_status = Command::new("cc")
         .arg("-o")
-        .arg("test")
+        .arg(name)
         .arg(format!("tests/compile/{name}.c"))
         .arg("out.o")
         .status()
         .expect("Failed to run cc");
     fs::remove_file("out.o").unwrap();
     assert!(cc_status.success(), "cc returned error status");
-    let test_status = Command::new("./test")
+    let test_status = Command::new(format!("./{name}"))
         .status()
         .expect("Failed to run the compiled test program");
-    fs::remove_file("test").unwrap();
+    fs::remove_file(name).unwrap();
     assert!(test_status.success(), "Test program returned error status");
 }
 
-/*#[tokio::test(flavor = "multi_thread")]
+#[tokio::test(flavor = "multi_thread")]
+#[serial]
 async fn test_compile_not() {
     test_compile_file("not").await;
-}*/
+}
 
 #[tokio::test(flavor = "multi_thread")]
+#[serial]
 async fn test_compile_and() {
     test_compile_file("and").await;
 }

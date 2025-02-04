@@ -17,8 +17,7 @@ int main() {
     int ab01 = !ac->f(ac, (Bool) !0, (Bool) !1);
     int ab10 = !ac->f(ac, (Bool) !1, (Bool) !0);
     int ab11 = !ac->f(ac, (Bool) !1, (Bool) !1);
-    printf("%d %d %d %d", ab00, ab01, ab10, ab11);
     int r = (!ab00 && !ab01 && !ab10 && ab11);
-    printf("Test: %s\n", r? "pass" : "fail");
+    //printf("Test: %s\n", r? "pass" : "fail");
     return !r;
 }
