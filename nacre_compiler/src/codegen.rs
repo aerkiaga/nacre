@@ -267,7 +267,7 @@ pub(crate) fn emit_code(ir: &Ir) -> Result<(), ()> {
             }
         }
     }
-    module.print_to_stderr();
+    //module.print_to_stderr();
     module.verify().unwrap();
     let target_triple = TargetTriple::create("x86_64-unknown-linux-gnu");
     let _ = Target::initialize_native(&InitializationConfig {
