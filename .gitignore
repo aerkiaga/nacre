@@ -4,3 +4,5 @@ Cargo.lock
 **/*.rs.bk
 notes/
 **/examples/out/
+*.s
+*.o

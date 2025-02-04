@@ -7,7 +7,11 @@ mod kernel_err;
 mod path;
 mod semantics;
 
+pub use kernel::get_definition_index;
+pub use kernel::get_global_environment;
+pub use kernel::get_global_environment_names;
 pub use kernel::verify;
+pub use kernel_err::TermMeta;
 pub use nacre_ast::{preprocess_file, AbstractSyntaxTree};
 pub use nacre_types::report;
 pub use nacre_types::report::Report;
