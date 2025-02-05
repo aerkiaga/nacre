@@ -7,6 +7,7 @@ use std::fmt::Write;
 mod base;
 mod code_transforms;
 mod codegen;
+mod pass_declosure;
 mod pass_uncurry;
 mod typing;
 
@@ -23,6 +24,8 @@ pub enum IrInstr {
     Apply(usize, Vec<usize>),
     /// Builds a closure from a global definition and a list of locally-defined captures.
     Closure(usize, Vec<usize>),
+    /// Builds a function from a global definition.
+    Function(usize),
     /// Returns a copy of the input local as output.
     Move(usize),
     /// Builds an enum variant with an index and a contained local value.
@@ -52,6 +55,7 @@ impl std::fmt::Debug for IrInstr {
                     output
                 })
             )?,
+            Self::Function(func) => write!(f, "fn @{}", func)?,
             Self::Move(n) => write!(f, "${}", n)?,
             Self::Enum(v, c) => match c {
                 Some(inner) => write!(f, "enum {} ${}", v, inner)?,
@@ -201,5 +205,6 @@ pub async fn compile(identifiers: Vec<String>) -> Result<Ir, ()> {
     let names = get_global_environment_names().await;
     let mut ir = base::compute_initial_ir(&indices, &env, &names);
     pass_uncurry::pass_uncurry(&mut ir);
+    pass_declosure::pass_declosure(&mut ir);
     Ok(ir)
 }

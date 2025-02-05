@@ -55,12 +55,12 @@ necessarily performance or even code quality
 as reference for later development).
 
 * Complete and stabilize code generation.
-  - De-closuring pass.
   - Structs and enum variants with contents.
   - Built-in operators.
   - Array and integer types.
   - Generic types (and related CoC-level transformations).
   - Partial application.
+  - Non-de-closureable usages.
 * Finish core syntax.
   - Implement named parameters in function application.
   - Implement struct and enum definition syntax.

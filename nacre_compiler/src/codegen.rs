@@ -30,8 +30,14 @@ fn emit_type<'a>(
     }
 }
 
-fn emit_instr_param<'a>(p: &usize, function: &FunctionValue<'a>) -> BasicValueEnum<'a> {
-    function.get_nth_param(*p as u32 + 1).unwrap()
+fn emit_instr_param<'a>(
+    p: &usize,
+    function: &FunctionValue<'a>,
+    closure: bool,
+) -> BasicValueEnum<'a> {
+    function
+        .get_nth_param(*p as u32 + if closure { 1 } else { 0 })
+        .unwrap()
 }
 
 fn emit_instr_capture<'a>(
@@ -92,6 +98,27 @@ fn emit_instr_apply<'a>(
                             .into_iter()
                             .chain(params.into_iter().map(|x| x.into()))
                             .collect::<Vec<_>>(),
+                        "apply",
+                    )
+                    .unwrap()
+            };
+            r.try_as_basic_value().left().unwrap()
+        }
+        IrType::Function(p, r) => {
+            let return_type = emit_type(*r, types, context);
+            let fn_type = return_type.fn_type(
+                &p.iter()
+                    .map(|t| emit_type(*t, types, context).into())
+                    .collect::<Vec<_>>(),
+                false,
+            );
+            let r = {
+                let func = closure.into_pointer_value();
+                builder
+                    .build_indirect_call(
+                        fn_type,
+                        func,
+                        &params.into_iter().map(|x| x.into()).collect::<Vec<_>>(),
                         "apply",
                     )
                     .unwrap()
@@ -190,17 +217,27 @@ pub(crate) fn emit_code(ir: &Ir) -> Result<(), ()> {
                 format!(".fn{}", n)
             };
             let return_type = emit_type(d.code.last().unwrap().value_type, &ir.types, &context);
-            let function_type = return_type.fn_type(
-                &[closure_type.into()]
-                    .into_iter()
-                    .chain(
-                        d.param_types
-                            .iter()
-                            .map(|t| emit_type(*t, &ir.types, &context).into()),
-                    )
-                    .collect::<Vec<_>>(),
-                false,
-            );
+            let function_type = if d.captures.is_empty() {
+                return_type.fn_type(
+                    &d.param_types
+                        .iter()
+                        .map(|t| emit_type(*t, &ir.types, &context).into())
+                        .collect::<Vec<_>>(),
+                    false,
+                )
+            } else {
+                return_type.fn_type(
+                    &[closure_type.into()]
+                        .into_iter()
+                        .chain(
+                            d.param_types
+                                .iter()
+                                .map(|t| emit_type(*t, &ir.types, &context).into()),
+                        )
+                        .collect::<Vec<_>>(),
+                    false,
+                )
+            };
             let function_linkage = if d.export {
                 Some(Linkage::External)
             } else {
@@ -220,7 +257,11 @@ pub(crate) fn emit_code(ir: &Ir) -> Result<(), ()> {
             for loc in &d.code {
                 match &loc.instr {
                     IrInstr::Param(p) => {
-                        values.push(emit_instr_param(p, &functions[n].unwrap()));
+                        values.push(emit_instr_param(
+                            p,
+                            &functions[n].unwrap(),
+                            !d.captures.is_empty(),
+                        ));
                     }
                     IrInstr::Capture(c) => {
                         values.push(emit_instr_capture(
@@ -249,6 +290,15 @@ pub(crate) fn emit_code(ir: &Ir) -> Result<(), ()> {
                             &context,
                             &builder,
                         )?);
+                    }
+                    IrInstr::Function(f) => {
+                        values.push(
+                            functions[*f]
+                                .unwrap()
+                                .as_global_value()
+                                .as_pointer_value()
+                                .into(),
+                        );
                     }
                     IrInstr::Move(p) => {
                         let param = values[*p];

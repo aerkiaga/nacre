@@ -14,8 +14,10 @@ pub enum IrType {
     Enum(Vec<Option<usize>>),
     /// A struct with a number of fields.
     Struct(Vec<Option<usize>>),
-    /// A closure that takes some params and returns a value.
+    /// A closure that takes some parameters and returns a value.
     Closure(Vec<Option<usize>>, Option<usize>),
+    /// A function that takes some parameters and returns a value.
+    Function(Vec<Option<usize>>, Option<usize>),
     /// Any type.
     Any,
 }
@@ -57,13 +59,28 @@ impl std::fmt::Debug for IrType {
                     Some(d) => writeln!(f, ") -> <{d:?}>")?,
                 }
             }
+            IrType::Function(params, ret) => {
+                writeln!(f, "fn (")?;
+                for param in params {
+                    match param {
+                        None => {
+                            writeln!(f, "void")?;
+                        }
+                        Some(d) => writeln!(f, "<{d}>")?,
+                    }
+                }
+                match ret {
+                    None => writeln!(f, ") -> void")?,
+                    Some(d) => writeln!(f, ") -> <{d:?}>")?,
+                }
+            }
             IrType::Any => writeln!(f, "any")?,
         }
         Ok(())
     }
 }
 
-fn add_type(t: IrType, types: &mut Vec<Option<IrType>>) -> usize {
+pub(crate) fn add_type(t: IrType, types: &mut Vec<Option<IrType>>) -> usize {
     for (i, t2) in types.iter().enumerate() {
         if let Some(tt) = t2 {
             if t == *tt {

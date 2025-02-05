@@ -9,6 +9,41 @@ pub(crate) fn trace_back(code: &Vec<IrLoc>, output: usize) -> usize {
     }
 }
 
+/// Finds the instructions at which the output of some instruction is used.
+pub(crate) fn trace_forwards(code: &[IrLoc], input: usize) -> HashSet<usize> {
+    let mut inputs = HashSet::new();
+    inputs.insert(input);
+    let mut outputs = HashSet::new();
+    for (n, loc) in code.iter().enumerate() {
+        match &loc.instr {
+            IrInstr::Apply(f, p) => {
+                if inputs.contains(f) | p.iter().any(|x| inputs.contains(x)) {
+                    outputs.insert(n);
+                }
+            }
+            IrInstr::Closure(_, p) => {
+                if p.iter().any(|x| inputs.contains(x)) {
+                    outputs.insert(n);
+                }
+            }
+            IrInstr::Move(l) => {
+                if inputs.contains(l) {
+                    inputs.insert(n);
+                }
+            }
+            IrInstr::Enum(_, c) => {
+                if let Some(cc) = c {
+                    if inputs.contains(cc) {
+                        outputs.insert(n);
+                    }
+                }
+            }
+            IrInstr::Param(_) | IrInstr::Capture(_) | IrInstr::Function(_) => {}
+        }
+    }
+    outputs
+}
+
 /// Increases all indices in the code by some amount, possibly to append it.
 pub(crate) fn move_code(code: &mut [IrLoc], dist: usize) {
     for loc in code {
@@ -82,7 +117,7 @@ fn trace_deps(code: &Vec<IrLoc>, output: usize) -> HashSet<usize> {
             Some(inner) => &r | &trace_deps(code, *inner),
             None => r,
         },
-        IrInstr::Param(_) | IrInstr::Capture(_) => r,
+        IrInstr::Param(_) | IrInstr::Capture(_) | IrInstr::Function(_) => r,
     }
 }
 
