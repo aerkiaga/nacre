@@ -54,21 +54,22 @@ necessarily performance or even code quality
 (although readable code is desired, so as to serve
 as reference for later development).
 
-* Add tests.
-  - Parser fuzz test.
-  - Regular test suite.
-  - Mutation testing.
-* Finish core syntax.
-  - Implement named parameters in function application.
-  - Implement struct and enum definition syntax.
-  - Add support for more kinds of lvalues.
-  - Add core operators.
 * Complete and stabilize code generation.
+  - De-closuring pass.
   - Structs and enum variants with contents.
   - Built-in operators.
   - Array and integer types.
   - Generic types (and related CoC-level transformations).
   - Partial application.
+* Finish core syntax.
+  - Implement named parameters in function application.
+  - Implement struct and enum definition syntax.
+  - Add support for more kinds of lvalues.
+  - Add core operators.
+* Add tests.
+  - Parser fuzz test.
+  - Regular test suite.
+  - Mutation testing.
 
 ### Research phase
 Once the bootstrapping compiler is capable of

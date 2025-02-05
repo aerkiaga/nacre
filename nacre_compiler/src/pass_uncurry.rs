@@ -159,6 +159,51 @@ fn uncurry_applications(ir: &mut Ir, n: usize) {
     clean_up_nondeps(code, code.len() - 1);
 }
 
+fn uncurry_type(ir: &mut Ir, n: usize) {
+    if let Some(IrType::Closure(p1, Some(r1i))) = &ir.types[n] {
+        let r = *r1i;
+        if let IrType::Closure(p2, r2) = ir.types[r].as_ref().unwrap() {
+            let mut p = p1.clone();
+            let mut p2c = p2.clone();
+            let rr = *r2;
+            uncurry_type(ir, r);
+            p.append(&mut p2c);
+            ir.types[n] = Some(IrType::Closure(p, rr));
+        }
+    }
+}
+
+fn handle_partial(ir: &mut Ir, n: usize) {
+    let def = match &mut ir.defs[n] {
+        None => return,
+        Some(d) => d,
+    };
+    let code = &mut def.code;
+    for n in 0..code.len() {
+        if let IrInstr::Apply(f, p) = &code[n].instr {
+            let origin = trace_back(code, *f);
+            match &ir.types[code[origin].value_type.unwrap()].as_ref().unwrap() {
+                IrType::Enum(v) => {
+                    if p.len() != v.len() {
+                        todo!();
+                    }
+                }
+                IrType::Closure(p2, _) => {
+                    if p.len() != p2.len() {
+                        todo!();
+                    }
+                }
+                IrType::Struct(_) => {
+                    if p.len() != 1 {
+                        todo!();
+                    }
+                }
+                _ => panic!(),
+            }
+        }
+    }
+}
+
 fn get_def_dependencies(r: &mut HashSet<usize>, ir: &Ir, n: usize) {
     r.insert(n);
     let code = &ir.defs[n].as_ref().unwrap().code;
@@ -187,20 +232,6 @@ fn pass_clean_up(ir: &mut Ir) {
     }
 }
 
-fn uncurry_type(ir: &mut Ir, n: usize) {
-    if let Some(IrType::Closure(p1, Some(r1i))) = &ir.types[n] {
-        let r = *r1i;
-        if let IrType::Closure(p2, r2) = ir.types[r].as_ref().unwrap() {
-            let mut p = p1.clone();
-            let mut p2c = p2.clone();
-            let rr = *r2;
-            uncurry_type(ir, r);
-            p.append(&mut p2c);
-            ir.types[n] = Some(IrType::Closure(p, rr));
-        }
-    }
-}
-
 pub(crate) fn pass_uncurry(ir: &mut Ir) {
     // First, uncurry all global definitions
     for n in 0..ir.defs.len() {
@@ -215,6 +246,8 @@ pub(crate) fn pass_uncurry(ir: &mut Ir) {
         uncurry_applications(ir, n);
     }
     // Finally, identify any remaining partial applications
-    // TODO
+    for n in 0..ir.defs.len() {
+        handle_partial(ir, n);
+    }
     pass_clean_up(ir);
 }
