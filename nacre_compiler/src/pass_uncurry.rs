@@ -1,101 +1,8 @@
-use crate::{Ir, IrInstr, IrLoc, IrType};
+use crate::code_transforms::{
+    clean_up_nondeps, move_code, move_params, remove_loc, replace_captures, trace_back,
+};
+use crate::{Ir, IrInstr, IrType};
 use std::collections::HashSet;
-
-fn trace_back(code: &Vec<IrLoc>, output: usize) -> usize {
-    match code[output].instr {
-        IrInstr::Move(i) => trace_back(code, i),
-        _ => output,
-    }
-}
-
-fn move_code(code: &mut [IrLoc], dist: usize) {
-    for loc in code {
-        loc.instr = match &loc.instr {
-            IrInstr::Apply(f, p) => {
-                IrInstr::Apply(*f + dist, p.iter().map(|x| *x + dist).collect())
-            }
-            IrInstr::Closure(f, c) => IrInstr::Closure(*f, c.iter().map(|x| *x + dist).collect()),
-            IrInstr::Move(x) => IrInstr::Move(*x + dist),
-            instr => instr.clone(),
-        };
-    }
-}
-
-fn move_rel(a: usize, rem: usize) -> usize {
-    if a > rem {
-        a - 1
-    } else {
-        a
-    }
-}
-
-fn remove_loc(code: &mut Vec<IrLoc>, n: usize) -> IrLoc {
-    let len = code.len();
-    for loc in &mut code[n + 1..len] {
-        loc.instr = match &loc.instr {
-            IrInstr::Apply(f, p) => {
-                IrInstr::Apply(move_rel(*f, n), p.iter().map(|x| move_rel(*x, n)).collect())
-            }
-            IrInstr::Closure(f, c) => {
-                IrInstr::Closure(*f, c.iter().map(|x| move_rel(*x, n)).collect())
-            }
-            IrInstr::Move(x) => IrInstr::Move(move_rel(*x, n)),
-            instr => instr.clone(),
-        };
-    }
-    code.remove(n)
-}
-
-fn remove_back(code: &mut Vec<IrLoc>, output: usize) {
-    let element = remove_loc(code, output);
-    if let IrInstr::Move(i) = element.instr {
-        remove_back(code, i)
-    }
-}
-
-fn move_params(code: &mut Vec<IrLoc>, dist: usize) {
-    for loc in code {
-        loc.instr = match &loc.instr {
-            IrInstr::Param(p) => IrInstr::Param(*p + dist),
-            instr => instr.clone(),
-        };
-    }
-}
-
-fn replace_captures(code: &mut Vec<IrLoc>, captures: &[usize]) {
-    for loc in code {
-        loc.instr = match &loc.instr {
-            IrInstr::Capture(c) => IrInstr::Move(captures[*c]),
-            instr => instr.clone(),
-        };
-    }
-}
-
-fn trace_deps(code: &Vec<IrLoc>, output: usize) -> HashSet<usize> {
-    let mut r = HashSet::new();
-    r.insert(output);
-    match &code[output].instr {
-        IrInstr::Apply(f, p) => p.iter().fold(&r | &trace_deps(code, *f), |y, x| {
-            &y | &trace_deps(code, *x)
-        }),
-        IrInstr::Closure(_, p) => p.iter().fold(r, |y, x| &y | &trace_deps(code, *x)),
-        IrInstr::Move(l) => &r | &trace_deps(code, *l),
-        IrInstr::Enum(_, c) => match c {
-            Some(inner) => &r | &trace_deps(code, *inner),
-            None => r,
-        },
-        IrInstr::Param(_) | IrInstr::Capture(_) => r,
-    }
-}
-
-fn clean_up_nondeps(code: &mut Vec<IrLoc>, output: usize) {
-    let deps = trace_deps(code, output);
-    for n in (0..code.len()).rev() {
-        if !deps.contains(&n) {
-            remove_loc(code, n);
-        }
-    }
-}
 
 fn uncurry_def(ir: &mut Ir, n: usize) {
     let def = match &ir.defs[n] {
@@ -117,7 +24,7 @@ fn uncurry_def(ir: &mut Ir, n: usize) {
         None => return,
         Some(d) => d,
     };
-    remove_back(&mut def.code, len - 1);
+    remove_loc(&mut def.code, len - 1);
     let len = def.code.len();
     // prepare code to append
     let mut second_code = ir.defs[closure_index].as_ref().unwrap().code.clone();

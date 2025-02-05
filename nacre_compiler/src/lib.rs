@@ -5,11 +5,12 @@ use std::collections::HashSet;
 use std::fmt::Write;
 
 mod base;
+mod code_transforms;
 mod codegen;
 mod pass_uncurry;
 mod typing;
 
-use typing::IrType;
+pub use typing::IrType;
 
 /// An IR instruction, taking some operands and producing an output.
 #[derive(Clone)]

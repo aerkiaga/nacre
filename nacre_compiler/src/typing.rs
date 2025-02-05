@@ -7,11 +7,16 @@ use std::sync::Arc;
 
 type Definition = (Option<Arc<Term<TermMeta>>>, Arc<Term<TermMeta>>);
 
+/// The type of an IR value.
 #[derive(Eq, PartialEq)]
 pub enum IrType {
+    /// An enum with some variants, each possibly containing some data.
     Enum(Vec<Option<usize>>),
+    /// A struct with a number of fields.
     Struct(Vec<Option<usize>>),
+    /// A closure that takes some params and returns a value.
     Closure(Vec<Option<usize>>, Option<usize>),
+    /// Any type.
     Any,
 }
 
