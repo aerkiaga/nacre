@@ -69,7 +69,7 @@ pub type Definition = (Arc<Term<TermMeta>>, Arc<Term<TermMeta>>, usize);
 fn kernel_loader(logical_path: &str) -> nacre_cache::LoaderFuture<'_, Definition> {
     Box::pin(async move {
         // First we verify the current definition
-        eprintln!("Verifying {}", logical_path);
+        //eprintln!("Verifying {}", logical_path);
         // Start by creating an environment for the kernel
         let mut env = GLOBAL_ENV.lock().await.clone();
         // Then load the definition term and compute its type
@@ -89,7 +89,7 @@ fn kernel_loader(logical_path: &str) -> nacre_cache::LoaderFuture<'_, Definition
         env.add_definition(Some(definition.clone()), type_term.clone())
             .map_err(|e| kernel_err::report(e, &filename))?;
         GLOBAL_ENV_NAMES.lock().await.push(logical_path.to_string());
-        eprintln!("Verified {}", logical_path);
+        //eprintln!("Verified {}", logical_path);
         let index = INDEX_COUNTER.fetch_add(1, Ordering::Relaxed);
         Ok((definition, type_term, index))
     })

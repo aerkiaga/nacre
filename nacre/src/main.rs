@@ -204,23 +204,29 @@ async fn main() {
     let (notify_completion_send, mut notify_completion) = mpsc::channel(1);
     let logical_path_clone = logical_path.clone();
     let task_handle = tokio::spawn(async move {
-        let _ = nacre_parser::verify(&logical_path_clone).await;
-        notify_completion_send.send(()).await.unwrap();
+        let status: Result<_, _> = nacre_parser::verify(&logical_path_clone).await;
+        notify_completion_send.send(status).await.unwrap();
     });
     let mut report_receiver = nacre_parser::REPORTS.subscribe();
-    loop {
+    let status: Result<_, _> = loop {
         tokio::select! {
-            _ = notify_completion.recv() => break,
+            status = notify_completion.recv() => {
+                break status.unwrap();
+            },
             report = report_receiver.recv() => {
                 let report = report.unwrap();
                 print_report(report).await;
             },
         };
-    }
+    };
     while let Ok(report) = report_receiver.try_recv() {
         print_report(report).await;
     }
     task_handle.await.unwrap();
+    match status {
+        Ok(_) => eprintln!("✔ Verified."),
+        Err(_) => eprintln!("✘ Verification failed."),
+    }
     /*
     let ir = nacre_compiler::compile(vec![logical_path]).await.unwrap();
     //println!("{:?}", ir);
