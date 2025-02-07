@@ -201,7 +201,7 @@ pub async fn compile(identifiers: Vec<String>) -> Result<Ir, ()> {
     for id in identifiers {
         indices.push(get_definition_index(&id).await?);
     }
-    let env = get_global_environment().await.into_vec();
+    let env = get_global_environment().await;
     let names = get_global_environment_names().await;
     let mut ir = base::compute_initial_ir(&indices, &env, &names);
     pass_uncurry::pass_uncurry(&mut ir);

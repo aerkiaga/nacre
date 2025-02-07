@@ -1,11 +1,9 @@
 use crate::IrDef;
 use nacre_kernel::Term;
 use nacre_kernel::TermInner;
+use nacre_kernel::{Context, Environment};
 use nacre_parser::TermMeta;
 use std::collections::HashMap;
-use std::sync::Arc;
-
-type Definition = (Option<Arc<Term<TermMeta>>>, Arc<Term<TermMeta>>);
 
 /// The type of an IR value.
 #[derive(Eq, PartialEq)]
@@ -95,7 +93,8 @@ pub(crate) fn add_type(t: IrType, types: &mut Vec<Option<IrType>>) -> usize {
 pub(crate) fn compute_struct(
     mut term: &Term<TermMeta>,
     types: &mut Vec<Option<IrType>>,
-    env: &Vec<Definition>,
+    ctx: &mut Context<TermMeta>,
+    env: &Environment<TermMeta>,
     def: &IrDef,
     defs: &HashMap<usize, usize>,
     mut level: usize,
@@ -120,7 +119,7 @@ pub(crate) fn compute_struct(
     }
     let r: Vec<_> = fields
         .into_iter()
-        .map(|s| compute_type(s, types, env, def, defs))
+        .map(|s| compute_type(s, types, ctx, env, def, defs))
         .collect();
     if r.is_empty() {
         None
@@ -132,7 +131,8 @@ pub(crate) fn compute_struct(
 pub(crate) fn compute_enum(
     mut term: &Term<TermMeta>,
     types: &mut Vec<Option<IrType>>,
-    env: &Vec<Definition>,
+    ctx: &mut Context<TermMeta>,
+    env: &Environment<TermMeta>,
     def: &IrDef,
     defs: &HashMap<usize, usize>,
 ) -> Option<usize> {
@@ -151,6 +151,7 @@ pub(crate) fn compute_enum(
                 structs.push(a);
                 term = b;
                 level += 1;
+                ctx.add_inner(None, (**a).clone());
             }
             _ => todo!(),
         }
@@ -158,8 +159,11 @@ pub(crate) fn compute_enum(
     let r: Vec<_> = structs
         .into_iter()
         .enumerate()
-        .map(|(n, s)| compute_struct(s, types, env, def, defs, n))
+        .map(|(n, s)| compute_struct(s, types, ctx, env, def, defs, n))
         .collect();
+    for _ in 0..level {
+        ctx.remove_inner();
+    }
     if r.is_empty() {
         panic!("Falsehood found during compilation");
     } else if r.len() == 1 {
@@ -172,29 +176,43 @@ pub(crate) fn compute_enum(
 pub(crate) fn compute_type(
     term: &Term<TermMeta>,
     types: &mut Vec<Option<IrType>>,
-    env: &Vec<Definition>,
+    ctx: &mut Context<TermMeta>,
+    env: &Environment<TermMeta>,
     def: &IrDef,
     defs: &HashMap<usize, usize>,
 ) -> Option<usize> {
     match &term.inner {
         TermInner::Prop => None,
         TermInner::Type(_) => None,
-        TermInner::Global(g) => compute_type(env[*g].0.as_ref().unwrap(), types, env, def, defs),
+        TermInner::Global(g) => compute_type(
+            env.as_vec_ref()[*g].0.as_ref().unwrap(),
+            types,
+            ctx,
+            env,
+            def,
+            defs,
+        ),
         TermInner::Variable(_) => Some(add_type(IrType::Any, types)),
         TermInner::Forall(a, b) => {
-            if a.inner == TermInner::Prop {
-                compute_enum(b, types, env, def, defs)
+            ctx.add_inner(None, (**a).clone());
+            let r = if a.inner == TermInner::Prop {
+                compute_enum(b, types, ctx, env, def, defs)
             } else {
-                let at = compute_type(a, types, env, def, defs);
+                let at = compute_type(a, types, ctx, env, def, defs);
                 //let bb = b.make_outer_by_n(0).unwrap();
-                let bt = compute_type(b, types, env, def, defs);
+                let bt = compute_type(b, types, ctx, env, def, defs);
                 let t = IrType::Closure(vec![at], bt);
                 Some(add_type(t, types))
-            }
+            };
+            ctx.remove_inner();
+            r
         }
         TermInner::Lambda(_a, _b) => todo!(),
-        TermInner::Apply(_a, _b) => todo!(),
-        TermInner::Let(_a, _b) => todo!(),
+        TermInner::Apply(_, _) | TermInner::Let(_, _) => {
+            let mut new_term = term.clone();
+            new_term.convert(env, ctx).unwrap();
+            compute_type(&new_term, types, ctx, env, def, defs)
+        }
     }
 }
 

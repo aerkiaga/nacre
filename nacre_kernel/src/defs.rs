@@ -541,6 +541,10 @@ impl<T: Meta> Environment<T> {
         self.inner
     }
 
+    pub fn as_vec_ref(self: &Environment<T>) -> &Vec<EnvDefinition<T>> {
+        &self.inner
+    }
+
     pub fn contains_global(&self, g: GlobalRef) -> bool {
         g < self.inner.len()
     }

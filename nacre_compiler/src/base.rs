@@ -1,27 +1,28 @@
 use crate::typing;
-use crate::{Ir, IrDef, IrInstr, IrLoc};
+use crate::{Ir, IrDef, IrInstr, IrLoc, IrType};
 use nacre_kernel::Term;
 use nacre_kernel::TermInner;
 use nacre_kernel::{Context, Environment};
 use nacre_parser::TermMeta;
 use std::collections::HashMap;
 use std::collections::HashSet;
-use std::sync::Arc;
-
-type Definition = (Option<Arc<Term<TermMeta>>>, Arc<Term<TermMeta>>);
 
 fn compute_inductive_const(
     ir: &mut Ir,
     ir_index: usize,
     term: &Term<TermMeta>,
-    env: &Vec<Definition>,
+    ce: (&mut Context<TermMeta>, &Environment<TermMeta>),
     defs: &mut HashMap<usize, usize>,
 ) -> Result<(), ()> {
-    let mut t = term;
+    let (ctx, env) = ce;
+    let new_term = term.normalize_in_ctx(env, ctx).unwrap();
+    let mut t = &new_term;
     let mut variant_count = 0;
-    while let TermInner::Lambda(_, b) = &t.inner {
+    let term_type = new_term.compute_type(env, ctx).unwrap();
+    while let TermInner::Lambda(_a, b) = &t.inner {
         variant_count += 1;
         t = b;
+        //ctx.add_inner(None, (**a).clone());
     }
     // TODO: handle structs, enum contents
     let variant = if let TermInner::Variable(v) = t.inner {
@@ -32,18 +33,11 @@ fn compute_inductive_const(
     };
     assert!(variant_count > 1); // TODO: handle structs
                                 // TODO: move computation into crate::typing
-    let e = Environment::from_vec(env.clone()); // TODO: pass actual env
-    let mut c = Context::new();
-    c.add_inner(
-        None,
-        Term {
-            inner: TermInner::Prop,
-            meta: TermMeta::default().into(),
-        },
-    );
-    let term_type = term.compute_type(&e, &mut c).unwrap();
     let def = ir.defs[ir_index].as_mut().unwrap();
-    let value_type = typing::compute_enum(&term_type, &mut ir.types, env, def, defs);
+    let value_type = typing::compute_enum(&term_type, &mut ir.types, ctx, env, def, defs);
+    /*for _ in 0..variant_count {
+        ctx.remove_inner();
+    }*/
     def.code.push(IrLoc {
         instr: IrInstr::Enum(variant, None),
         value_type,
@@ -56,7 +50,7 @@ fn compute_global(
     ir: &mut Ir,
     ir_index: usize,
     env_to_ir_index: &mut Vec<Option<usize>>,
-    env: &Vec<Definition>,
+    env: &Environment<TermMeta>,
     names: &Vec<String>,
 ) -> Result<(), ()> {
     match env_to_ir_index[*g] {
@@ -131,24 +125,26 @@ fn compute_lambda(
     ir: &mut Ir,
     ir_index: usize,
     env_to_ir_index: &mut Vec<Option<usize>>,
-    env: &Vec<Definition>,
+    ce: (&mut Context<TermMeta>, &Environment<TermMeta>),
     names: &Vec<String>,
     defs: &mut HashMap<usize, usize>,
 ) -> Result<(), ()> {
     let (a, b) = lam;
+    let (ctx, env) = ce;
     let def = ir.defs[ir_index].as_mut().unwrap();
-    let param_type = typing::compute_type(a, &mut ir.types, env, def, defs);
+    let param_type = typing::compute_type(a, &mut ir.types, ctx, env, def, defs);
     let new_defs = HashMap::new();
     let old_defs: HashMap<_, _>;
     (old_defs, *defs) = (defs.clone(), new_defs);
     defs.insert(0, usize::MAX); // innermost definition is now a parameter
+    ctx.add_inner(None, a.clone());
     if let TermInner::Prop = a.inner {
-        compute_inductive_const(ir, ir_index, b, env, defs)?;
+        compute_inductive_const(ir, ir_index, b, (ctx, env), defs)?;
     } else if def.params == 0 && def.code.is_empty() {
         // outer body of global definition
         def.params = 1;
         def.param_types = vec![param_type];
-        compute_ir_instruction(ir, ir_index, env_to_ir_index, b, env, names, defs)?;
+        compute_ir_instruction(ir, ir_index, env_to_ir_index, b, (ctx, env), names, defs)?;
     } else {
         // inner lambda, create anonymous global definition
         let mut capture_types = vec![];
@@ -176,7 +172,15 @@ fn compute_lambda(
             code: vec![],
         }));
         let closure_ir_index = ir.defs.len() - 1;
-        compute_ir_instruction(ir, ir.defs.len() - 1, env_to_ir_index, b, env, names, defs)?;
+        compute_ir_instruction(
+            ir,
+            ir.defs.len() - 1,
+            env_to_ir_index,
+            b,
+            (ctx, env),
+            names,
+            defs,
+        )?;
         let closure = ir.defs[closure_ir_index].as_ref().unwrap();
         let closure_type = typing::compute_closure(closure, &mut ir.types);
         let n_params = closure.params;
@@ -225,6 +229,7 @@ fn compute_lambda(
             });
         }
     }
+    ctx.remove_inner();
     *defs = old_defs;
     Ok(())
 }
@@ -234,30 +239,81 @@ fn compute_apply(
     ir: &mut Ir,
     ir_index: usize,
     env_to_ir_index: &mut Vec<Option<usize>>,
-    env: &Vec<Definition>,
+    ce: (&mut Context<TermMeta>, &Environment<TermMeta>),
     names: &Vec<String>,
     defs: &mut HashMap<usize, usize>,
 ) -> Result<(), ()> {
     let (a, b) = app;
-    compute_ir_instruction(ir, ir_index, env_to_ir_index, a, env, names, defs)?;
-    let a_index = ir.defs[ir_index].as_mut().unwrap().code.len() - 1;
-    if compute_ir_instruction(ir, ir_index, env_to_ir_index, b, env, names, defs).is_ok() {
-        let def = ir.defs[ir_index].as_mut().unwrap();
-        let b_index = def.code.len() - 1;
-        let a_type = def.code[a_index].value_type;
-        let b_type = def.code[b_index].value_type;
-        if b_type.is_none() {
-            def.code.push(IrLoc {
-                instr: IrInstr::Move(a_index),
-                value_type: a_type,
-            });
-            return Ok(());
+    let (ctx, env) = ce;
+    let b_type = b.compute_type(env, ctx).unwrap();
+    let b_ir_type = typing::compute_type(
+        &b_type,
+        &mut ir.types,
+        ctx,
+        env,
+        ir.defs[ir_index].as_ref().unwrap(),
+        defs,
+    );
+    match b_ir_type {
+        Some(_) => {
+            compute_ir_instruction(ir, ir_index, env_to_ir_index, a, (ctx, env), names, defs)?;
+            let a_index = ir.defs[ir_index].as_mut().unwrap().code.len() - 1;
+            if compute_ir_instruction(ir, ir_index, env_to_ir_index, b, (ctx, env), names, defs)
+                .is_ok()
+            {
+                let def = ir.defs[ir_index].as_mut().unwrap();
+                let b_index = def.code.len() - 1;
+                let a_type = def.code[a_index].value_type;
+                let b_type = def.code[b_index].value_type;
+                if b_type.is_none() {
+                    def.code.push(IrLoc {
+                        instr: IrInstr::Move(a_index),
+                        value_type: a_type,
+                    });
+                    return Ok(());
+                }
+                let typ = typing::compute_apply(a_type, b_type, &mut ir.types);
+                def.code.push(IrLoc {
+                    instr: IrInstr::Apply(a_index, vec![b_index]),
+                    value_type: typ,
+                });
+            }
         }
-        let typ = typing::compute_apply(a_type, b_type, &mut ir.types);
-        def.code.push(IrLoc {
-            instr: IrInstr::Apply(a_index, vec![b_index]),
-            value_type: typ,
-        });
+        None => {
+            let a_type = a.compute_type(env, ctx).unwrap();
+            let a_ir_type = typing::compute_type(
+                &a_type,
+                &mut ir.types,
+                ctx,
+                env,
+                ir.defs[ir_index].as_ref().unwrap(),
+                defs,
+            );
+            // TODO move logic into `typing`
+            let is = a_ir_type.is_some()
+                && matches!(
+                    ir.types[a_ir_type.unwrap()].as_ref().unwrap(),
+                    IrType::Enum(_) | IrType::Struct(_)
+                );
+            if is {
+                compute_ir_instruction(ir, ir_index, env_to_ir_index, a, (ctx, env), names, defs)?;
+            } else {
+                let mut new_term = Term {
+                    inner: TermInner::Apply(a.clone().into(), b.clone().into()),
+                    meta: TermMeta::default().into(),
+                };
+                new_term.convert(env, ctx).unwrap();
+                compute_ir_instruction(
+                    ir,
+                    ir_index,
+                    env_to_ir_index,
+                    &new_term,
+                    (ctx, env),
+                    names,
+                    defs,
+                )?;
+            }
+        }
     }
     Ok(())
 }
@@ -267,12 +323,13 @@ fn compute_let(
     ir: &mut Ir,
     ir_index: usize,
     env_to_ir_index: &mut Vec<Option<usize>>,
-    env: &Vec<Definition>,
+    ce: (&mut Context<TermMeta>, &Environment<TermMeta>),
     names: &Vec<String>,
     defs: &mut HashMap<usize, usize>,
 ) -> Result<(), ()> {
     let (a, b) = lt;
-    compute_ir_instruction(ir, ir_index, env_to_ir_index, a, env, names, defs)?;
+    let (ctx, env) = ce;
+    compute_ir_instruction(ir, ir_index, env_to_ir_index, a, (ctx, env), names, defs)?;
     let a_index = ir.defs[ir_index].as_ref().unwrap().code.len() - 1;
     let mut new_defs = HashMap::new();
     let old_defs: HashMap<_, _>;
@@ -281,7 +338,10 @@ fn compute_let(
     }
     (old_defs, *defs) = (defs.clone(), new_defs);
     defs.insert(0, a_index);
-    compute_ir_instruction(ir, ir_index, env_to_ir_index, b, env, names, defs)?;
+    let a_type = a.compute_type(env, ctx).unwrap();
+    ctx.add_inner(Some(a.clone()), a_type);
+    compute_ir_instruction(ir, ir_index, env_to_ir_index, b, (ctx, env), names, defs)?;
+    ctx.remove_inner();
     *defs = old_defs;
     Ok(())
 }
@@ -291,22 +351,20 @@ fn compute_ir_instruction(
     ir_index: usize,
     env_to_ir_index: &mut Vec<Option<usize>>,
     term: &Term<TermMeta>,
-    env: &Vec<Definition>,
+    ce: (&mut Context<TermMeta>, &Environment<TermMeta>),
     names: &Vec<String>,
     defs: &mut HashMap<usize, usize>,
 ) -> Result<(), ()> {
     match &term.inner {
-        TermInner::Global(g) => compute_global(g, ir, ir_index, env_to_ir_index, env, names),
+        TermInner::Global(g) => compute_global(g, ir, ir_index, env_to_ir_index, ce.1, names),
         TermInner::Variable(v) => compute_variable(v, ir, ir_index, defs),
         TermInner::Lambda(a, b) => {
-            compute_lambda((a, b), ir, ir_index, env_to_ir_index, env, names, defs)
+            compute_lambda((a, b), ir, ir_index, env_to_ir_index, ce, names, defs)
         }
         TermInner::Apply(a, b) => {
-            compute_apply((a, b), ir, ir_index, env_to_ir_index, env, names, defs)
+            compute_apply((a, b), ir, ir_index, env_to_ir_index, ce, names, defs)
         }
-        TermInner::Let(a, b) => {
-            compute_let((a, b), ir, ir_index, env_to_ir_index, env, names, defs)
-        }
+        TermInner::Let(a, b) => compute_let((a, b), ir, ir_index, env_to_ir_index, ce, names, defs),
         _ => Err(()),
     }
 }
@@ -316,11 +374,11 @@ fn compute_ir_definition(
     ir_index: usize,
     env_index: usize,
     env_to_ir_index: &mut Vec<Option<usize>>,
-    env: &Vec<Definition>,
+    env: &Environment<TermMeta>,
     names: &Vec<String>,
 ) -> Result<(), ()> {
     env_to_ir_index[env_index] = Some(ir_index);
-    let term = env[env_index].0.as_ref().unwrap();
+    let term = env.as_vec_ref()[env_index].0.as_ref().unwrap();
     ir.defs[ir_index] = Some(IrDef {
         env_index: Some(env_index),
         name: Some(names[env_index].clone()),
@@ -331,12 +389,14 @@ fn compute_ir_definition(
         capture_types: vec![],
         code: vec![],
     });
+    let mut ctx = Context::new();
+    let ce = (&mut ctx, env);
     compute_ir_instruction(
         ir,
         ir_index,
         env_to_ir_index,
         term,
-        env,
+        ce,
         names,
         &mut HashMap::new(),
     )
@@ -344,10 +404,11 @@ fn compute_ir_definition(
 
 pub(crate) fn compute_initial_ir(
     indices: &[usize],
-    env: &Vec<Definition>,
+    env: &Environment<TermMeta>,
     names: &Vec<String>,
 ) -> Ir {
-    let mut env_to_ir_index: Vec<Option<usize>> = (0..env.len()).map(|_| None).collect();
+    let mut env_to_ir_index: Vec<Option<usize>> =
+        (0..env.as_vec_ref().len()).map(|_| None).collect();
     let reserved_indices = indices.len();
     let mut r = Ir {
         types: vec![],
