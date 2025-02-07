@@ -2,6 +2,7 @@ use crate::{Ir, IrInstr, IrType};
 use inkwell::builder::Builder;
 use inkwell::context::Context;
 use inkwell::module::Linkage;
+use inkwell::passes::PassBuilderOptions;
 use inkwell::targets::{
     CodeModel, FileType, InitializationConfig, RelocMode, Target, TargetTriple,
 };
@@ -339,6 +340,10 @@ pub(crate) fn emit_code(ir: &Ir) -> Result<(), ()> {
             CodeModel::Default,
         )
         .unwrap();
+    module
+        .run_passes("inline", &target_machine, PassBuilderOptions::create())
+        .unwrap();
+    //module.print_to_stderr();
     target_machine
         .write_to_file(&module, FileType::Assembly, std::path::Path::new("./out.s"))
         .or(Err(()))?;
