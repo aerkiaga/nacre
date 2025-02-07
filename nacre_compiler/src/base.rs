@@ -4,40 +4,63 @@ use nacre_kernel::Term;
 use nacre_kernel::TermInner;
 use nacre_kernel::{Context, Environment};
 use nacre_parser::TermMeta;
-use std::collections::HashMap;
 use std::collections::HashSet;
+
+fn get_def(defs: &[usize], n: isize) -> Option<usize> {
+    if n < 0 || n as usize >= defs.len() {
+        None
+    } else {
+        defs.get(defs.len() - 1 - n as usize).copied()
+    }
+}
 
 fn compute_inductive_const(
     ir: &mut Ir,
     ir_index: usize,
     term: &Term<TermMeta>,
     ce: (&mut Context<TermMeta>, &Environment<TermMeta>),
-    defs: &mut HashMap<usize, usize>,
+    defs: &mut Vec<usize>,
 ) -> Result<(), ()> {
     let (ctx, env) = ce;
-    let new_term = term.normalize_in_ctx(env, ctx).unwrap();
-    let mut t = &new_term;
+    let mut t = term.normalize_in_ctx(env, ctx).unwrap();
     let mut variant_count = 0;
-    let term_type = new_term.compute_type(env, ctx).unwrap();
-    while let TermInner::Lambda(_a, b) = &t.inner {
-        variant_count += 1;
-        t = b;
-        //ctx.add_inner(None, (**a).clone());
-    }
-    // TODO: handle structs, enum contents
-    let variant = if let TermInner::Variable(v) = t.inner {
-        assert!(v < variant_count);
-        variant_count - v - 1
-    } else {
-        panic!()
-    };
-    assert!(variant_count > 1); // TODO: handle structs
-                                // TODO: move computation into crate::typing
+    let term_type = t.compute_type(env, ctx).unwrap();
     let def = ir.defs[ir_index].as_mut().unwrap();
     let value_type = typing::compute_enum(&term_type, &mut ir.types, ctx, env, def, defs);
-    /*for _ in 0..variant_count {
+    let variant = loop {
+        match &t.inner {
+            TermInner::Variable(v) => {
+                assert!(*v < variant_count);
+                break variant_count - v - 1;
+            }
+            TermInner::Lambda(a, b) => {
+                if let TermInner::Prop = a.inner {
+                    for _ in 0..variant_count {
+                        ctx.remove_inner();
+                    }
+                    return Err(());
+                }
+                // TODO: handle fields
+                variant_count += 1;
+                ctx.add_inner(None, (**a).clone());
+                t = *b.clone();
+            }
+            _ => {
+                if !t.convert(env, ctx).unwrap() {
+                    for _ in 0..variant_count {
+                        ctx.remove_inner();
+                    }
+                    return Err(());
+                }
+            }
+        }
+    };
+    // TODO: handle structs, enum contents
+    assert!(variant_count > 1); // TODO: handle structs
+                                // TODO: move computation into crate::typing
+    for _ in 0..variant_count {
         ctx.remove_inner();
-    }*/
+    }
     def.code.push(IrLoc {
         instr: IrInstr::Enum(variant, None),
         value_type,
@@ -84,37 +107,26 @@ fn compute_global(
     Ok(())
 }
 
-fn compute_variable(
-    v: &usize,
-    ir: &mut Ir,
-    ir_index: usize,
-    defs: &mut HashMap<usize, usize>,
-) -> Result<(), ()> {
+fn compute_variable(v: &usize, ir: &mut Ir, ir_index: usize, defs: &mut [usize]) -> Result<(), ()> {
     let def = ir.defs[ir_index].as_mut().unwrap();
-    match defs.get(v) {
+    match get_def(defs, *v as isize) {
         // variable corresponds to lambda parameter
-        Some(&usize::MAX) => def.code.push(IrLoc {
+        Some(usize::MAX) => def.code.push(IrLoc {
             instr: IrInstr::Param(0),
             value_type: def.param_types[0],
         }),
         // variable corresponds to let definition
         Some(n) => def.code.push(IrLoc {
-            instr: IrInstr::Move(*n),
-            value_type: def.code[*n].value_type,
+            instr: IrInstr::Move(n),
+            value_type: def.code[n].value_type,
         }),
         // variable corresponds to something else (capture)
         _ => {
-            let mut par = 0;
-            for (k, v) in defs.iter() {
-                if *v == usize::MAX {
-                    par = *k;
-                }
-            }
             def.code.push(IrLoc {
-                instr: IrInstr::Capture(*v - par - 1),
-                value_type: def.capture_types[*v - par - 1],
+                instr: IrInstr::Capture(*v - defs.len()),
+                value_type: def.capture_types[*v - defs.len()],
             });
-            def.captures.insert(*v - par - 1);
+            def.captures.insert(*v - defs.len());
         }
     }
     Ok(())
@@ -127,40 +139,45 @@ fn compute_lambda(
     env_to_ir_index: &mut Vec<Option<usize>>,
     ce: (&mut Context<TermMeta>, &Environment<TermMeta>),
     names: &Vec<String>,
-    defs: &mut HashMap<usize, usize>,
+    defs: &mut Vec<usize>,
 ) -> Result<(), ()> {
     let (a, b) = lam;
     let (ctx, env) = ce;
     let def = ir.defs[ir_index].as_mut().unwrap();
     let param_type = typing::compute_type(a, &mut ir.types, ctx, env, def, defs);
-    let new_defs = HashMap::new();
-    let old_defs: HashMap<_, _>;
-    (old_defs, *defs) = (defs.clone(), new_defs);
-    defs.insert(0, usize::MAX); // innermost definition is now a parameter
+    let mut defs2o = vec![];
+    let defs2 = &mut defs2o;
+    defs2.push(usize::MAX); // innermost definition is now a parameter
     ctx.add_inner(None, a.clone());
     if let TermInner::Prop = a.inner {
-        compute_inductive_const(ir, ir_index, b, (ctx, env), defs)?;
+        if compute_inductive_const(ir, ir_index, b, (ctx, env), defs2).is_err() {
+            defs.push(usize::MAX - 1);
+            compute_ir_instruction(ir, ir_index, env_to_ir_index, b, (ctx, env), names, defs)?;
+            defs.pop();
+        }
     } else if def.params == 0 && def.code.is_empty() {
         // outer body of global definition
         def.params = 1;
         def.param_types = vec![param_type];
-        compute_ir_instruction(ir, ir_index, env_to_ir_index, b, (ctx, env), names, defs)?;
+        compute_ir_instruction(ir, ir_index, env_to_ir_index, b, (ctx, env), names, defs2)?;
     } else {
         // inner lambda, create anonymous global definition
         let mut capture_types = vec![];
-        let mut i = 0;
-        loop {
-            match defs.get(&i) {
+        for i in 0..defs.len() {
+            match get_def(defs, i as isize) {
                 None => break,
-                Some(&usize::MAX) => {
-                    capture_types.push(def.param_types[0]);
-                }
                 Some(n) => {
-                    capture_types.push(def.code[*n].value_type);
+                    if n == usize::MAX {
+                        capture_types.push(def.param_types[0]);
+                    } else if n == usize::MAX - 1 {
+                        capture_types.push(None);
+                    } else {
+                        capture_types.push(def.code[n].value_type);
+                    }
                 }
             }
-            i += 1;
         }
+        capture_types.append(&mut def.capture_types.clone());
         ir.defs.push(Some(IrDef {
             env_index: None,
             name: None,
@@ -179,7 +196,7 @@ fn compute_lambda(
             b,
             (ctx, env),
             names,
-            defs,
+            defs2,
         )?;
         let closure = ir.defs[closure_ir_index].as_ref().unwrap();
         let closure_type = typing::compute_closure(closure, &mut ir.types);
@@ -189,31 +206,31 @@ fn compute_lambda(
         let captures = closure.captures.clone();
         let def = ir.defs[ir_index].as_mut().unwrap();
         for c in captures.iter() {
-            match defs.get(c) {
-                // capture parameter
-                Some(&usize::MAX) => def.code.push(IrLoc {
-                    instr: IrInstr::Param(0),
-                    value_type: def.param_types[0],
-                }),
-                // capture local definition
-                Some(n) => def.code.push(IrLoc {
-                    instr: IrInstr::Move(*n),
-                    value_type: def.code[*n].value_type,
-                }),
-                // capture enclosing capture
-                _ => {
-                    let mut par = 0;
-                    // find enclosing parameter
-                    for (k, v) in defs.iter() {
-                        if *v == usize::MAX {
-                            par = *k;
-                        }
+            match get_def(defs, *c as isize) {
+                Some(n) => {
+                    if n == usize::MAX {
+                        // capture parameter
+                        def.code.push(IrLoc {
+                            instr: IrInstr::Param(0),
+                            value_type: def.param_types[0],
+                        })
+                    } else if n == usize::MAX - 1 {
+                        // capture nothing
+                    } else {
+                        // capture local value
+                        def.code.push(IrLoc {
+                            instr: IrInstr::Move(n),
+                            value_type: def.code[n].value_type,
+                        })
                     }
+                }
+                None => {
+                    // capture enclosing capture
                     def.code.push(IrLoc {
-                        instr: IrInstr::Capture(c - par - 1),
-                        value_type: def.capture_types[c - par - 1],
+                        instr: IrInstr::Capture(c - defs2.len()),
+                        value_type: def.capture_types[c - defs2.len()],
                     });
-                    def.captures.insert(c - par - 1);
+                    def.captures.insert(c - defs2.len());
                 }
             }
         }
@@ -230,7 +247,6 @@ fn compute_lambda(
         }
     }
     ctx.remove_inner();
-    *defs = old_defs;
     Ok(())
 }
 
@@ -241,7 +257,7 @@ fn compute_apply(
     env_to_ir_index: &mut Vec<Option<usize>>,
     ce: (&mut Context<TermMeta>, &Environment<TermMeta>),
     names: &Vec<String>,
-    defs: &mut HashMap<usize, usize>,
+    defs: &mut Vec<usize>,
 ) -> Result<(), ()> {
     let (a, b) = app;
     let (ctx, env) = ce;
@@ -325,24 +341,18 @@ fn compute_let(
     env_to_ir_index: &mut Vec<Option<usize>>,
     ce: (&mut Context<TermMeta>, &Environment<TermMeta>),
     names: &Vec<String>,
-    defs: &mut HashMap<usize, usize>,
+    defs: &mut Vec<usize>,
 ) -> Result<(), ()> {
     let (a, b) = lt;
     let (ctx, env) = ce;
     compute_ir_instruction(ir, ir_index, env_to_ir_index, a, (ctx, env), names, defs)?;
     let a_index = ir.defs[ir_index].as_ref().unwrap().code.len() - 1;
-    let mut new_defs = HashMap::new();
-    let old_defs: HashMap<_, _>;
-    for (k, v) in defs.iter() {
-        new_defs.insert(k + 1, *v);
-    }
-    (old_defs, *defs) = (defs.clone(), new_defs);
-    defs.insert(0, a_index);
+    defs.push(a_index);
     let a_type = a.compute_type(env, ctx).unwrap();
     ctx.add_inner(Some(a.clone()), a_type);
     compute_ir_instruction(ir, ir_index, env_to_ir_index, b, (ctx, env), names, defs)?;
     ctx.remove_inner();
-    *defs = old_defs;
+    defs.pop();
     Ok(())
 }
 
@@ -353,7 +363,7 @@ fn compute_ir_instruction(
     term: &Term<TermMeta>,
     ce: (&mut Context<TermMeta>, &Environment<TermMeta>),
     names: &Vec<String>,
-    defs: &mut HashMap<usize, usize>,
+    defs: &mut Vec<usize>,
 ) -> Result<(), ()> {
     match &term.inner {
         TermInner::Global(g) => compute_global(g, ir, ir_index, env_to_ir_index, ce.1, names),
@@ -391,15 +401,7 @@ fn compute_ir_definition(
     });
     let mut ctx = Context::new();
     let ce = (&mut ctx, env);
-    compute_ir_instruction(
-        ir,
-        ir_index,
-        env_to_ir_index,
-        term,
-        ce,
-        names,
-        &mut HashMap::new(),
-    )
+    compute_ir_instruction(ir, ir_index, env_to_ir_index, term, ce, names, &mut vec![])
 }
 
 pub(crate) fn compute_initial_ir(

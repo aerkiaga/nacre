@@ -455,14 +455,14 @@ impl<T: Meta> Context<T> {
         v < self.inner.len()
     }
 
-    pub(crate) fn variable_type(&self, v: VariableRef) -> Option<&Term<T>> {
+    pub fn variable_type(&self, v: VariableRef) -> Option<&Term<T>> {
         if !self.contains_variable(v) {
             return None;
         }
         self.inner.get(self.inner.len() - v - 1).map(|x| &x.1)
     }
 
-    pub(crate) fn variable_value(&self, v: VariableRef) -> Option<&Term<T>> {
+    pub fn variable_value(&self, v: VariableRef) -> Option<&Term<T>> {
         if !self.contains_variable(v) {
             return None;
         }

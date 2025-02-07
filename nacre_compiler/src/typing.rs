@@ -3,7 +3,7 @@ use nacre_kernel::Term;
 use nacre_kernel::TermInner;
 use nacre_kernel::{Context, Environment};
 use nacre_parser::TermMeta;
-use std::collections::HashMap;
+use std::collections::HashSet;
 
 /// The type of an IR value.
 #[derive(Eq, PartialEq)]
@@ -91,36 +91,45 @@ pub(crate) fn add_type(t: IrType, types: &mut Vec<Option<IrType>>) -> usize {
 }
 
 pub(crate) fn compute_struct(
-    mut term: &Term<TermMeta>,
+    term: &Term<TermMeta>,
     types: &mut Vec<Option<IrType>>,
-    ctx: &mut Context<TermMeta>,
-    env: &Environment<TermMeta>,
+    ce: (&mut Context<TermMeta>, &Environment<TermMeta>),
     def: &IrDef,
-    defs: &HashMap<usize, usize>,
+    defs: &Vec<usize>,
     mut level: usize,
+    generics: &HashSet<usize>,
 ) -> Option<usize> {
-    let mut fields = vec![];
+    let (ctx, env) = ce;
+    let mut t = term.clone();
+    let mut r = vec![];
+    let mut generics2 = generics.clone();
     loop {
-        match &term.inner {
+        match &t.inner {
             TermInner::Variable(v) => {
-                if *v == level {
+                if generics2.contains(&(level - *v)) {
                     break;
                 } else {
                     todo!();
                 }
             }
             TermInner::Forall(a, b) => {
-                fields.push(a);
-                term = b;
+                if let TermInner::Prop = a.inner {
+                    // this can only be a generic, since
+                    // negative-position inductive parameters
+                    // are filtered out during verification
+                    generics2.insert(level + 1);
+                } else {
+                    let f = compute_type(a, types, ctx, env, def, defs);
+                    r.push(f);
+                }
+                t = *b.clone();
                 level += 1;
             }
-            _ => todo!(),
+            _ => {
+                t.convert(env, ctx).unwrap();
+            }
         }
     }
-    let r: Vec<_> = fields
-        .into_iter()
-        .map(|s| compute_type(s, types, ctx, env, def, defs))
-        .collect();
     if r.is_empty() {
         None
     } else {
@@ -129,38 +138,43 @@ pub(crate) fn compute_struct(
 }
 
 pub(crate) fn compute_enum(
-    mut term: &Term<TermMeta>,
+    term: &Term<TermMeta>,
     types: &mut Vec<Option<IrType>>,
     ctx: &mut Context<TermMeta>,
     env: &Environment<TermMeta>,
     def: &IrDef,
-    defs: &HashMap<usize, usize>,
+    defs: &Vec<usize>,
 ) -> Option<usize> {
-    let mut structs = vec![];
+    let mut t = term.clone();
+    let mut generics = HashSet::new();
+    generics.insert(0);
+    let mut r = vec![];
     let mut level = 0;
     loop {
-        match &term.inner {
+        match &t.inner {
             TermInner::Variable(v) => {
-                if *v == level {
+                if generics.contains(&(level - *v)) {
                     break;
                 } else {
                     todo!();
                 }
             }
             TermInner::Forall(a, b) => {
-                structs.push(a);
-                term = b;
-                level += 1;
+                if let TermInner::Prop = a.inner {
+                    generics.insert(level + 1);
+                } else {
+                    let s = compute_struct(a, types, (ctx, env), def, defs, level, &generics);
+                    r.push(s);
+                }
                 ctx.add_inner(None, (**a).clone());
+                t = *b.clone();
+                level += 1;
             }
-            _ => todo!(),
+            _ => {
+                t.convert(env, ctx).unwrap();
+            }
         }
     }
-    let r: Vec<_> = structs
-        .into_iter()
-        .enumerate()
-        .map(|(n, s)| compute_struct(s, types, ctx, env, def, defs, n))
-        .collect();
     for _ in 0..level {
         ctx.remove_inner();
     }
@@ -179,7 +193,7 @@ pub(crate) fn compute_type(
     ctx: &mut Context<TermMeta>,
     env: &Environment<TermMeta>,
     def: &IrDef,
-    defs: &HashMap<usize, usize>,
+    defs: &Vec<usize>,
 ) -> Option<usize> {
     match &term.inner {
         TermInner::Prop => None,
