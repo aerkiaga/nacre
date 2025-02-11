@@ -1,4 +1,5 @@
 use crate::{IrInstr, IrLoc};
+use std::collections::HashMap;
 use std::collections::HashSet;
 
 /// Finds the instruction at which the output of some instruction is produced.
@@ -94,11 +95,11 @@ pub(crate) fn move_params(code: &mut Vec<IrLoc>, dist: usize) {
     }
 }
 
-/// Replaces each capture in the code by an input local from a list.
-pub(crate) fn replace_captures(code: &mut Vec<IrLoc>, captures: &[usize]) {
+/// Replaces each capture in the code by an input local from a map.
+pub(crate) fn replace_captures(code: &mut Vec<IrLoc>, captures: &HashMap<usize, usize>) {
     for loc in code {
         loc.instr = match &loc.instr {
-            IrInstr::Capture(c) => IrInstr::Move(captures[*c]),
+            IrInstr::Capture(c) => IrInstr::Move(captures[c]),
             instr => instr.clone(),
         };
     }

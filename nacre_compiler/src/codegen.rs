@@ -21,9 +21,9 @@ fn emit_type<'a>(
                 // TODO: handle content
                 context.i64_type().into()
             }
-            IrType::Closure(_, _) => {
-                let closure_type = context.ptr_type(AddressSpace::from(0));
-                closure_type.into()
+            IrType::Closure(_, _) | IrType::Any => {
+                let ptr_type = context.ptr_type(AddressSpace::from(0));
+                ptr_type.into()
             }
             _ => todo!(),
         },

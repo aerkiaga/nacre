@@ -2,6 +2,7 @@ use crate::code_transforms::{
     clean_up_nondeps, move_code, move_params, remove_loc, replace_captures, trace_back,
 };
 use crate::{Ir, IrInstr, IrType};
+use std::collections::HashMap;
 use std::collections::HashSet;
 
 fn uncurry_def(ir: &mut Ir, n: usize) {
@@ -11,7 +12,7 @@ fn uncurry_def(ir: &mut Ir, n: usize) {
     };
     let code_index = trace_back(&def.code, def.code.len() - 1);
     // check if the current definition is curried
-    let (closure_index, captures) = match &def.code[code_index].instr {
+    let (closure_index, input_captures) = match &def.code[code_index].instr {
         IrInstr::Closure(i, c) => (*i, c.clone()),
         _ => return,
     };
@@ -26,13 +27,26 @@ fn uncurry_def(ir: &mut Ir, n: usize) {
     };
     remove_loc(&mut def.code, len - 1);
     let len = def.code.len();
+    // compute captures
+    let other_def = ir.defs[closure_index].as_ref().unwrap();
+    let mut max_cap = 0;
+    for cap in other_def.captures.iter() {
+        max_cap = std::cmp::max(max_cap, *cap + 1);
+    }
+    let mut captures = HashMap::new();
+    let mut i = 0;
+    for cap in 0..max_cap {
+        if other_def.captures.contains(&cap) {
+            captures.insert(cap, input_captures[i]);
+            i += 1;
+        }
+    }
     // prepare code to append
-    let mut second_code = ir.defs[closure_index].as_ref().unwrap().code.clone();
+    let mut second_code = other_def.code.clone();
     move_code(&mut second_code, len);
     move_params(&mut second_code, n_params);
     replace_captures(&mut second_code, &captures);
     // get values
-    let other_def = ir.defs[closure_index].as_ref().unwrap();
     let other_params = other_def.params;
     let mut other_param_types = other_def.param_types.clone();
     // append code

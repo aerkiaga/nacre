@@ -204,7 +204,6 @@ pub async fn compile(identifiers: Vec<String>) -> Result<Ir, ()> {
     let env = get_global_environment().await;
     let names = get_global_environment_names().await;
     let mut ir = base::compute_initial_ir(&indices, &env, &names);
-    println!("{ir:?}"); //D
     pass_uncurry::pass_uncurry(&mut ir);
     pass_declosure::pass_declosure(&mut ir);
     Ok(ir)
