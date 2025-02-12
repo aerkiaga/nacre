@@ -63,6 +63,7 @@ fn emit_instr_capture<'a>(
     builder
         .build_load(closure_type, capture_address, "capture")
         .unwrap()
+    // TODO: emit correct capture type
 }
 
 fn emit_instr_apply<'a>(

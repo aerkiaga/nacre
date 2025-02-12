@@ -149,6 +149,13 @@ fn compute_lambda(
 ) -> Result<(), ()> {
     let (a, b) = lam;
     let (ctx, env) = ce;
+    let term: Term<TermMeta> = (
+        TermInner::Lambda(a.clone().into(), b.clone().into()),
+        &TermMeta::default().into(),
+    )
+        .into();
+    let term_type = term.compute_type(env, ctx).unwrap();
+    let mut closure_type = typing::compute_type(&term_type, &mut ir.types, ctx, env);
     let def = ir.defs[ir_index].as_mut().unwrap();
     let param_type = typing::compute_type(a, &mut ir.types, ctx, env);
     let mut defs2o = vec![];
@@ -205,13 +212,6 @@ fn compute_lambda(
             defs2,
         )?;
         let closure = ir.defs[closure_ir_index].as_ref().unwrap();
-        let term: Term<TermMeta> = (
-            TermInner::Lambda(a.clone().into(), b.clone().into()),
-            &TermMeta::default().into(),
-        )
-            .into();
-        let term_type = term.compute_type(env, ctx).unwrap();
-        let mut closure_type = typing::compute_type(&term_type, &mut ir.types, ctx, env);
         if let IrType::Closure(_, _) = ir.types[closure_type.unwrap()].as_ref().unwrap() {
         } else {
             let new_type = IrType::Closure(vec![], closure_type);

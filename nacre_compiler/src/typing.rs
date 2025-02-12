@@ -182,6 +182,25 @@ pub(crate) fn compute_enum(
     }
 }
 
+fn undo_inductive(inductive: Option<usize>, types: &mut Vec<Option<IrType>>) -> Option<usize> {
+    if let IrType::Enum(variants) = types[inductive.unwrap()].as_ref().unwrap() {
+        let new_type = IrType::Closure(
+            variants
+                .into_iter()
+                .map(|t| {
+                    t.map(|ti| match types[ti].as_ref().unwrap() {
+                        _ => todo!(),
+                    })
+                })
+                .collect(),
+            Some(add_type(IrType::Any, types)),
+        );
+        Some(add_type(new_type, types))
+    } else {
+        panic!()
+    }
+}
+
 /**
 Computes the type of a term in IR form,
 given the type of the term in CoC form.
@@ -218,9 +237,14 @@ pub(crate) fn compute_type_rec(
             let vt = ctx.variable_type(*v).unwrap();
             if vt.inner == TermInner::Prop {
                 (Some(add_type(IrType::Enum(vec![]), types)), Some(*v))
+            } else if let Some(vv) = ctx.variable_value(*v) {
+                let vvc = vv.clone();
+                let vvt = vvc.compute_type(env, ctx).unwrap();
+                compute_type_rec(&vvt.clone(), types, ctx, env)
             } else {
-                let vv = ctx.variable_value(*v).unwrap().clone();
-                compute_type_rec(&vv, types, ctx, env)
+                let mut reduced = vt.clone();
+                assert!(reduced.convert(env, ctx).unwrap());
+                compute_type_rec(&reduced, types, ctx, env)
             }
             // TODO: use conversion wherever appropriate
         }
@@ -244,54 +268,75 @@ pub(crate) fn compute_type_rec(
                 let (bt, bg) = compute_type_rec(b, types, ctx, env);
                 if let Some(g) = bg {
                     // the body contains an inductive type under construction
-                    if let IrType::Enum(variants) = types[bt.unwrap()].as_ref().unwrap() {
-                        if let Some(ga) = ag {
-                            // the parameter type also contains an inductive type under construction
-                            if ga + 1 == g {
-                                if let IrType::Enum(variants_a) =
-                                    types[at.unwrap()].as_ref().unwrap()
-                                {
-                                    let variants_clone = variants.clone();
-                                    // convert parametr type into new enum variant
-                                    let struct_type = match variants_a.len() {
-                                        0 => None,          // no fields
-                                        1 => variants_a[0], // single field
-                                        _ => Some(add_type(
-                                            IrType::Struct(variants_a.clone()),
-                                            types,
-                                        )), // struct of fields
-                                    };
-                                    let new_variants = IrType::Enum(
-                                        [struct_type].into_iter().chain(variants_clone).collect(),
-                                    );
-                                    (Some(add_type(new_variants, types)), Some(ga))
+                    match types[bt.unwrap()].as_ref().unwrap() {
+                        IrType::Enum(variants) => {
+                            if let Some(ga) = ag {
+                                // the parameter type also contains an inductive type under construction
+                                if ga + 1 == g {
+                                    // generics match, this is part of our inductive type
+                                    match types[at.unwrap()].as_ref().unwrap() {
+                                        IrType::Enum(variants_a) => {
+                                            // the parameter type can be interpreted as an enum variant
+                                            // that itself looks like an enum
+                                            // this means we have a recursive inductive type
+                                            // ((... -> T) -> (... -> T) -> T) -> ... -> T
+                                            // ... or an enum variant with no fields
+                                            // T -> ... -> T
+                                            let variants_clone = variants.clone();
+                                            // convert parameter type into new enum variant
+                                            let struct_type = match variants_a.len() {
+                                                0 => None,    // no fields
+                                                _ => todo!(), // recursive field
+                                            };
+                                            let new_variants = IrType::Enum(
+                                                [struct_type]
+                                                    .into_iter()
+                                                    .chain(variants_clone)
+                                                    .collect(),
+                                            );
+                                            (Some(add_type(new_variants, types)), Some(ga))
+                                        }
+                                        IrType::Struct(fields) => {
+                                            // the parameter type contains a tentatively-defined struct
+                                            // definitely accept it and return an enum
+                                            todo!();
+                                        }
+                                        _ => {
+                                            // the parameter type contains something else
+                                            // tentatively generate a struct
+                                            todo!();
+                                        }
+                                    }
                                 } else {
-                                    panic!()
+                                    // the parameter type looks like an inductive type, but generics don't match
+                                    // we thus have a non-inductive type
+                                    // ((... -> U) -> (... -> U) -> U) -> ... -> T
+                                    let body_type = undo_inductive(bt, types);
+                                    let parameter_type = undo_inductive(at, types);
+                                    let closure_type =
+                                        IrType::Closure(vec![parameter_type], body_type);
+                                    (Some(add_type(closure_type, types)), None)
                                 }
                             } else {
+                                // the parameter type contains an already-built inductive type
+                                // tentatively generate a struct
                                 todo!();
                             }
-                        } else {
+                        }
+                        IrType::Struct(fields) => {
+                            // we are tentatively building a struct
+                            // add parameter type to it
                             todo!();
                         }
-                    } else {
-                        panic!();
+                        _ => {
+                            panic!();
+                        }
                     }
                 } else {
                     // we're not building an inductive type
                     let closure_type = IrType::Closure(vec![at], bt);
                     (Some(add_type(closure_type, types)), None)
                 }
-                /*
-                if ag.is_some() {
-                    todo!();
-                }
-                if bg.is_some() {
-                    todo!();
-                }
-                */
-                //let t = compute_closure_type(&vec![at], bt, types);
-                //t
             };
             ctx.remove_inner();
             r
@@ -300,7 +345,19 @@ pub(crate) fn compute_type_rec(
         TermInner::Apply(_, _) | TermInner::Let(_, _) => {
             let mut new_term = term.clone();
             new_term.convert(env, ctx).unwrap();
-            compute_type_rec(&new_term, types, ctx, env)
+            let (t, g) = compute_type_rec(&new_term, types, ctx, env);
+            if let TermInner::Let(_, _) = &term.inner {
+                (
+                    t,
+                    match g {
+                        None => None,
+                        Some(0) => None,
+                        Some(x) => Some(x - 1),
+                    },
+                )
+            } else {
+                (t, g)
+            }
         }
     }
 }
@@ -312,13 +369,9 @@ pub(crate) fn compute_type(
     env: &Environment<TermMeta>,
 ) -> Option<usize> {
     let (t, ind) = compute_type_rec(term, types, ctx, env);
-    assert!(ind.is_none());
-    if let Some(tt) = t {
-        if let IrType::Enum(variants) = types[tt].as_ref().unwrap() {
-            if variants.is_empty() {
-                panic!("Trivially uninhabited type found during type realization");
-            }
-        }
+    if ind.is_none() {
+        t
+    } else {
+        undo_inductive(t, types)
     }
-    t
 }
