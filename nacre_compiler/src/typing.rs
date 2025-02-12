@@ -299,7 +299,18 @@ pub(crate) fn compute_type_rec(
                                         IrType::Struct(fields) => {
                                             // the parameter type contains a tentatively-defined struct
                                             // definitely accept it and return an enum
-                                            todo!();
+                                            let variant = match fields.len() {
+                                                0 => panic!(),
+                                                1 => fields[0],
+                                                _ => at,
+                                            };
+                                            let new_variants = IrType::Enum(
+                                                [variant]
+                                                    .into_iter()
+                                                    .chain(variants.into_iter().copied())
+                                                    .collect(),
+                                            );
+                                            (Some(add_type(new_variants, types)), Some(ga))
                                         }
                                         _ => {
                                             // the parameter type contains something else
@@ -320,7 +331,8 @@ pub(crate) fn compute_type_rec(
                             } else {
                                 // the parameter type contains an already-built inductive type
                                 // tentatively generate a struct
-                                todo!();
+                                let struct_type = IrType::Struct(vec![at]);
+                                (Some(add_type(struct_type, types)), Some(bg.unwrap() - 1))
                             }
                         }
                         IrType::Struct(fields) => {
