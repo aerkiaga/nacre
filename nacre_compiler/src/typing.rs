@@ -186,7 +186,7 @@ fn undo_inductive(inductive: Option<usize>, types: &mut Vec<Option<IrType>>) -> 
     if let IrType::Enum(variants) = types[inductive.unwrap()].as_ref().unwrap() {
         let new_type = IrType::Closure(
             variants
-                .into_iter()
+                .iter()
                 .map(|t| {
                     t.map(|ti| match types[ti].as_ref().unwrap() {
                         _ => todo!(),
@@ -307,7 +307,7 @@ pub(crate) fn compute_type_rec(
                                             let new_variants = IrType::Enum(
                                                 [variant]
                                                     .into_iter()
-                                                    .chain(variants.into_iter().copied())
+                                                    .chain(variants.iter().copied())
                                                     .collect(),
                                             );
                                             (Some(add_type(new_variants, types)), Some(ga))
@@ -335,7 +335,7 @@ pub(crate) fn compute_type_rec(
                                 (Some(add_type(struct_type, types)), Some(bg.unwrap() - 1))
                             }
                         }
-                        IrType::Struct(fields) => {
+                        IrType::Struct(_fields) => {
                             // we are tentatively building a struct
                             // add parameter type to it
                             todo!();

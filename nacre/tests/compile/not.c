@@ -1,15 +1,13 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <inttypes.h>
+#include <stdbool.h>
 
-typedef uint64_t Bool;
-
-extern Bool test(Bool x);
+extern bool test(bool x);
 
 int main() {
-    int nb0 = test((Bool) 0);
-    int nb1 = test((Bool) 1);
+    int nb0 = test(false);
+    int nb1 = test(true);
     int r = (nb0 && !nb1);
-    //printf("Test: %s\n", r? "pass" : "fail");
     return !r;
 }

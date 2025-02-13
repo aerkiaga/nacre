@@ -6,28 +6,89 @@ use inkwell::passes::PassBuilderOptions;
 use inkwell::targets::{
     CodeModel, FileType, InitializationConfig, RelocMode, Target, TargetTriple,
 };
-use inkwell::types::{BasicType, BasicTypeEnum};
-use inkwell::values::{BasicValue, BasicValueEnum, FunctionValue, IntValue};
+use inkwell::types::{BasicType, BasicTypeEnum, IntType};
+use inkwell::values::{BasicValue, BasicValueEnum, FunctionValue, IntValue, StructValue};
 use inkwell::{AddressSpace, OptimizationLevel};
+use std::cmp::max;
+
+fn emit_tag_type(variant_count: usize, context: &Context) -> BasicTypeEnum {
+    let tag_bits = (2 * variant_count - 1).ilog2();
+    if tag_bits > 0 && tag_bits <= 128 {
+        context.custom_width_int_type(tag_bits).into()
+    } else {
+        todo!();
+    }
+}
 
 fn emit_type<'a>(
-    value_type: Option<usize>,
+    value_type: usize,
     types: &[Option<IrType>],
     context: &'a Context,
 ) -> BasicTypeEnum<'a> {
-    match value_type {
-        Some(t) => match types[t].as_ref().unwrap() {
-            IrType::Enum(_variants) => {
-                // TODO: handle content
-                context.i64_type().into()
+    match types[value_type].as_ref().unwrap() {
+        IrType::Enum(variants) => {
+            // TODO: handle content
+            let variant_count = variants.len();
+            let tag_type = emit_tag_type(variant_count, context);
+            let (tag_size, _) = compute_type_size(tag_type);
+            let (max_variant_size, max_variant_alignment) = variants
+                .iter()
+                .map(|vt| match vt {
+                    Some(vts) => compute_type_size(emit_type(*vts, types, context)),
+                    None => (0, 1),
+                })
+                .fold((0, 1), |(xs, xa), (ys, ya)| (max(xs, ys), max(xa, ya)));
+            let field_alignment = max_variant_alignment * tag_size.div_ceil(max_variant_alignment);
+            let middle_padding = field_alignment - tag_size;
+            let nontag_size = max_variant_size + middle_padding;
+            let struct_type = if nontag_size > 0 {
+                let array_type = context
+                    .i8_type()
+                    .array_type(nontag_size.try_into().unwrap());
+                context.struct_type(&[tag_type, array_type.into()], false)
+            } else {
+                context.struct_type(&[tag_type], false)
+            };
+            struct_type.into()
+        }
+        IrType::Closure(_, _) | IrType::Any => {
+            let ptr_type = context.ptr_type(AddressSpace::from(0));
+            ptr_type.into()
+        }
+        _ => todo!(),
+    }
+}
+
+fn compute_type_size(t: BasicTypeEnum) -> (usize, usize) {
+    match t {
+        BasicTypeEnum::IntType(tt) => {
+            let bit_width = tt.get_bit_width();
+            let log_bit_width = (2 * bit_width - 1).ilog2();
+            match log_bit_width {
+                0..=3 => (1, 1),
+                4 => (2, 2),
+                5 => (4, 4),
+                6 => (8, 8),
+                7 => (16, 16),
+                _ => todo!(),
             }
-            IrType::Closure(_, _) | IrType::Any => {
-                let ptr_type = context.ptr_type(AddressSpace::from(0));
-                ptr_type.into()
+        }
+        BasicTypeEnum::StructType(tt) => {
+            let sizes: Vec<_> = tt.get_field_types_iter().map(compute_type_size).collect();
+            let mut s = 0;
+            let mut a = 1;
+            for (size, alignment) in sizes {
+                s += (alignment - (s % alignment)) % alignment;
+                s += size;
+                a = max(a, alignment);
             }
-            _ => todo!(),
-        },
-        None => todo!(),
+            (s, a)
+        }
+        BasicTypeEnum::ArrayType(tt) => {
+            let (size, alignment) = compute_type_size(tt.get_element_type());
+            (tt.len() as usize * size, alignment)
+        }
+        _ => todo!(),
     }
 }
 
@@ -78,14 +139,17 @@ fn emit_instr_apply<'a>(
     match types[ir_type.unwrap()].as_ref().unwrap() {
         IrType::Closure(p, r) => {
             let closure_type = context.ptr_type(AddressSpace::from(0));
-            let return_type = emit_type(*r, types, context);
-            let fn_type = return_type.fn_type(
-                &[closure_type.into()]
-                    .into_iter()
-                    .chain(p.iter().map(|t| emit_type(*t, types, context).into()))
-                    .collect::<Vec<_>>(),
-                false,
-            );
+            let param_types = [closure_type.into()]
+                .into_iter()
+                .chain(
+                    p.iter()
+                        .map(|t| emit_type(t.unwrap(), types, context).into()),
+                )
+                .collect::<Vec<_>>();
+            let fn_type = match r {
+                Some(rs) => emit_type(*rs, types, context).fn_type(&param_types, false),
+                None => context.void_type().fn_type(&param_types, false),
+            };
             let r = {
                 let closure = closure.into_pointer_value();
                 let func = builder
@@ -107,13 +171,14 @@ fn emit_instr_apply<'a>(
             r.try_as_basic_value().left().unwrap()
         }
         IrType::Function(p, r) => {
-            let return_type = emit_type(*r, types, context);
-            let fn_type = return_type.fn_type(
-                &p.iter()
-                    .map(|t| emit_type(*t, types, context).into())
-                    .collect::<Vec<_>>(),
-                false,
-            );
+            let param_types = p
+                .iter()
+                .map(|t| emit_type(t.unwrap(), types, context).into())
+                .collect::<Vec<_>>();
+            let fn_type = match r {
+                Some(rs) => emit_type(*rs, types, context).fn_type(&param_types, false),
+                None => context.void_type().fn_type(&param_types, false),
+            };
             let r = {
                 let func = closure.into_pointer_value();
                 builder
@@ -128,14 +193,24 @@ fn emit_instr_apply<'a>(
             r.try_as_basic_value().left().unwrap()
         }
         IrType::Enum(variants) => {
-            let switch_value: IntValue = closure.try_into().unwrap();
+            let struct_value: StructValue = closure.try_into().unwrap();
+            let switch_value: IntValue = builder
+                .build_extract_value(struct_value, 0, "tag")
+                .unwrap()
+                .try_into()
+                .unwrap();
             let start_block = builder.get_insert_block().unwrap();
             let landing_block = context.append_basic_block(*function, "match_landing");
-            let enum_type = context.i64_type();
+            let tag_type: IntType = struct_value
+                .get_type()
+                .get_field_type_at_index(0)
+                .unwrap()
+                .try_into()
+                .unwrap();
             let mut cases = vec![];
             let mut values = vec![];
             for (n, _variant) in variants.iter().enumerate() {
-                let enum_value = enum_type.const_int(n.try_into().unwrap(), false);
+                let enum_value = tag_type.const_int(n.try_into().unwrap(), false);
                 let variant_block = context.append_basic_block(*function, "match_variant");
                 builder.position_at_end(variant_block);
                 values.push(params[n]);
@@ -194,14 +269,26 @@ fn emit_instr_closure<'a>(
 fn emit_instr_enum<'a>(
     variant: usize,
     contained: Option<BasicValueEnum>,
+    value_type: Option<usize>,
+    types: &[Option<IrType>],
     context: &'a Context,
 ) -> Result<BasicValueEnum<'a>, ()> {
+    let value_type = types[value_type.unwrap()].as_ref().unwrap();
     if contained.is_some() {
         todo!();
     }
-    let enum_type = context.i64_type();
-    let enum_value = enum_type.const_int(variant.try_into().unwrap(), false);
-    Ok(enum_value.into())
+    let variants = if let IrType::Enum(variants) = value_type {
+        variants
+    } else {
+        panic!()
+    };
+    let tag_type: IntType = emit_tag_type(variants.len(), context).try_into().unwrap();
+    let tag_value = tag_type.const_int(variant.try_into().unwrap(), false);
+    let field_type = variants[variant].map(|v| emit_type(v, types, context));
+    Ok(match field_type {
+        Some(_ft) => todo!(),
+        None => context.const_struct(&[tag_value.into()], false).into(),
+    })
 }
 
 pub(crate) fn emit_code(ir: &Ir) -> Result<(), ()> {
@@ -218,27 +305,25 @@ pub(crate) fn emit_code(ir: &Ir) -> Result<(), ()> {
             } else {
                 format!(".fn{}", n)
             };
-            let return_type = emit_type(d.code.last().unwrap().value_type, &ir.types, &context);
-            let function_type = if d.captures.is_empty() {
-                return_type.fn_type(
-                    &d.param_types
-                        .iter()
-                        .map(|t| emit_type(*t, &ir.types, &context).into())
-                        .collect::<Vec<_>>(),
-                    false,
-                )
+            let param_types = if d.captures.is_empty() {
+                d.param_types
+                    .iter()
+                    .map(|t| emit_type(t.unwrap(), &ir.types, &context).into())
+                    .collect::<Vec<_>>()
             } else {
-                return_type.fn_type(
-                    &[closure_type.into()]
-                        .into_iter()
-                        .chain(
-                            d.param_types
-                                .iter()
-                                .map(|t| emit_type(*t, &ir.types, &context).into()),
-                        )
-                        .collect::<Vec<_>>(),
-                    false,
-                )
+                [closure_type.into()]
+                    .into_iter()
+                    .chain(
+                        d.param_types
+                            .iter()
+                            .map(|t| emit_type(t.unwrap(), &ir.types, &context).into()),
+                    )
+                    .collect::<Vec<_>>()
+            };
+            let r = d.code.last().unwrap().value_type;
+            let function_type = match r {
+                Some(rs) => emit_type(rs, &ir.types, &context).fn_type(&param_types, false),
+                None => context.void_type().fn_type(&param_types, false),
             };
             let function_linkage = if d.export {
                 Some(Linkage::External)
@@ -310,7 +395,13 @@ pub(crate) fn emit_code(ir: &Ir) -> Result<(), ()> {
                         if c.is_some() {
                             todo!();
                         }
-                        values.push(emit_instr_enum(*v, None, &context)?);
+                        values.push(emit_instr_enum(
+                            *v,
+                            None,
+                            loc.value_type,
+                            &ir.types,
+                            &context,
+                        )?);
                     }
                 }
             }
@@ -344,7 +435,7 @@ pub(crate) fn emit_code(ir: &Ir) -> Result<(), ()> {
     module
         .run_passes("inline", &target_machine, PassBuilderOptions::create())
         .unwrap();
-    //module.print_to_stderr();
+    module.print_to_stderr();
     target_machine
         .write_to_file(&module, FileType::Assembly, std::path::Path::new("./out.s"))
         .or(Err(()))?;
