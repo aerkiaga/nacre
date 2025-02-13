@@ -183,21 +183,42 @@ pub(crate) fn compute_enum(
 }
 
 fn undo_inductive(inductive: Option<usize>, types: &mut Vec<Option<IrType>>) -> Option<usize> {
-    if let IrType::Enum(variants) = types[inductive.unwrap()].as_ref().unwrap() {
-        let new_type = IrType::Closure(
-            variants
-                .iter()
-                .map(|t| {
-                    t.map(|ti| match types[ti].as_ref().unwrap() {
-                        _ => todo!(),
+    match types[inductive.unwrap()].as_ref().unwrap() {
+        IrType::Enum(variants) => {
+            let variants_clone = variants.clone();
+            let any_type = Some(add_type(IrType::Any, types));
+            if variants_clone.is_empty() {
+                any_type
+            } else {
+                let new_type = IrType::Closure(
+                    variants_clone
+                        .iter()
+                        .map(|t| {
+                            t.map(|ti| match types[ti].as_ref().unwrap() {
+                                _ => todo!(),
+                            })
+                        })
+                        .collect(),
+                    any_type,
+                );
+                Some(add_type(new_type, types))
+            }
+        }
+        IrType::Struct(fields) => {
+            let new_type = IrType::Closure(
+                fields
+                    .iter()
+                    .copied()
+                    .map(|ti| {
+                        // TODO: take recursive fields into account
+                        ti
                     })
-                })
-                .collect(),
-            Some(add_type(IrType::Any, types)),
-        );
-        Some(add_type(new_type, types))
-    } else {
-        panic!()
+                    .collect(),
+                Some(add_type(IrType::Any, types)),
+            );
+            Some(add_type(new_type, types))
+        }
+        _ => todo!(),
     }
 }
 
@@ -322,11 +343,18 @@ pub(crate) fn compute_type_rec(
                                     // the parameter type looks like an inductive type, but generics don't match
                                     // we thus have a non-inductive type
                                     // ((... -> U) -> (... -> U) -> U) -> ... -> T
-                                    let body_type = undo_inductive(bt, types);
+                                    // tentatively generate a struct
+                                    let variants_clone = variants.clone();
                                     let parameter_type = undo_inductive(at, types);
-                                    let closure_type =
-                                        IrType::Closure(vec![parameter_type], body_type);
-                                    (Some(add_type(closure_type, types)), None)
+                                    let fields = [parameter_type]
+                                        .into_iter()
+                                        .chain(variants_clone.into_iter().map(|t| todo!()))
+                                        .collect();
+                                    let struct_type = IrType::Struct(fields);
+                                    (
+                                        Some(add_type(struct_type, types)),
+                                        if g == 0 { None } else { Some(g - 1) },
+                                    )
                                 }
                             } else {
                                 // the parameter type contains an already-built inductive type
@@ -346,7 +374,12 @@ pub(crate) fn compute_type_rec(
                     }
                 } else {
                     // we're not building an inductive type
-                    let closure_type = IrType::Closure(vec![at], bt);
+                    let at_new = if let None = ag {
+                        at
+                    } else {
+                        undo_inductive(at, types)
+                    };
+                    let closure_type = IrType::Closure(vec![at_new], bt);
                     (Some(add_type(closure_type, types)), None)
                 }
             };
@@ -381,7 +414,7 @@ pub(crate) fn compute_type(
     env: &Environment<TermMeta>,
 ) -> Option<usize> {
     let (t, ind) = compute_type_rec(term, types, ctx, env);
-    if ind.is_none() {
+    if ind.is_none() || ind == Some(0) {
         t
     } else {
         undo_inductive(t, types)
