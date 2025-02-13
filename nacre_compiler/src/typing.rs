@@ -2,7 +2,6 @@ use nacre_kernel::Term;
 use nacre_kernel::TermInner;
 use nacre_kernel::{Context, Environment};
 use nacre_parser::TermMeta;
-use std::collections::HashSet;
 
 /// The type of an IR value.
 #[derive(Eq, PartialEq)]
@@ -87,99 +86,6 @@ pub(crate) fn add_type(t: IrType, types: &mut Vec<Option<IrType>>) -> usize {
     }
     types.push(Some(t));
     types.len() - 1
-}
-
-pub(crate) fn compute_struct(
-    term: &Term<TermMeta>,
-    types: &mut Vec<Option<IrType>>,
-    ce: (&mut Context<TermMeta>, &Environment<TermMeta>),
-    mut level: usize,
-    generics: &HashSet<usize>,
-) -> Option<usize> {
-    let (ctx, env) = ce;
-    let mut t = term.clone();
-    let mut r = vec![];
-    let mut generics2 = generics.clone();
-    loop {
-        match &t.inner {
-            TermInner::Variable(v) => {
-                if generics2.contains(&(level - *v)) {
-                    break;
-                } else {
-                    todo!();
-                }
-            }
-            TermInner::Forall(a, b) => {
-                if let TermInner::Prop = a.inner {
-                    generics2.insert(level + 1);
-                } else {
-                    // TODO: handle recursive structs
-                    let f = compute_type(a, types, ctx, env);
-                    r.push(f);
-                }
-                t = *b.clone();
-                level += 1;
-            }
-            _ => {
-                t.convert(env, ctx).unwrap();
-            }
-        }
-    }
-    if r.is_empty() {
-        None
-    } else if r.len() == 1 {
-        r[0]
-    } else {
-        Some(add_type(IrType::Struct(r), types))
-    }
-}
-
-pub(crate) fn compute_enum(
-    term: &Term<TermMeta>,
-    types: &mut Vec<Option<IrType>>,
-    ctx: &mut Context<TermMeta>,
-    env: &Environment<TermMeta>,
-) -> Option<usize> {
-    let mut t = term.clone();
-    let mut generics = HashSet::new();
-    generics.insert(0);
-    let mut r = vec![];
-    let mut level = 0;
-    loop {
-        match &t.inner {
-            TermInner::Variable(v) => {
-                if generics.contains(&(level - *v)) {
-                    break;
-                } else {
-                    todo!();
-                }
-            }
-            TermInner::Forall(a, b) => {
-                if let TermInner::Prop = a.inner {
-                    generics.insert(level + 1);
-                } else {
-                    let s = compute_struct(a, types, (ctx, env), level, &generics);
-                    r.push(s);
-                }
-                ctx.add_inner(None, (**a).clone());
-                t = *b.clone();
-                level += 1;
-            }
-            _ => {
-                t.convert(env, ctx).unwrap();
-            }
-        }
-    }
-    for _ in 0..level {
-        ctx.remove_inner();
-    }
-    if r.is_empty() {
-        panic!("Falsehood found during compilation");
-    } else if r.len() == 1 {
-        r[0]
-    } else {
-        Some(add_type(IrType::Enum(r), types))
-    }
 }
 
 fn undo_inductive(inductive: Option<usize>, types: &mut Vec<Option<IrType>>) -> Option<usize> {
@@ -348,7 +254,7 @@ pub(crate) fn compute_type_rec(
                                     let parameter_type = undo_inductive(at, types);
                                     let fields = [parameter_type]
                                         .into_iter()
-                                        .chain(variants_clone.into_iter().map(|t| todo!()))
+                                        .chain(variants_clone.into_iter().map(|_t| todo!()))
                                         .collect();
                                     let struct_type = IrType::Struct(fields);
                                     (
@@ -374,7 +280,7 @@ pub(crate) fn compute_type_rec(
                     }
                 } else {
                     // we're not building an inductive type
-                    let at_new = if let None = ag {
+                    let at_new = if ag.is_none() {
                         at
                     } else {
                         undo_inductive(at, types)

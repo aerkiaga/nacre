@@ -27,20 +27,25 @@ fn emit_type<'a>(
 ) -> BasicTypeEnum<'a> {
     match types[value_type].as_ref().unwrap() {
         IrType::Enum(variants) => {
-            // TODO: handle content
             let variant_count = variants.len();
             let tag_type = emit_tag_type(variant_count, context);
             let (tag_size, _) = compute_type_size(tag_type);
-            let (max_variant_size, max_variant_alignment) = variants
+            // TODO: put the tag inside the union, for better alignment and compatibility with Rust
+            let nontag_size = variants
                 .iter()
                 .map(|vt| match vt {
-                    Some(vts) => compute_type_size(emit_type(*vts, types, context)),
-                    None => (0, 1),
+                    Some(vts) => {
+                        let (variant_size, variant_alignment) =
+                            compute_type_size(emit_type(*vts, types, context));
+                        let field_alignment =
+                            variant_alignment * tag_size.div_ceil(variant_alignment);
+                        let middle_padding = field_alignment - tag_size;
+                        variant_size + middle_padding
+                    }
+                    None => 0,
                 })
-                .fold((0, 1), |(xs, xa), (ys, ya)| (max(xs, ys), max(xa, ya)));
-            let field_alignment = max_variant_alignment * tag_size.div_ceil(max_variant_alignment);
-            let middle_padding = field_alignment - tag_size;
-            let nontag_size = max_variant_size + middle_padding;
+                .max()
+                .unwrap();
             let struct_type = if nontag_size > 0 {
                 let array_type = context
                     .i8_type()
@@ -87,6 +92,9 @@ fn compute_type_size(t: BasicTypeEnum) -> (usize, usize) {
         BasicTypeEnum::ArrayType(tt) => {
             let (size, alignment) = compute_type_size(tt.get_element_type());
             (tt.len() as usize * size, alignment)
+        }
+        BasicTypeEnum::PointerType(_) => {
+            todo!()
         }
         _ => todo!(),
     }
@@ -269,14 +277,12 @@ fn emit_instr_closure<'a>(
 fn emit_instr_enum<'a>(
     variant: usize,
     contained: Option<BasicValueEnum>,
-    value_type: Option<usize>,
+    vt: Option<usize>,
     types: &[Option<IrType>],
     context: &'a Context,
+    builder: &'a Builder,
 ) -> Result<BasicValueEnum<'a>, ()> {
-    let value_type = types[value_type.unwrap()].as_ref().unwrap();
-    if contained.is_some() {
-        todo!();
-    }
+    let value_type = types[vt.unwrap()].as_ref().unwrap();
     let variants = if let IrType::Enum(variants) = value_type {
         variants
     } else {
@@ -284,9 +290,16 @@ fn emit_instr_enum<'a>(
     };
     let tag_type: IntType = emit_tag_type(variants.len(), context).try_into().unwrap();
     let tag_value = tag_type.const_int(variant.try_into().unwrap(), false);
-    let field_type = variants[variant].map(|v| emit_type(v, types, context));
-    Ok(match field_type {
-        Some(_ft) => todo!(),
+    Ok(match contained {
+        Some(c) => {
+            let struct_value = context.const_struct(&[tag_value.into(), c], false);
+            let struct_ptr = builder
+                .build_alloca(struct_value.get_type(), "enum_struct_ptr")
+                .unwrap();
+            builder.build_store(struct_ptr, struct_value).unwrap();
+            let value_type = emit_type(vt.unwrap(), types, context);
+            builder.build_load(value_type, struct_ptr, "enum").unwrap()
+        }
         None => context.const_struct(&[tag_value.into()], false).into(),
     })
 }
@@ -392,15 +405,14 @@ pub(crate) fn emit_code(ir: &Ir) -> Result<(), ()> {
                         values.push(param);
                     }
                     IrInstr::Enum(v, c) => {
-                        if c.is_some() {
-                            todo!();
-                        }
+                        let contained = c.map(|cc| values[cc]);
                         values.push(emit_instr_enum(
                             *v,
-                            None,
+                            contained,
                             loc.value_type,
                             &ir.types,
                             &context,
+                            &builder,
                         )?);
                     }
                 }

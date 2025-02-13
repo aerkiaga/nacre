@@ -19,18 +19,24 @@ fn compute_inductive_const(
     ir_index: usize,
     term: &Term<TermMeta>,
     ce: (&mut Context<TermMeta>, &Environment<TermMeta>),
+    defs: &Vec<usize>,
 ) -> Result<(), ()> {
     let (ctx, env) = ce;
-    let mut t = term.normalize_in_ctx(env, ctx).unwrap();
     let mut variant_count = 0;
-    let term_type = t.compute_type(env, ctx).unwrap();
-    let def = ir.defs[ir_index].as_mut().unwrap();
-    let value_type = typing::compute_enum(&term_type, &mut ir.types, ctx, env);
-    let variant = loop {
+    let term_type = term.compute_type(env, ctx).unwrap();
+    let value_type = typing::compute_type(&term_type, &mut ir.types, ctx, env);
+    let mut t = if let TermInner::Lambda(_, b) = &term.inner {
+        b
+    } else {
+        panic!()
+    }
+    .normalize_in_ctx(env, ctx)
+    .unwrap();
+    let (variant, fields) = 'outer: loop {
         match &t.inner {
             TermInner::Variable(v) => {
                 assert!(*v < variant_count);
-                break variant_count - v - 1;
+                break (variant_count - v - 1, vec![]);
             }
             TermInner::Lambda(a, b) => {
                 if let TermInner::Prop = a.inner {
@@ -39,10 +45,29 @@ fn compute_inductive_const(
                     }
                     return Err(());
                 }
-                // TODO: handle fields
                 variant_count += 1;
                 ctx.add_inner(None, (**a).clone());
                 t = *b.clone();
+            }
+            TermInner::Apply(a, b) => {
+                let ta = a;
+                let field_terms = vec![b];
+                loop {
+                    match ta.inner {
+                        TermInner::Variable(v) => {
+                            assert!(v < variant_count);
+                            let fields = field_terms
+                                .into_iter()
+                                .map(|ft| match ft.inner {
+                                    TermInner::Variable(fv) => fv - variant_count - 1,
+                                    _ => todo!(),
+                                })
+                                .collect();
+                            break 'outer (variant_count - v - 1, fields);
+                        }
+                        _ => todo!(),
+                    }
+                }
             }
             _ => {
                 if !t.convert(env, ctx).unwrap() {
@@ -54,14 +79,26 @@ fn compute_inductive_const(
             }
         }
     };
-    // TODO: handle structs, enum contents
-    assert!(variant_count > 1); // TODO: handle structs
+    let field_indices: Vec<_> = fields
+        .into_iter()
+        .map(|f| {
+            compute_variable(&f, ir, ir_index, &mut defs.clone()).unwrap();
+            ir.defs[ir_index].as_ref().unwrap().code.len() - 1
+        })
+        .collect();
+    let def = ir.defs[ir_index].as_mut().unwrap();
+    assert!(variant_count > 1); // TODO: handle pure structs
                                 // TODO: move computation into crate::typing
     for _ in 0..variant_count {
         ctx.remove_inner();
     }
+    let inner_value = match field_indices.len() {
+        0 => None,
+        1 => Some(field_indices[0]),
+        _ => todo!(),
+    };
     def.code.push(IrLoc {
-        instr: IrInstr::Enum(variant, None),
+        instr: IrInstr::Enum(variant, inner_value),
         value_type,
     });
     Ok(())
@@ -161,20 +198,24 @@ fn compute_lambda(
     let mut defs2o = vec![];
     let defs2 = &mut defs2o;
     defs2.push(usize::MAX); // innermost definition is now a parameter
-    ctx.add_inner(None, a.clone());
     if let TermInner::Prop = a.inner {
-        if compute_inductive_const(ir, ir_index, b, (ctx, env)).is_err() {
+        if compute_inductive_const(ir, ir_index, &term, (ctx, env), defs).is_err() {
+            ctx.add_inner(None, a.clone());
             defs.push(usize::MAX - 1);
             compute_ir_instruction(ir, ir_index, env_to_ir_index, b, (ctx, env), names, defs)?;
             defs.pop();
+            ctx.remove_inner();
         }
     } else if def.params == 0 && def.code.is_empty() {
         // outer body of global definition
+        ctx.add_inner(None, a.clone());
         def.params = 1;
         def.param_types = vec![param_type];
         compute_ir_instruction(ir, ir_index, env_to_ir_index, b, (ctx, env), names, defs2)?;
+        ctx.remove_inner();
     } else {
         // inner lambda, create anonymous global definition
+        ctx.add_inner(None, a.clone());
         let mut capture_types = vec![];
         for i in 0..defs.len() {
             match get_def(defs, i as isize) {
@@ -262,8 +303,8 @@ fn compute_lambda(
                 value_type: return_type,
             });
         }
+        ctx.remove_inner();
     }
-    ctx.remove_inner();
     Ok(())
 }
 
