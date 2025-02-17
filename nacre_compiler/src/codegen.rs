@@ -112,6 +112,8 @@ fn emit_instr_param<'a>(
 
 fn emit_instr_capture<'a>(
     c: &usize,
+    t: Option<usize>,
+    types: &[Option<IrType>],
     function: &FunctionValue<'a>,
     context: &'a Context,
     builder: &'a Builder,
@@ -120,6 +122,7 @@ fn emit_instr_capture<'a>(
     let closure = self_param.into_pointer_value();
     let i32_type = context.i32_type();
     let closure_type = context.ptr_type(AddressSpace::from(0));
+    let capture_type = emit_type(t.unwrap(), types, context);
     let capture_address = unsafe {
         builder.build_gep(
             closure_type,
@@ -130,7 +133,7 @@ fn emit_instr_capture<'a>(
     }
     .unwrap();
     builder
-        .build_load(closure_type, capture_address, "capture")
+        .build_load(capture_type, capture_address, "capture")
         .unwrap()
     // TODO: emit correct capture type
 }
@@ -290,18 +293,16 @@ fn emit_instr_enum<'a>(
     };
     let tag_type: IntType = emit_tag_type(variants.len(), context).try_into().unwrap();
     let tag_value = tag_type.const_int(variant.try_into().unwrap(), false);
-    Ok(match contained {
-        Some(c) => {
-            let struct_value = context.const_struct(&[tag_value.into(), c], false);
-            let struct_ptr = builder
-                .build_alloca(struct_value.get_type(), "enum_struct_ptr")
-                .unwrap();
-            builder.build_store(struct_ptr, struct_value).unwrap();
-            let value_type = emit_type(vt.unwrap(), types, context);
-            builder.build_load(value_type, struct_ptr, "enum").unwrap()
-        }
-        None => context.const_struct(&[tag_value.into()], false).into(),
-    })
+    let struct_value = match contained {
+        Some(c) => context.const_struct(&[tag_value.into(), c], false),
+        None => context.const_struct(&[tag_value.into()], false),
+    };
+    let struct_ptr = builder
+        .build_alloca(struct_value.get_type(), "enum_struct_ptr")
+        .unwrap();
+    builder.build_store(struct_ptr, struct_value).unwrap();
+    let value_type = emit_type(vt.unwrap(), types, context);
+    Ok(builder.build_load(value_type, struct_ptr, "enum").unwrap())
 }
 
 pub(crate) fn emit_code(ir: &Ir) -> Result<(), ()> {
@@ -366,6 +367,8 @@ pub(crate) fn emit_code(ir: &Ir) -> Result<(), ()> {
                     IrInstr::Capture(c) => {
                         values.push(emit_instr_capture(
                             c,
+                            def.as_ref().unwrap().capture_types[*c],
+                            &ir.types,
                             &functions[n].unwrap(),
                             &context,
                             &builder,
@@ -447,7 +450,7 @@ pub(crate) fn emit_code(ir: &Ir) -> Result<(), ()> {
     module
         .run_passes("inline", &target_machine, PassBuilderOptions::create())
         .unwrap();
-    module.print_to_stderr();
+    //module.print_to_stderr();
     target_machine
         .write_to_file(&module, FileType::Assembly, std::path::Path::new("./out.s"))
         .or(Err(()))?;

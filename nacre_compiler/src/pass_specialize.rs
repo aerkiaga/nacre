@@ -80,7 +80,11 @@ fn try_specialize_closure(
                     }
                 }
             }
-            new_value_type = Some(IrType::Closure(param_types.clone(), return_type));
+            new_value_type = match &ir.types[left_type].as_ref().unwrap() {
+                IrType::Closure(_, _) => Some(IrType::Closure(param_types.clone(), return_type)),
+                IrType::Function(_, _) => Some(IrType::Function(param_types.clone(), return_type)),
+                _ => panic!(),
+            };
         }
         IrType::Struct(_) | IrType::Enum(_) => {
             // shouldn't need to do anything

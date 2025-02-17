@@ -333,7 +333,7 @@ pub(crate) fn is_generic(
     ctx: &mut Context<TermMeta>,
     env: &Environment<TermMeta>,
 ) -> bool {
-    // TODO: normalize
+    let term = term.normalize_in_ctx(env, ctx).unwrap();
     if let TermInner::Forall(a_g, b_g) = &term.inner {
         if a_g.inner != TermInner::Prop {
             return false;
