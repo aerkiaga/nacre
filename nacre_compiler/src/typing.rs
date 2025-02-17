@@ -326,3 +326,30 @@ pub(crate) fn compute_type(
         undo_inductive(t, types)
     }
 }
+
+pub(crate) fn is_generic(
+    term: &Term<TermMeta>,
+    types: &Vec<Option<IrType>>,
+    ctx: &mut Context<TermMeta>,
+    env: &Environment<TermMeta>,
+) -> bool {
+    // TODO: normalize
+    if let TermInner::Forall(a_g, b_g) = &term.inner {
+        if a_g.inner != TermInner::Prop {
+            return false;
+        }
+        let mut depth = 0;
+        let mut t = b_g;
+        while let TermInner::Forall(_, ti) = &t.inner {
+            depth += 1;
+            t = ti;
+        }
+        if let TermInner::Variable(v) = &t.inner {
+            *v != depth
+        } else {
+            false
+        }
+    } else {
+        false
+    }
+}

@@ -82,6 +82,9 @@ fn try_specialize_closure(
             }
             new_value_type = Some(IrType::Closure(param_types.clone(), return_type));
         }
+        IrType::Struct(_) | IrType::Enum(_) => {
+            // shouldn't need to do anything
+        }
         _ => todo!(),
     }
     if do_specialize {

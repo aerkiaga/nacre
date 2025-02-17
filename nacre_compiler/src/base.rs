@@ -361,9 +361,14 @@ fn compute_apply(
                     IrType::Enum(_) | IrType::Struct(_)
                 );
             if is {
+                // either an inductive or a generic type being specialized
+                let def = ir.defs[ir_index].as_mut().unwrap();
+                let len = def.code.len();
                 compute_ir_instruction(ir, ir_index, env_to_ir_index, a, (ctx, env), names, defs)?;
                 let def = ir.defs[ir_index].as_mut().unwrap();
-                def.code.last_mut().unwrap().value_type = value_type;
+                if def.code.len() > len && typing::is_generic(&a_type, &ir.types, ctx, env) {
+                    def.code.last_mut().unwrap().value_type = value_type;
+                }
             } else {
                 term.convert(env, ctx).unwrap();
                 compute_ir_instruction(
