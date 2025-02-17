@@ -321,6 +321,12 @@ fn compute_apply(
     let (ctx, env) = ce;
     let b_type = b.compute_type(env, ctx).unwrap();
     let b_ir_type = typing::compute_type(&b_type, &mut ir.types, ctx, env);
+    let mut term = Term {
+        inner: TermInner::Apply(a.clone().into(), b.clone().into()),
+        meta: TermMeta::default().into(),
+    };
+    let term_type = term.compute_type(env, ctx).unwrap();
+    let value_type = typing::compute_type(&term_type, &mut ir.types, ctx, env);
     match b_ir_type {
         Some(_) => {
             compute_ir_instruction(ir, ir_index, env_to_ir_index, a, (ctx, env), names, defs)?;
@@ -339,15 +345,9 @@ fn compute_apply(
                     });
                     return Ok(());
                 }
-                let term = Term {
-                    inner: TermInner::Apply(a.clone().into(), b.clone().into()),
-                    meta: TermMeta::default().into(),
-                };
-                let term_type = term.compute_type(env, ctx).unwrap();
-                let typ = typing::compute_type(&term_type, &mut ir.types, ctx, env);
                 def.code.push(IrLoc {
                     instr: IrInstr::Apply(a_index, vec![b_index]),
-                    value_type: typ,
+                    value_type,
                 });
             }
         }
@@ -361,18 +361,21 @@ fn compute_apply(
                     IrType::Enum(_) | IrType::Struct(_)
                 );
             if is {
+                // either an inductive or a generic type being specialized
+                let def = ir.defs[ir_index].as_mut().unwrap();
+                let len = def.code.len();
                 compute_ir_instruction(ir, ir_index, env_to_ir_index, a, (ctx, env), names, defs)?;
+                let def = ir.defs[ir_index].as_mut().unwrap();
+                if def.code.len() > len && typing::is_generic(&a_type, &ir.types, ctx, env) {
+                    def.code.last_mut().unwrap().value_type = value_type;
+                }
             } else {
-                let mut new_term = Term {
-                    inner: TermInner::Apply(a.clone().into(), b.clone().into()),
-                    meta: TermMeta::default().into(),
-                };
-                new_term.convert(env, ctx).unwrap();
+                term.convert(env, ctx).unwrap();
                 compute_ir_instruction(
                     ir,
                     ir_index,
                     env_to_ir_index,
-                    &new_term,
+                    &term,
                     (ctx, env),
                     names,
                     defs,
