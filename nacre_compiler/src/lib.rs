@@ -7,7 +7,9 @@ use std::fmt::Write;
 mod base;
 mod code_transforms;
 mod codegen;
+mod pass_cleanup;
 mod pass_declosure;
+mod pass_specialize;
 mod pass_uncurry;
 mod typing;
 
@@ -86,6 +88,7 @@ impl std::fmt::Debug for IrLoc {
 }
 
 /// A global function definition.
+#[derive(Clone)]
 pub struct IrDef {
     /// Index of the definition in the global environment, if it corresponds to a CoC definition.
     pub env_index: Option<usize>,
@@ -206,5 +209,7 @@ pub async fn compile(identifiers: Vec<String>) -> Result<Ir, ()> {
     let mut ir = base::compute_initial_ir(&indices, &env, &names);
     pass_uncurry::pass_uncurry(&mut ir);
     pass_declosure::pass_declosure(&mut ir);
+    pass_specialize::pass_specialize(&mut ir);
+    pass_cleanup::pass_cleanup(&mut ir);
     Ok(ir)
 }

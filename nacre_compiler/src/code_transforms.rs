@@ -67,6 +67,14 @@ fn move_rel(a: usize, rem: usize) -> usize {
     }
 }
 
+fn move_back_rel(a: usize, rem: usize) -> usize {
+    if a > rem {
+        a + 1
+    } else {
+        a
+    }
+}
+
 /// Removes an instruction.
 pub(crate) fn remove_loc(code: &mut Vec<IrLoc>, n: usize) -> IrLoc {
     let len = code.len();
@@ -85,7 +93,25 @@ pub(crate) fn remove_loc(code: &mut Vec<IrLoc>, n: usize) -> IrLoc {
     code.remove(n)
 }
 
-/// Increases all parameter in the code by some amount, possibly to append tham.
+pub(crate) fn insert_loc(code: &mut Vec<IrLoc>, n: usize, loc: IrLoc) {
+    let len = code.len();
+    for loc in &mut code[n..len] {
+        loc.instr = match &loc.instr {
+            IrInstr::Apply(f, p) => IrInstr::Apply(
+                move_back_rel(*f, n),
+                p.iter().map(|x| move_rel(*x, n)).collect(),
+            ),
+            IrInstr::Closure(f, c) => {
+                IrInstr::Closure(*f, c.iter().map(|x| move_back_rel(*x, n)).collect())
+            }
+            IrInstr::Move(x) => IrInstr::Move(move_back_rel(*x, n)),
+            instr => instr.clone(),
+        };
+    }
+    code.insert(n, loc);
+}
+
+/// Increases all parameters in the code by some amount, possibly to append them.
 pub(crate) fn move_params(code: &mut Vec<IrLoc>, dist: usize) {
     for loc in code {
         loc.instr = match &loc.instr {
@@ -130,4 +156,16 @@ pub(crate) fn clean_up_nondeps(code: &mut Vec<IrLoc>, output: usize) {
             remove_loc(code, n);
         }
     }
+}
+
+pub(crate) fn change_type(code: &mut Vec<IrLoc>, index: usize, new_type: Option<usize>) {
+    if trace_back(code, index) != index {
+        // also update dependencies
+        todo!();
+    }
+    if trace_forwards(code, index).len() > 1 {
+        // also update reverse dependencies
+        todo!();
+    }
+    code[index].value_type = new_type;
 }
