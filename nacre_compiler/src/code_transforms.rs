@@ -67,8 +67,8 @@ fn move_rel(a: usize, rem: usize) -> usize {
     }
 }
 
-fn move_back_rel(a: usize, rem: usize) -> usize {
-    if a > rem {
+fn move_back_rel(a: usize, ins: usize) -> usize {
+    if a >= ins {
         a + 1
     } else {
         a
@@ -99,7 +99,7 @@ pub(crate) fn insert_loc(code: &mut Vec<IrLoc>, n: usize, loc: IrLoc) {
         loc.instr = match &loc.instr {
             IrInstr::Apply(f, p) => IrInstr::Apply(
                 move_back_rel(*f, n),
-                p.iter().map(|x| move_rel(*x, n)).collect(),
+                p.iter().map(|x| move_back_rel(*x, n)).collect(),
             ),
             IrInstr::Closure(f, c) => {
                 IrInstr::Closure(*f, c.iter().map(|x| move_back_rel(*x, n)).collect())

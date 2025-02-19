@@ -1,0 +1,6 @@
+use super::super::super::std::test::Bool;
+use super::super::super::std::test::Option;
+
+fn test(f: Bool -> Bool, x: Option Bool) {
+    x.map f
+};

@@ -28,28 +28,28 @@ impl Bool {
 
 // An enum with two variants, where one of them contains data of type A
 fn Option(A: Type) {
-    type(T: Type, a: A -> T, b: T) -> T
+    type(T: Type, none: T, some: A -> T) -> T
 } -> Type;
 
 impl Option {
     fn some(A: Type)(inner: A) {
-        fn(T: Type, a: A -> T, b: T) {
-            a inner
+        fn(T: Type, none: T, some: A -> T) {
+            some inner
         }
     } -> Option A;
     
     fn none(A: Type) {
-        fn(T: Type, a: A -> T, b: T) {
-            b
+        fn(T: Type, none: T, some: A -> T) {
+            none
         }
     } -> Option A;
     
     fn map(A: Type)(self: Option A)(B: Type)(mapper: A -> B) {
-        fn a(inner: A) {
+        fn some(inner: A) {
             Option::some (mapper inner)
         };
-        let b = Option::none B;
-        self a b
+        let none = Option::none B;
+        self none some
     } -> Option B;
 };
 

@@ -42,3 +42,9 @@ async fn test_compile_not() {
 async fn test_compile_and() {
     test_compile_file("and").await;
 }
+
+#[tokio::test(flavor = "multi_thread")]
+#[serial]
+async fn test_compile_option_map() {
+    test_compile_file("option_map").await;
+}
