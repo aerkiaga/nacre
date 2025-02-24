@@ -108,7 +108,7 @@ fn emit_instr_param<'a>(
     vt: BasicTypeEnum<'a>,
     function: &FunctionValue<'a>,
     closure: bool,
-    context: &'a Context,
+    _context: &'a Context,
     builder: &'a Builder,
 ) -> BasicValueEnum<'a> {
     let raw_param = function
@@ -117,7 +117,7 @@ fn emit_instr_param<'a>(
     let param_ptr = builder
         .build_alloca(raw_param.get_type(), "param_ptr")
         .unwrap();
-    builder.build_store(param_ptr, raw_param);
+    builder.build_store(param_ptr, raw_param).unwrap();
     builder.build_load(vt, param_ptr, "param").unwrap()
 }
 
@@ -171,7 +171,7 @@ fn emit_instr_apply<'a>(
                         context.custom_width_int_type((8 * param_size).try_into().unwrap());
                     let apply_param_ptr =
                         builder.build_alloca(param_type, "apply_param_ptr").unwrap();
-                    builder.build_store(apply_param_ptr, param);
+                    builder.build_store(apply_param_ptr, param).unwrap();
                     builder
                         .build_load(cast_param_type, apply_param_ptr, "apply_param")
                         .unwrap()
@@ -221,12 +221,11 @@ fn emit_instr_apply<'a>(
                     .unwrap()
             };
             let cast_return_value = rv.try_as_basic_value().left().unwrap();
-            let cast_return_type = cast_return_value.get_type();
             let return_type = emit_type(r.unwrap(), types, context);
             let return_ptr = builder
                 .build_alloca(return_type, "apply_return_ptr")
                 .unwrap();
-            builder.build_store(return_ptr, cast_return_value);
+            builder.build_store(return_ptr, cast_return_value).unwrap();
             let return_value = builder
                 .build_load(return_type, return_ptr, "apply_return_value")
                 .unwrap();
@@ -242,7 +241,7 @@ fn emit_instr_apply<'a>(
                         context.custom_width_int_type((8 * param_size).try_into().unwrap());
                     let apply_param_ptr =
                         builder.build_alloca(param_type, "apply_param_ptr").unwrap();
-                    builder.build_store(apply_param_ptr, param);
+                    builder.build_store(apply_param_ptr, param).unwrap();
                     builder
                         .build_load(cast_param_type, apply_param_ptr, "apply_param")
                         .unwrap()
@@ -285,12 +284,11 @@ fn emit_instr_apply<'a>(
                     .unwrap()
             };
             let cast_return_value = rv.try_as_basic_value().left().unwrap();
-            let cast_return_type = cast_return_value.get_type();
             let return_type = emit_type(r.unwrap(), types, context);
             let return_ptr = builder
                 .build_alloca(return_type, "apply_return_ptr")
                 .unwrap();
-            builder.build_store(return_ptr, cast_return_value);
+            builder.build_store(return_ptr, cast_return_value).unwrap();
             let return_value = builder
                 .build_load(return_type, return_ptr, "apply_return_value")
                 .unwrap();
@@ -346,7 +344,6 @@ fn emit_instr_apply<'a>(
                         let field_value = builder
                             .build_extract_value(cast_struct_value, 1, "apply_field")
                             .unwrap();
-                        let closure_type = param_ir_types[n];
                         let value = emit_instr_apply(
                             params[n],
                             vec![field_value],
@@ -603,7 +600,7 @@ pub(crate) fn emit_code(ir: &Ir) -> Result<(), ()> {
                     )
                     .into();
                 let return_ptr = builder.build_alloca(return_type, "return_ptr").unwrap();
-                builder.build_store(return_ptr, *return_value);
+                builder.build_store(return_ptr, *return_value).unwrap();
                 let cast_return_value = builder
                     .build_load(cast_return_type, return_ptr, "cast_return_value")
                     .unwrap();

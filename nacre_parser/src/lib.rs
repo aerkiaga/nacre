@@ -12,7 +12,7 @@ pub use kernel::get_global_environment;
 pub use kernel::get_global_environment_names;
 pub use kernel::verify;
 pub use kernel_err::TermMeta;
-pub use nacre_ast::{preprocess_file, AbstractSyntaxTree};
+pub use nacre_ast::{AbstractSyntaxTree, preprocess_file};
 pub use nacre_types::report;
 pub use nacre_types::report::Report;
 pub use report::REPORTS;
@@ -120,7 +120,7 @@ pub(crate) async fn get_ast(
     DEFINITION_CACHE
         .get(logical_path)
         .await
-        .map(|x| (x.0 .0, x.1.clone()))
+        .map(|x| (x.0.0, x.1.clone()))
 }
 
 // Get the [AbstractSyntaxTree] for a particular top-level definition.
@@ -130,5 +130,5 @@ pub(crate) async fn get_type_ast(
     DEFINITION_CACHE
         .get(logical_path)
         .await
-        .map(|x| (x.0 .1, x.1.clone()))
+        .map(|x| (x.0.1, x.1.clone()))
 }

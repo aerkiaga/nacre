@@ -60,19 +60,11 @@ pub(crate) fn move_code(code: &mut [IrLoc], dist: usize) {
 }
 
 fn move_rel(a: usize, rem: usize) -> usize {
-    if a > rem {
-        a - 1
-    } else {
-        a
-    }
+    if a > rem { a - 1 } else { a }
 }
 
 fn move_back_rel(a: usize, ins: usize) -> usize {
-    if a >= ins {
-        a + 1
-    } else {
-        a
-    }
+    if a >= ins { a + 1 } else { a }
 }
 
 /// Removes an instruction.

@@ -88,7 +88,7 @@ fn compute_inductive_const(
         .collect();
     let def = ir.defs[ir_index].as_mut().unwrap();
     assert!(variant_count > 1); // TODO: handle pure structs
-                                // TODO: move computation into crate::typing
+    // TODO: move computation into crate::typing
     for _ in 0..variant_count {
         ctx.remove_inner();
     }
@@ -481,7 +481,7 @@ pub(crate) fn compute_initial_ir(
         .unwrap();
     }
     for n in 0..reserved_indices {
-        if let Some(ref mut d) = &mut r.defs[n] {
+        if let &mut Some(ref mut d) = &mut r.defs[n] {
             d.export = true;
         }
     }

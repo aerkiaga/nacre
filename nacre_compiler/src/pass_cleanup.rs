@@ -22,7 +22,7 @@ pub(crate) fn pass_cleanup(ir: &mut Ir) {
     for n in 0..ir.defs.len() {
         if let Some(def) = &ir.defs[n] {
             if def.export {
-                let deps = compute_def_deps(ir, n, &mut used_defs);
+                compute_def_deps(ir, n, &mut used_defs);
             }
         }
     }

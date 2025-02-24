@@ -5,9 +5,9 @@ use nacre_kernel::Environment;
 use nacre_kernel::Term;
 use nacre_kernel::TermInner;
 use once_cell::sync::Lazy;
+use std::sync::Arc;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
-use std::sync::Arc;
 use tokio::sync::Mutex;
 
 // A counter to assign indices to top-level definitions

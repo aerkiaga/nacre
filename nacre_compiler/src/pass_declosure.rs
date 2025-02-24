@@ -1,5 +1,5 @@
 use crate::code_transforms::{trace_back, trace_forwards};
-use crate::{typing, Ir, IrInstr, IrType};
+use crate::{Ir, IrInstr, IrType, typing};
 
 fn declosure_def(ir: &mut Ir, n: usize) {
     let def = match &mut ir.defs[n] {

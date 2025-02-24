@@ -329,7 +329,7 @@ pub(crate) fn compute_type(
 
 pub(crate) fn is_generic(
     term: &Term<TermMeta>,
-    types: &Vec<Option<IrType>>,
+    _types: &Vec<Option<IrType>>,
     ctx: &mut Context<TermMeta>,
     env: &Environment<TermMeta>,
 ) -> bool {

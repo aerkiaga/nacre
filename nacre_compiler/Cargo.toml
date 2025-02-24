@@ -1,7 +1,7 @@
 [package]
 name = "nacre_compiler"
 version = "0.1.0"
-edition = "2021"
+edition = "2024"
 
 [dependencies]
 inkwell = {git = "https://github.com/TheDan64/inkwell.git", rev= "03c0c6b1842afc438a9ec299efc5386bf52e92e1", features = ["llvm18-0"]}

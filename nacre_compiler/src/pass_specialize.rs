@@ -14,7 +14,9 @@ fn specialize_def(
         None => {
             specialization_map.insert(ir_index, vec![]);
         }
-        Some(specializations) => {
+        Some(_specializations) => {
+            todo!();
+            /*
             for s in specializations {
                 let def = ir.defs[*s].as_ref().unwrap();
                 let def_param_types = &def.param_types;
@@ -22,6 +24,7 @@ fn specialize_def(
                 // TODO: return existing specialization if types match
                 todo!();
             }
+            */
         }
     }
     ir.defs.push(ir.defs[ir_index].clone());
