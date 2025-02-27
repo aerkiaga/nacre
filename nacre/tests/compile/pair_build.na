@@ -1,0 +1,9 @@
+use super::super::super::std::test::Pair;
+use super::super::super::std::test::Bool;
+
+fn test(x: Bool, y: Bool) {
+    fn (T: Type)(f: Bool -> Bool -> T) {
+        f x y
+    }
+} -> Pair Bool Bool;
+

@@ -50,12 +50,12 @@ fn compute_inductive_const(
                 t = *b.clone();
             }
             TermInner::Apply(a, b) => {
-                let ta = a;
-                let field_terms = vec![b];
+                let mut ta = a;
+                let mut field_terms = vec![b];
                 loop {
-                    match ta.inner {
+                    match &ta.inner {
                         TermInner::Variable(v) => {
-                            assert!(v < variant_count);
+                            assert!(*v < variant_count);
                             let fields = field_terms
                                 .into_iter()
                                 .map(|ft| match ft.inner {
@@ -64,6 +64,10 @@ fn compute_inductive_const(
                                 })
                                 .collect();
                             break 'outer (variant_count - v - 1, fields);
+                        }
+                        TermInner::Apply(a2, b2) => {
+                            field_terms = [b2].into_iter().chain(field_terms.into_iter()).collect();
+                            ta = &a2;
                         }
                         _ => todo!(),
                     }
@@ -87,7 +91,6 @@ fn compute_inductive_const(
         })
         .collect();
     let def = ir.defs[ir_index].as_mut().unwrap();
-    assert!(variant_count > 1); // TODO: handle pure structs
     // TODO: move computation into crate::typing
     for _ in 0..variant_count {
         ctx.remove_inner();
@@ -95,12 +98,30 @@ fn compute_inductive_const(
     let inner_value = match field_indices.len() {
         0 => None,
         1 => Some(field_indices[0]),
-        _ => todo!(),
+        _ => {
+            let field_types = field_indices
+                .iter()
+                .map(|fi| def.code[*fi].value_type)
+                .collect();
+            let vt = typing::add_type(IrType::Struct(field_types), &mut ir.types);
+            def.code.push(IrLoc {
+                instr: IrInstr::Struct(field_indices),
+                value_type: Some(vt),
+            });
+            Some(def.code.len() - 1)
+        }
     };
-    def.code.push(IrLoc {
-        instr: IrInstr::Enum(variant, inner_value),
-        value_type,
-    });
+    if variant_count > 1 {
+        def.code.push(IrLoc {
+            instr: IrInstr::Enum(variant, inner_value),
+            value_type,
+        });
+    } else if inner_value.unwrap() != def.code.len() - 1 {
+        def.code.push(IrLoc {
+            instr: IrInstr::Move(inner_value.unwrap()),
+            value_type,
+        });
+    }
     Ok(())
 }
 

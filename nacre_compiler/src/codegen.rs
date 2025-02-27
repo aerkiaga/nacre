@@ -61,6 +61,13 @@ fn emit_type<'a>(
                 tag_type.into()
             }
         }
+        IrType::Struct(fields) => {
+            let struct_members: Vec<_> = fields
+                .into_iter()
+                .map(|t| emit_type(t.unwrap(), types, context))
+                .collect();
+            context.struct_type(&struct_members, false).into()
+        }
         IrType::Closure(_, _) | IrType::Any => {
             let ptr_type = context.ptr_type(AddressSpace::from(0));
             ptr_type.into()
@@ -445,6 +452,31 @@ fn emit_instr_enum<'a>(
     Ok(builder.build_load(value_type, struct_ptr, "enum").unwrap())
 }
 
+fn emit_instr_struct<'a>(
+    contained: Vec<BasicValueEnum<'a>>,
+    context: &'a Context,
+    builder: &'a Builder,
+) -> Result<BasicValueEnum<'a>, ()> {
+    let zeroed_fields: Vec<_> = contained
+        .iter()
+        .map(|v| v.get_type().const_zero())
+        .collect();
+    let mut struct_value: StructValue = context.const_struct(&zeroed_fields, false);
+    for (n, value) in contained.iter().enumerate() {
+        struct_value = builder
+            .build_insert_value(
+                struct_value,
+                *value,
+                n.try_into().unwrap(),
+                "struct_inserted",
+            )
+            .unwrap()
+            .try_into()
+            .unwrap();
+    }
+    Ok(struct_value.into())
+}
+
 pub(crate) fn emit_code(ir: &Ir) -> Result<(), ()> {
     let context = Context::create();
     let module = context.create_module("nacre");
@@ -588,6 +620,10 @@ pub(crate) fn emit_code(ir: &Ir) -> Result<(), ()> {
                             &context,
                             &builder,
                         )?);
+                    }
+                    IrInstr::Struct(p) => {
+                        let contained = p.into_iter().map(|pp| values[*pp]).collect();
+                        values.push(emit_instr_struct(contained, &context, &builder)?);
                     }
                 }
             }

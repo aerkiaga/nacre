@@ -22,7 +22,7 @@ pub(crate) fn trace_forwards(code: &[IrLoc], input: usize) -> HashSet<usize> {
                     outputs.insert(n);
                 }
             }
-            IrInstr::Closure(_, p) => {
+            IrInstr::Closure(_, p) | IrInstr::Struct(p) => {
                 if p.iter().any(|x| inputs.contains(x)) {
                     outputs.insert(n);
                 }
@@ -54,7 +54,11 @@ pub(crate) fn move_code(code: &mut [IrLoc], dist: usize) {
             }
             IrInstr::Closure(f, c) => IrInstr::Closure(*f, c.iter().map(|x| *x + dist).collect()),
             IrInstr::Move(x) => IrInstr::Move(*x + dist),
-            instr => instr.clone(),
+            IrInstr::Enum(v, c) => IrInstr::Enum(*v, c.map(|x| x + dist)),
+            IrInstr::Struct(p) => IrInstr::Struct(p.iter().map(|x| *x + dist).collect()),
+            IrInstr::Param(p) => IrInstr::Param(*p),
+            IrInstr::Capture(p) => IrInstr::Capture(*p),
+            IrInstr::Function(p) => IrInstr::Function(*p),
         };
     }
 }
@@ -79,7 +83,11 @@ pub(crate) fn remove_loc(code: &mut Vec<IrLoc>, n: usize) -> IrLoc {
                 IrInstr::Closure(*f, c.iter().map(|x| move_rel(*x, n)).collect())
             }
             IrInstr::Move(x) => IrInstr::Move(move_rel(*x, n)),
-            instr => instr.clone(),
+            IrInstr::Enum(v, c) => IrInstr::Enum(*v, c.map(|x| move_rel(x, n))),
+            IrInstr::Struct(p) => IrInstr::Struct(p.iter().map(|x| move_rel(*x, n)).collect()),
+            IrInstr::Param(p) => IrInstr::Param(*p),
+            IrInstr::Capture(p) => IrInstr::Capture(*p),
+            IrInstr::Function(p) => IrInstr::Function(*p),
         };
     }
     code.remove(n)
@@ -97,7 +105,11 @@ pub(crate) fn insert_loc(code: &mut Vec<IrLoc>, n: usize, loc: IrLoc) {
                 IrInstr::Closure(*f, c.iter().map(|x| move_back_rel(*x, n)).collect())
             }
             IrInstr::Move(x) => IrInstr::Move(move_back_rel(*x, n)),
-            instr => instr.clone(),
+            IrInstr::Enum(v, c) => IrInstr::Enum(*v, c.map(|x| move_back_rel(x, n))),
+            IrInstr::Struct(p) => IrInstr::Struct(p.iter().map(|x| move_back_rel(*x, n)).collect()),
+            IrInstr::Param(p) => IrInstr::Param(*p),
+            IrInstr::Capture(p) => IrInstr::Capture(*p),
+            IrInstr::Function(p) => IrInstr::Function(*p),
         };
     }
     code.insert(n, loc);
@@ -130,7 +142,9 @@ fn trace_deps(code: &Vec<IrLoc>, output: usize) -> HashSet<usize> {
         IrInstr::Apply(f, p) => p.iter().fold(&r | &trace_deps(code, *f), |y, x| {
             &y | &trace_deps(code, *x)
         }),
-        IrInstr::Closure(_, p) => p.iter().fold(r, |y, x| &y | &trace_deps(code, *x)),
+        IrInstr::Closure(_, p) | IrInstr::Struct(p) => {
+            p.iter().fold(r, |y, x| &y | &trace_deps(code, *x))
+        }
         IrInstr::Move(l) => &r | &trace_deps(code, *l),
         IrInstr::Enum(_, c) => match c {
             Some(inner) => &r | &trace_deps(code, *inner),

@@ -32,6 +32,8 @@ pub enum IrInstr {
     Move(usize),
     /// Builds an enum variant with an index and a contained local value.
     Enum(usize, Option<usize>),
+    /// Builds a struct with a number of fields, loaded from locals.
+    Struct(Vec<usize>),
 }
 
 impl std::fmt::Debug for IrInstr {
@@ -63,6 +65,14 @@ impl std::fmt::Debug for IrInstr {
                 Some(inner) => write!(f, "enum {} ${}", v, inner)?,
                 None => write!(f, "enum {}", v)?,
             },
+            Self::Struct(fields) => write!(
+                f,
+                "struct{}",
+                fields.iter().fold(String::new(), |mut output, x| {
+                    write!(output, " ${}", x).unwrap();
+                    output
+                })
+            )?,
         }
         Ok(())
     }

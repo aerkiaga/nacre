@@ -269,10 +269,15 @@ pub(crate) fn compute_type_rec(
                                 (Some(add_type(struct_type, types)), Some(bg.unwrap() - 1))
                             }
                         }
-                        IrType::Struct(_fields) => {
+                        IrType::Struct(fields) => {
                             // we are tentatively building a struct
                             // add parameter type to it
-                            todo!();
+                            let struct_type = IrType::Struct(
+                                [at].into_iter()
+                                    .chain(fields.into_iter().copied())
+                                    .collect(),
+                            );
+                            (Some(add_type(struct_type, types)), Some(bg.unwrap() - 1))
                         }
                         _ => {
                             panic!();
