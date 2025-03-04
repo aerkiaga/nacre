@@ -56,6 +56,16 @@ fn compute_inductive_const(
                     match &ta.inner {
                         TermInner::Variable(v) => {
                             assert!(*v < variant_count);
+                            for ft in &field_terms {
+                                if let TermInner::Variable(fv) = ft.inner {
+                                    if fv < variant_count + 1 {
+                                        for _ in 0..variant_count {
+                                            ctx.remove_inner();
+                                        }
+                                        return Err(());
+                                    }
+                                }
+                            }
                             let fields = field_terms
                                 .into_iter()
                                 .map(|ft| match ft.inner {

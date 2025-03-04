@@ -30,6 +30,7 @@ pub(crate) fn trace_forwards(code: &[IrLoc], input: usize) -> HashSet<usize> {
             IrInstr::Move(l) => {
                 if inputs.contains(l) {
                     inputs.insert(n);
+                    outputs.insert(n);
                 }
             }
             IrInstr::Enum(_, c) => {

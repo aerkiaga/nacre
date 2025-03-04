@@ -59,6 +59,28 @@ fn Pair(A: Type, B: Type) {
     type(T: Type, f: A -> B -> T) -> T
 } -> Type;
 
+impl Pair {
+    fn build(A: Type, B: Type)(left: A, right: B) {
+        fn (T: Type, f: A -> B -> T) {
+            f left right
+        }
+    } -> Pair A B;
+
+    fn left(A: Type, B: Type)(self: Pair A B) {
+        fn f(left: A, right: B) {
+            left
+        };
+        self f
+    };
+
+    fn right(A: Type, B: Type)(self: Pair A B) {
+        fn f(left: A, right: B) {
+            right
+        };
+        self f
+    };
+};
+
 // A type for Peano arithmetic using Church numerals
 type Church(T: Type, f: T -> T, x: T) -> T: Type;
 

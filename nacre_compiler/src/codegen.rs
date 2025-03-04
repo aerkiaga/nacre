@@ -381,6 +381,40 @@ fn emit_instr_apply<'a>(
             }
             output.as_basic_value()
         }
+        IrType::Struct(fields) => {
+            assert!(params.len() == 1);
+            let struct_value = if let BasicValueEnum::StructValue(struct_value) = closure {
+                struct_value
+            } else {
+                panic!()
+            };
+            let callee = params[0];
+            let field_values: Vec<_> = fields
+                .into_iter()
+                .enumerate()
+                .map(|(nf, fv)| {
+                    builder
+                        .build_extract_value(
+                            struct_value,
+                            nf.try_into().unwrap(),
+                            "apply_struct_field",
+                        )
+                        .unwrap()
+                })
+                .collect();
+            let field_types = fields.clone();
+            let value = emit_instr_apply(
+                callee,
+                field_values,
+                param_ir_types[0],
+                field_types,
+                types,
+                function,
+                context,
+                builder,
+            );
+            value
+        }
         _ => todo!(),
     }
 }

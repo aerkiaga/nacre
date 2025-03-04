@@ -35,7 +35,7 @@ cargo clippy        # linter
 cargo test          # integration tests
 cargo llvm-cov      # test coverage
 cargo bench         # performance regressions
-cargo mutants       # mutation testing
+cargo mutants --test-workspace true       # mutation testing
 ```
 
 ### Fuzz testing

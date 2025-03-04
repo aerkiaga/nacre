@@ -54,3 +54,9 @@ async fn test_compile_option_map() {
 async fn test_compile_pair_build() {
     test_compile_file("pair_build").await;
 }
+
+#[tokio::test(flavor = "multi_thread")]
+#[serial]
+async fn test_compile_pair_left() {
+    test_compile_file("pair_left").await;
+}

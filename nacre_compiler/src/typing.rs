@@ -36,7 +36,12 @@ impl std::fmt::Debug for IrType {
             IrType::Struct(fields) => {
                 writeln!(f, "struct {{")?;
                 for field in fields {
-                    field.fmt(f)?;
+                    match field {
+                        None => {
+                            writeln!(f, "void")?;
+                        }
+                        Some(d) => writeln!(f, "<{d}>")?,
+                    }
                 }
                 writeln!(f, "}}")?;
             }
@@ -101,7 +106,10 @@ fn undo_inductive(inductive: Option<usize>, types: &mut Vec<Option<IrType>>) -> 
                         .iter()
                         .map(|t| {
                             t.map(|ti| match types[ti].as_ref().unwrap() {
-                                _ => todo!(),
+                                IrType::Struct(fields) => {
+                                    add_type(IrType::Closure(fields.clone(), any_type), types)
+                                }
+                                _ => add_type(IrType::Closure(vec![Some(ti)], any_type), types),
                             })
                         })
                         .collect(),
@@ -254,7 +262,11 @@ pub(crate) fn compute_type_rec(
                                     let parameter_type = undo_inductive(at, types);
                                     let fields = [parameter_type]
                                         .into_iter()
-                                        .chain(variants_clone.into_iter().map(|_t| todo!()))
+                                        .chain(variants_clone.into_iter().map(|_t| {
+                                            // fields of the form ... -> T
+                                            // TODO: actually handle this as recursive fields
+                                            Some(add_type(IrType::Any, types))
+                                        }))
                                         .collect();
                                     let struct_type = IrType::Struct(fields);
                                     (
@@ -324,11 +336,24 @@ pub(crate) fn compute_type(
     ctx: &mut Context<TermMeta>,
     env: &Environment<TermMeta>,
 ) -> Option<usize> {
-    let (t, ind) = compute_type_rec(term, types, ctx, env);
-    if ind.is_none() || ind == Some(0) {
-        t
-    } else {
+    let (mut t, ind) = compute_type_rec(term, types, ctx, env);
+    if ind.is_some() && ind.unwrap() != 0 {
         undo_inductive(t, types)
+    } else if let Some(IrType::Struct(_)) = t.map(|tt| types[tt].as_ref().unwrap()) {
+        undo_inductive(t, types)
+    } else {
+        loop {
+            if let Some(IrType::Enum(variants)) = t.map(|tt| types[tt].as_ref().unwrap()) {
+                if variants.len() == 1 {
+                    t = variants[0];
+                } else {
+                    break;
+                }
+            } else {
+                break;
+            }
+        }
+        t
     }
 }
 

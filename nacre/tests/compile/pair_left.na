@@ -1,7 +1,7 @@
 use super::super::super::std::test::Pair;
 use super::super::super::std::test::Bool;
 
-fn test(x: Bool, y: Bool) {
-    Pair::build Bool Bool x y
-} -> Pair Bool Bool;
+fn test(p: Pair Bool Bool) {
+    p.left
+} -> Bool;
 

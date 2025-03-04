@@ -1,8 +1,8 @@
 use crate::code_transforms::{trace_back, trace_forwards};
 use crate::{Ir, IrInstr, IrType, typing};
 
-fn declosure_def(ir: &mut Ir, n: usize) {
-    let def = match &mut ir.defs[n] {
+fn declosure_def(ir: &mut Ir, index: usize) {
+    let def = match &mut ir.defs[index] {
         None => return,
         Some(d) => d,
     };
@@ -14,13 +14,32 @@ fn declosure_def(ir: &mut Ir, n: usize) {
                 let ff = *f;
                 let usages = trace_forwards(code, n);
                 for usage in usages.iter() {
+                    if let IrInstr::Move(_) = code[*usage].instr {
+                        if *usage < code.len() - 1 {
+                            continue;
+                        } else {
+                            todo!();
+                        }
+                    }
                     let direct_application = if let IrInstr::Apply(f2, _) = code[*usage].instr {
                         trace_back(code, f2) == n
                     } else {
                         false
                     };
                     if !direct_application {
-                        todo!();
+                        let match_parameter = if let IrInstr::Apply(f2, _) = code[*usage].instr {
+                            let matched = trace_back(code, f2);
+                            let matched_type = code[matched].value_type.unwrap();
+                            match ir.types[matched_type].as_ref().unwrap() {
+                                IrType::Enum(_) | IrType::Struct(_) => true,
+                                _ => false,
+                            }
+                        } else {
+                            false
+                        };
+                        if !match_parameter {
+                            todo!();
+                        }
                     }
                 }
                 let loc = &mut code[n];
@@ -35,6 +54,12 @@ fn declosure_def(ir: &mut Ir, n: usize) {
                 } else {
                     panic!();
                 };
+                let value_type = loc.value_type;
+                for usage in usages.iter() {
+                    if let IrInstr::Move(_) = code[*usage].instr {
+                        code[*usage].value_type = value_type;
+                    }
+                }
             }
         }
     }
