@@ -68,7 +68,7 @@ fn emit_type<'a>(
                 .collect();
             context.struct_type(&struct_members, false).into()
         }
-        IrType::Closure(_, _) | IrType::Any => {
+        IrType::Closure(_, _) | IrType::Recursive(_) | IrType::Any => {
             let ptr_type = context.ptr_type(AddressSpace::from(0));
             ptr_type.into()
         }

@@ -4,6 +4,10 @@ version = "0.1.0"
 edition = "2024"
 autoexamples = false
 
+[[example]]
+name = "fuzz_consistency"
+path = "examples/fuzz_consistency.rs"
+
 [dependencies]
 
 [dev-dependencies]

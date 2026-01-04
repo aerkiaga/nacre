@@ -32,10 +32,10 @@ against a test program, which is then run.
 ```shell
 cargo check         # build
 cargo clippy        # linter
-cargo test          # integration tests
+cargo test --tests  # integration tests
 cargo llvm-cov      # test coverage
 cargo bench         # performance regressions
-cargo mutants --test-workspace true       # mutation testing
+cargo mutants --test-workspace true -C tests      # mutation testing
 ```
 
 ### Fuzz testing

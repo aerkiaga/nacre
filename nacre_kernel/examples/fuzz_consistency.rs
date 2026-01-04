@@ -118,9 +118,10 @@ fn main() {
                         assert!(tt.well_formed(&env));
                         let ctt = tt.normalize(&env).map_err(|_| ()).unwrap();
                         assert!(ctt != term_false);
-                        assert!(env
-                            .add_definition(Some(Arc::new(term)), Arc::new(tt))
-                            .is_ok());
+                        assert!(
+                            env.add_definition(Some(Arc::new(term)), Arc::new(tt))
+                                .is_ok()
+                        );
                     }
                     Err(_) => {
                         println!("Can't compute type");

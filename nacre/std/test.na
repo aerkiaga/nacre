@@ -82,14 +82,14 @@ impl Pair {
 };
 
 // A type for Peano arithmetic using Church numerals
-type Church(T: Type, f: T -> T, x: T) -> T: Type;
+type Church(T: Type, init: T, for: T -> T) -> T: Type;
 
 impl Church {
-    fn 0(T: Type, f: T -> T, x: T) {x}: Church;
+    fn 0(T: Type, init: T, for: T -> T) {init}: Church;
     
     fn s(self: Church) {
-        fn(T: Type, f: T -> T, x: T) {
-            f (self f x)
+        fn(T: Type, init: T, for: T -> T) {
+            for (self init for)
         }
     } -> Church;
     

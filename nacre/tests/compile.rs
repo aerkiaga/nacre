@@ -60,3 +60,9 @@ async fn test_compile_pair_build() {
 async fn test_compile_pair_left() {
     test_compile_file("pair_left").await;
 }
+
+#[tokio::test(flavor = "multi_thread")]
+#[serial]
+async fn test_compile_church_zero() {
+    test_compile_file("church_zero").await;
+}

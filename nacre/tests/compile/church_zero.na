@@ -1,0 +1,6 @@
+use super::super::super::std::test::Church;
+
+fn test(n: Church) {
+    Church::0
+} -> Church;
+

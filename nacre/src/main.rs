@@ -227,6 +227,7 @@ async fn main() {
         Ok(_) => eprintln!("✔ Verified."),
         Err(_) => eprintln!("✘ Verification failed."),
     }
+
     /*
     let ir = nacre_compiler::compile(vec![logical_path]).await.unwrap();
     ir.emit_code().unwrap();

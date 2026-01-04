@@ -35,10 +35,12 @@ fn compute_inductive_const(
     let (variant, fields) = 'outer: loop {
         match &t.inner {
             TermInner::Variable(v) => {
+                // Select one variant from an enum
                 assert!(*v < variant_count);
                 break (variant_count - v - 1, vec![]);
             }
             TermInner::Lambda(a, b) => {
+                // Introduce variant
                 if let TermInner::Prop = a.inner {
                     for _ in 0..variant_count {
                         ctx.remove_inner();
@@ -50,15 +52,20 @@ fn compute_inductive_const(
                 t = *b.clone();
             }
             TermInner::Apply(a, b) => {
+                // Function applied to a sequence of terms
                 let mut ta = a;
                 let mut field_terms = vec![b];
                 loop {
                     match &ta.inner {
                         TermInner::Variable(v) => {
+                            // Found function
+                            // Select one variant from an enum
+                            // Each parameter represents an enum variant field
                             assert!(*v < variant_count);
                             for ft in &field_terms {
                                 if let TermInner::Variable(fv) = ft.inner {
                                     if fv < variant_count + 1 {
+                                        // Can't reference enum variants in field
                                         for _ in 0..variant_count {
                                             ctx.remove_inner();
                                         }
@@ -66,16 +73,29 @@ fn compute_inductive_const(
                                     }
                                 }
                             }
-                            let fields = field_terms
-                                .into_iter()
-                                .map(|ft| match ft.inner {
-                                    TermInner::Variable(fv) => fv - variant_count - 1,
-                                    _ => todo!(),
-                                })
-                                .collect();
-                            break 'outer (variant_count - v - 1, fields);
+                            let fields = field_terms.into_iter().map(|ft| match ft.inner {
+                                TermInner::Variable(fv) => {
+                                    // Reference something outside the enum
+                                    Some(fv - variant_count - 1)
+                                }
+                                _ => {
+                                    // TODO: handle better
+                                    // For now, just mark it
+                                    None
+                                }
+                            });
+                            if fields.clone().any(|f| f.is_none()) {
+                                // For now, turn it into a function
+                                for _ in 0..variant_count {
+                                    ctx.remove_inner();
+                                }
+                                return Err(());
+                            }
+                            let fields = fields.map(|f| f.unwrap());
+                            break 'outer (variant_count - v - 1, fields.collect());
                         }
                         TermInner::Apply(a2, b2) => {
+                            // Add new term
                             field_terms = [b2].into_iter().chain(field_terms.into_iter()).collect();
                             ta = &a2;
                         }
@@ -84,6 +104,7 @@ fn compute_inductive_const(
                 }
             }
             _ => {
+                // Reduce term
                 if !t.convert(env, ctx).unwrap() {
                     for _ in 0..variant_count {
                         ctx.remove_inner();

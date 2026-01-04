@@ -14,6 +14,8 @@ pub enum IrType {
     Closure(Vec<Option<usize>>, Option<usize>),
     /// A function that takes some parameters and returns a value.
     Function(Vec<Option<usize>>, Option<usize>),
+    /// An owned reference to an object of a type that encloses this type.
+    Recursive(Option<usize>),
     /// Any type.
     Any,
 }
@@ -73,6 +75,12 @@ impl std::fmt::Debug for IrType {
                 match ret {
                     None => writeln!(f, ") -> void")?,
                     Some(d) => writeln!(f, ") -> <{d:?}>")?,
+                }
+            }
+            IrType::Recursive(inner) => {
+                writeln!(f, "recursive")?;
+                if let Some(inn) = inner {
+                    writeln!(f, " {inn}")?;
                 }
             }
             IrType::Any => writeln!(f, "any")?,
@@ -188,6 +196,12 @@ pub(crate) fn compute_type_rec(
                 // TODO: check expressions equivalent to Prop
                 ctx.add_inner(None, (**a).clone());
                 let (bt, bg) = compute_type_rec(b, types, ctx, env);
+                for typ in types.iter_mut() {
+                    // resolve recursive types
+                    if let Some(IrType::Recursive(None)) = *typ {
+                        *typ = Some(IrType::Recursive(bt));
+                    }
+                }
                 (
                     bt,
                     match bg {
@@ -219,12 +233,29 @@ pub(crate) fn compute_type_rec(
                                             // T -> ... -> T
                                             let variants_clone = variants.clone();
                                             // convert parameter type into new enum variant
-                                            let struct_type = match variants_a.len() {
-                                                0 => None,    // no fields
-                                                _ => todo!(), // recursive field
+                                            let struct_type_id = match variants_a.len() {
+                                                0 => None, // no fields
+                                                _ => {
+                                                    // recursive field
+                                                    let variants_a_clone = variants_a.clone();
+                                                    let struct_fields = variants_a_clone
+                                                        .iter()
+                                                        .map(|field| {
+                                                            let rec_type = IrType::Recursive(None);
+                                                            let rec_type_id =
+                                                                Some(add_type(rec_type, types));
+                                                            match field {
+                                                                None => rec_type_id, // non-closure
+                                                                _ => todo!(),        // closure
+                                                            }
+                                                        })
+                                                        .collect();
+                                                    let struct_type = IrType::Struct(struct_fields);
+                                                    Some(add_type(struct_type, types))
+                                                }
                                             };
                                             let new_variants = IrType::Enum(
-                                                [struct_type]
+                                                [struct_type_id]
                                                     .into_iter()
                                                     .chain(variants_clone)
                                                     .collect(),
@@ -330,6 +361,184 @@ pub(crate) fn compute_type_rec(
     }
 }
 
+fn try_deduplicate_type_rec(
+    t: Option<usize>,
+    rr: usize,
+    types: &mut Vec<Option<IrType>>,
+    t2: Option<usize>,
+    rr2: usize,
+) -> Option<usize> {
+    let tt = match t {
+        Some(tt) => tt,
+        None => return None,
+    };
+    let tt2 = match t2 {
+        Some(tt2) => tt2,
+        None => return Some(tt),
+    };
+    match types[tt].as_ref().unwrap() {
+        IrType::Recursive(r) => {
+            if let IrType::Recursive(r2) = types[tt2].as_ref().unwrap() {
+                if *r == Some(rr) && *r2 == Some(rr2) {
+                    return Some(tt2);
+                }
+            }
+        }
+        IrType::Enum(variants) => {
+            if let IrType::Enum(variants2) = types[tt2].as_ref().unwrap() {
+                if variants.len() == variants2.len() {
+                    let mut equal = true;
+                    let variants = variants.clone();
+                    let variants2 = variants2.clone();
+                    for n in 0..variants2.len() {
+                        if variants2[n]
+                            != try_deduplicate_type_rec(variants[n], rr, types, variants2[n], rr2)
+                        {
+                            equal = false;
+                            break;
+                        }
+                    }
+                    if equal {
+                        return Some(tt2);
+                    }
+                }
+            }
+        }
+        IrType::Struct(fields) => {
+            if let IrType::Struct(fields2) = types[tt2].as_ref().unwrap() {
+                if fields.len() == fields2.len() {
+                    let mut equal = true;
+                    let fields = fields.clone();
+                    let fields2 = fields2.clone();
+                    for n in 0..fields.len() {
+                        if fields2[n]
+                            != try_deduplicate_type_rec(fields[n], rr, types, fields2[n], rr2)
+                        {
+                            equal = false;
+                            break;
+                        }
+                    }
+                    if equal {
+                        return Some(tt2);
+                    }
+                }
+            }
+        }
+        IrType::Closure(params, ret) => {
+            if let IrType::Closure(params2, ret2) = types[tt2].as_ref().unwrap() {
+                if params.len() == params2.len() {
+                    let mut equal = true;
+                    let params = params.clone();
+                    let params2 = params2.clone();
+                    let ret2 = ret2.clone();
+                    if ret2 != try_deduplicate_type_rec(*ret, rr, types, ret2, rr2) {
+                        equal = false;
+                    } else {
+                        for n in 0..params.len() {
+                            if params2[n]
+                                != try_deduplicate_type_rec(params[n], rr, types, params2[n], rr2)
+                            {
+                                equal = false;
+                                break;
+                            }
+                        }
+                    }
+                    if equal {
+                        return Some(tt2);
+                    }
+                }
+            }
+        }
+        IrType::Function(params, ret) => {
+            if let IrType::Function(params2, ret2) = types[tt2].as_ref().unwrap() {
+                if params.len() == params2.len() {
+                    let mut equal = true;
+                    let params = params.clone();
+                    let params2 = params2.clone();
+                    let ret2 = ret2.clone();
+                    if ret2 != try_deduplicate_type_rec(*ret, rr, types, ret2, rr2) {
+                        equal = false;
+                    } else {
+                        for n in 0..params.len() {
+                            if params2[n]
+                                != try_deduplicate_type_rec(params[n], rr, types, params2[n], rr2)
+                            {
+                                equal = false;
+                                break;
+                            }
+                        }
+                    }
+                    if equal {
+                        return Some(tt2);
+                    }
+                }
+            }
+        }
+        _ => return Some(tt),
+    }
+    Some(tt)
+}
+
+fn deduplicate_type(t: Option<usize>, types: &mut Vec<Option<IrType>>) -> Option<usize> {
+    if let Some(tt) = t {
+        // first, try to de-duplicate inner types
+        match types[tt].as_ref().unwrap() {
+            IrType::Enum(variants) => {
+                let variants = variants.clone();
+                let mut new_variants = vec![];
+                for v in variants {
+                    new_variants.push(deduplicate_type(v, types));
+                }
+                types[tt] = Some(IrType::Enum(new_variants));
+            }
+            IrType::Struct(fields) => {
+                let fields = fields.clone();
+                let mut new_fields = vec![];
+                for v in fields {
+                    new_fields.push(deduplicate_type(v, types));
+                }
+                types[tt] = Some(IrType::Struct(new_fields));
+            }
+            IrType::Closure(params, ret) => {
+                let params = params.clone();
+                let new_ret = deduplicate_type(*ret, types);
+                let mut new_params = vec![];
+                for v in params {
+                    new_params.push(deduplicate_type(v, types));
+                }
+                types[tt] = Some(IrType::Closure(new_params, new_ret));
+            }
+            IrType::Function(params, ret) => {
+                let params = params.clone();
+                let new_ret = deduplicate_type(*ret, types);
+                let mut new_params = vec![];
+                for v in params {
+                    new_params.push(deduplicate_type(v, types));
+                }
+                types[tt] = Some(IrType::Function(new_params, new_ret));
+            }
+            _ => {}
+        }
+        // then, de-duplicate current type if equal
+        for t2 in 0..tt {
+            if types[tt].as_ref() == types[t2].as_ref() {
+                return Some(t2);
+            }
+        }
+        // finally, try to de-duplicate current type assuming it is recursive
+        for t2 in 0..tt {
+            let new_t = try_deduplicate_type_rec(Some(tt), tt, types, Some(t2), t2);
+            if new_t != Some(tt) {
+                return new_t;
+            }
+        }
+        // if everything fails, type is already unique
+        t
+    } else {
+        None
+    }
+}
+
 pub(crate) fn compute_type(
     term: &Term<TermMeta>,
     types: &mut Vec<Option<IrType>>,
@@ -337,7 +546,7 @@ pub(crate) fn compute_type(
     env: &Environment<TermMeta>,
 ) -> Option<usize> {
     let (mut t, ind) = compute_type_rec(term, types, ctx, env);
-    if ind.is_some() && ind.unwrap() != 0 {
+    let r = if ind.is_some() && ind.unwrap() != 0 {
         undo_inductive(t, types)
     } else if let Some(IrType::Struct(_)) = t.map(|tt| types[tt].as_ref().unwrap()) {
         undo_inductive(t, types)
@@ -354,7 +563,8 @@ pub(crate) fn compute_type(
             }
         }
         t
-    }
+    };
+    deduplicate_type(r, types)
 }
 
 pub(crate) fn is_generic(
